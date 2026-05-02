@@ -1,0 +1,320 @@
+<?php
+
+use Livewire\Component;
+use Livewire\Attributes\Computed;
+use App\Models\Counter;
+use App\Models\CounterRate;
+use App\Models\Customer;
+use App\Models\TransactionMaster;
+use App\Models\TransactionDetail;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+
+new class extends Component
+{
+    public string $counterId = '';
+    public string $counterCode = '';
+
+    public string $custName = '';
+    public ?int $customerId = null;
+
+    // Booth-to-booth discount
+    public bool $isDiscountBooth = false;
+    public string $discountBoothCode = '';
+
+    // Transaction rows
+    public array $rows = [];
+
+    // Current row — Sell: ลูกค้าให้ THB → แลกเป็นเงินต่างประเทศ
+    public string $selectedCurrency = '';  // denomination_id
+    public float $addAmount = 0;           // จำนวนเงิน THB ที่ลูกค้าให้
+    public float $currentRate = 0;         // อัตราขาย
+    public float $currentTotal = 0;        // จำนวนเงินต่างประเทศที่ลูกค้าจะได้ = THB / rate
+    public float $boothAmount = 0;         // จำนวนเงินต่างประเทศที่มีในบูธ
+    public bool $showAdjustModal = false;  // แสดง modal ปรับจำนวน
+    public float $adjustedTotal = 0;       // จำนวนเงินต่างประเทศหลัง adjust
+    public float $adjustedThb = 0;         // จำนวน THB หลัง adjust
+
+    // Result
+    public ?int $savedTransactionId = null;
+    public bool $showPrintSlip = false;
+
+    // Passport capture (same as buy form)
+    public string $passportImageB64 = '';
+    public string $ocrPassportNo = '';
+    public string $ocrFirstName = '';
+    public string $ocrLastName = '';
+    public string $ocrNationality = '';
+    public string $ocrDob = '';
+    public string $ocrExpiry = '';
+
+    public function mount(): void
+    {
+        $sessionCounterId = session('working_counter_id');
+        if ($sessionCounterId) {
+            $counter = Counter::where('id', $sessionCounterId)->where('is_active', true)->first();
+            if ($counter) {
+                $this->counterId   = (string) $counter->id;
+                $this->counterCode = $counter->counter_code;
+                return;
+            }
+        }
+
+        $user = Auth::user();
+        if ($user && $user->branch_id) {
+            $counter = Counter::where('branch_id', $user->branch_id)
+                ->where('is_active', true)->first();
+            if ($counter) {
+                $this->counterId   = (string) $counter->id;
+                $this->counterCode = $counter->counter_code;
+            }
+        }
+    }
+
+    public function updatedSelectedCurrency(string $denomId): void
+    {
+        if (! $denomId || ! $this->counterId) {
+            $this->currentRate = 0;
+            $this->currentTotal = 0;
+            return;
+        }
+        $cr = CounterRate::where('counter_id', $this->counterId)
+            ->where('denomination_id', $denomId)
+            ->whereDate('rate_date', today())
+            ->first();
+
+        if ($this->isDiscountBooth && $cr) {
+            $this->currentRate = max(0, (float)$cr->rate_sell - (float)$cr->sell_discount_rate);
+        } else {
+            $this->currentRate = $cr ? (float) $cr->rate_sell : 0;
+        }
+        $this->recalcTotal();
+    }
+
+    public function updatedAddAmount(): void { $this->recalcTotal(); }
+
+    public function recalcTotal(): void
+    {
+        // Sell: ลูกค้าให้ THB → คำนวณเงินต่างประเทศที่ได้ = THB / rate
+        if ($this->currentRate > 0) {
+            $this->currentTotal = floor($this->addAmount / $this->currentRate);
+        } else {
+            $this->currentTotal = 0;
+        }
+    }
+
+    public function addRow(): void
+    {
+        if (! $this->selectedCurrency || $this->addAmount <= 0) return;
+
+        $denom = \App\Models\CurrencyDenomination::with('currency')->find($this->selectedCurrency);
+        $foreignAmount = $this->currentTotal; // จำนวนเงินต่างประเทศที่คำนวณได้
+
+        // ถ้ามี boothAmount → ตรวจว่าเงินในบูธพอไหม
+        if ($this->boothAmount > 0 && $foreignAmount > $this->boothAmount) {
+            // เงินไม่พอ → เปิด modal ให้ adjust
+            $this->adjustedTotal = $this->boothAmount;
+            $this->adjustedThb = ceil($this->boothAmount * $this->currentRate);
+            $this->showAdjustModal = true;
+            return;
+        }
+
+        // ถ้า boothAmount > 0 แต่ <= foreignAmount → ใช้ boothAmount
+        // ถ้า boothAmount = 0 → ไม่ check (ไม่ได้กรอก)
+        if ($this->boothAmount > 0 && $this->boothAmount < $foreignAmount) {
+            $foreignAmount = $this->boothAmount;
+        }
+
+        $this->rows[] = [
+            'currency_code'      => $denom?->currency_code ?? '',
+            'currency_name'      => $denom?->display_name ?? '',
+            'amount'             => $this->addAmount,       // THB ที่ลูกค้ากรอกมาเต็มๆ
+            'rate'               => $this->currentRate,
+            'total'              => $foreignAmount,         // เงินต่างประเทศที่ให้ลูกค้า
+            'discount_rate_sell' => 0,
+        ];
+
+        $this->resetInputRow();
+    }
+
+    public function confirmAdjust(): void
+    {
+        $denom = \App\Models\CurrencyDenomination::with('currency')->find($this->selectedCurrency);
+
+        $this->rows[] = [
+            'currency_code'      => $denom?->currency_code ?? '',
+            'currency_name'      => $denom?->display_name ?? '',
+            'amount'             => $this->adjustedThb,
+            'rate'               => $this->currentRate,
+            'total'              => $this->adjustedTotal,
+            'discount_rate_sell' => 0,
+        ];
+
+        $this->showAdjustModal = false;
+        $this->resetInputRow();
+    }
+
+    public function cancelAdjust(): void
+    {
+        $this->showAdjustModal = false;
+    }
+
+    protected function resetInputRow(): void
+    {
+        $this->selectedCurrency = '';
+        $this->addAmount = 0;
+        $this->boothAmount = 0;
+        $this->currentRate = 0;
+        $this->currentTotal = 0;
+        $this->adjustedTotal = 0;
+        $this->adjustedThb = 0;
+    }
+
+    public function removeRow(int $index): void
+    {
+        unset($this->rows[$index]);
+        $this->rows = array_values($this->rows);
+    }
+
+    public function getGrandTotalProperty(): float
+    {
+        return collect($this->rows)->sum('total');
+    }
+
+    public function saveTransaction(): void
+    {
+        if (empty($this->rows) || ! $this->counterId) return;
+
+        $counter = Counter::find($this->counterId);
+        $docNo   = $this->generateDocNo('S');
+
+        DB::transaction(function () use ($counter, $docNo) {
+            $master = TransactionMaster::create([
+                'trns_no'              => $docNo,
+                'trns_type'            => 'SELLING',
+                'counter_id'           => $this->counterId,
+                'counter_name'         => $counter->counter_name,
+                'customer_id'          => $this->customerId,
+                'cust_name'            => $this->custName,
+                'convert_currency_to'  => 'THB',
+                'is_discount_booth'    => $this->isDiscountBooth,
+                'discount_booth_code'  => $this->discountBoothCode ?: null,
+                'trns_datetime'        => now(),
+                'created_by'           => Auth::id(),
+                'updated_by'           => Auth::id(),
+            ]);
+
+            foreach ($this->rows as $row) {
+                TransactionDetail::create([
+                    'transaction_id'     => $master->id,
+                    'currency_code'      => $row['currency_code'],
+                    'currency_name'      => $row['currency_name'],
+                    'unit_price'         => $row['rate'],
+                    'amount'             => $row['amount'],
+                    'total'              => $row['total'],
+                    'discount_rate_sell' => $row['discount_rate_sell'] ?? 0,
+                    'created_by'         => Auth::id(),
+                ]);
+            }
+
+            if ($this->passportImageB64 && $this->ocrPassportNo) {
+                $this->savePassportCustomer($master);
+            }
+
+            $this->savedTransactionId = $master->id;
+        });
+
+        $this->rows = [];
+        $this->custName = '';
+        $this->showPrintSlip = true;
+        $this->dispatch('transaction-saved', id: $this->savedTransactionId);
+    }
+
+    protected function generateDocNo(string $prefix): string
+    {
+        $today = now()->format('Ymd');
+        $last = TransactionMaster::where('trns_no', 'like', $prefix . $today . '%')
+            ->orderByDesc('trns_no')->first();
+        $seq = $last ? (int) substr($last->trns_no, -4) + 1 : 1;
+        return $prefix . $today . str_pad($seq, 4, '0', STR_PAD_LEFT);
+    }
+
+    protected function savePassportCustomer(TransactionMaster $master): void
+    {
+        $imagePath = null;
+        if ($this->passportImageB64) {
+            $imageData = base64_decode(preg_replace('/^data:image\/\w+;base64,/', '', $this->passportImageB64));
+            $filename  = 'passports/' . now()->format('Y/m') . '/' . uniqid('pp_') . '.jpg';
+            \Illuminate\Support\Facades\Storage::disk('public')->put($filename, $imageData);
+            $imagePath = $filename;
+        }
+        $customer = Customer::updateOrCreate(
+            ['id_type' => 'passport', 'id_number' => $this->ocrPassportNo],
+            [
+                'name_en'         => trim($this->ocrFirstName . ' ' . $this->ocrLastName),
+                'first_name'      => $this->ocrFirstName,
+                'last_name'       => $this->ocrLastName,
+                'nationality'     => $this->ocrNationality,
+                'date_of_birth'   => $this->ocrDob ?: null,
+                'passport_expiry' => $this->ocrExpiry ?: null,
+                'passport_photo'  => $imagePath,
+                'kyc_status'      => 'approved',
+            ]
+        );
+        $master->update(['customer_id' => $customer->id]);
+        $this->customerId = $customer->id;
+    }
+
+    public function receiveOcrData(array $data): void
+    {
+        $this->ocrFirstName   = $data['firstName'] ?? '';
+        $this->ocrLastName    = $data['lastName'] ?? '';
+        $this->ocrNationality = $data['nationality'] ?? '';
+        $this->ocrDob         = $data['dob'] ?? '';
+        $this->ocrPassportNo  = $data['passportNo'] ?? '';
+        $this->ocrExpiry      = $data['expiry'] ?? '';
+        $this->custName       = trim($this->ocrFirstName . ' ' . $this->ocrLastName);
+    }
+
+    public function receivePassportImage(string $imageB64): void
+    {
+        $this->passportImageB64 = $imageB64;
+    }
+
+    #[Computed]
+    public function availableCounters()
+    {
+        return Counter::where('is_active', true)->with('branch')->get();
+    }
+
+    #[Computed]
+    public function availableCurrencies()
+    {
+        if (! $this->counterId) return collect();
+        return CounterRate::with(['currency', 'denomination'])
+            ->where('counter_id', $this->counterId)
+            ->whereDate('rate_date', today())
+            ->whereNotNull('denomination_id')
+            ->where('rate_sell', '>', 0)
+            ->join('currency_denominations', 'counter_rates.denomination_id', '=', 'currency_denominations.id')
+            ->orderBy('currency_denominations.seq')
+            ->select('counter_rates.*')
+            ->get();
+    }
+
+    #[Computed]
+    public function otherCounters()
+    {
+        return Counter::where('is_active', true)
+            ->where('id', '!=', $this->counterId ?? 0)
+            ->get();
+    }
+
+    public function render()
+    {
+        return view('livewire.transaction.sell-form');
+    }
+};
+?>
+
+{{-- Template placeholder --}}
