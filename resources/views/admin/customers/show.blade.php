@@ -130,17 +130,19 @@
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-200">
-                    @forelse ($customer->transactions as $tx)
+                    @forelse ($transactions as $tx)
                         <tr class="hover:bg-gray-50">
-                            <td class="px-4 py-3 font-mono text-gray-800">{{ $tx->tx_number ?? $tx->id }}</td>
+                            <td class="px-4 py-3 font-mono text-gray-800">
+                                <a href="{{ route('transaction.detail', $tx->id) }}" class="text-blue-600 hover:underline">{{ $tx->trns_no ?? $tx->id }}</a>
+                            </td>
                             <td class="px-4 py-3">
                                 <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium
-                                    {{ $tx->type === 'buy' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' }}">
-                                    {{ $tx->type === 'buy' ? 'ซื้อ' : 'ขาย' }}
+                                    {{ $tx->trns_type === 'BUYING' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' }}">
+                                    {{ $tx->trns_type === 'BUYING' ? 'ซื้อ' : 'ขาย' }}
                                 </span>
                             </td>
-                            <td class="px-4 py-3 text-right font-mono">{{ number_format($tx->total_thb ?? 0, 2) }}</td>
-                            <td class="px-4 py-3 text-gray-600">{{ $tx->created_at->format('d/m/Y H:i') }}</td>
+                            <td class="px-4 py-3 text-right font-mono">{{ number_format($tx->totalThb, 2) }}</td>
+                            <td class="px-4 py-3 text-gray-600">{{ $tx->trns_datetime?->format('d/m/Y H:i') ?? $tx->created_at->format('d/m/Y H:i') }}</td>
                         </tr>
                     @empty
                         <tr>

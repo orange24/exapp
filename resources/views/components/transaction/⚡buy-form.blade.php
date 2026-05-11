@@ -101,11 +101,12 @@ new class extends Component
         $denom = \App\Models\CurrencyDenomination::with('currency')->find($this->selectedCurrency);
 
         $this->rows[] = [
-            'currency_code' => $denom?->currency_code ?? '',
-            'currency_name' => $denom?->display_name ?? '',
-            'amount'        => $this->addAmount,
-            'rate'          => $this->currentRate,
-            'total'         => $this->currentTotal,
+            'currency_code'   => $denom?->currency_code ?? '',
+            'currency_name'   => $denom?->display_name ?? '',
+            'denomination_id' => (int) $this->selectedCurrency,
+            'amount'          => $this->addAmount,
+            'rate'            => $this->currentRate,
+            'total'           => $this->currentTotal,
         ];
 
         // Reset input row
@@ -147,16 +148,32 @@ new class extends Component
                 'updated_by'     => Auth::id(),
             ]);
 
+            $inventoryService = app(\App\Services\InventoryService::class);
+
             foreach ($this->rows as $row) {
                 TransactionDetail::create([
-                    'transaction_id' => $master->id,
-                    'currency_code'  => $row['currency_code'],
-                    'currency_name'  => $row['currency_name'],
-                    'unit_price'     => $row['rate'],
-                    'amount'         => $row['amount'],
-                    'total'          => $row['total'],
-                    'created_by'     => Auth::id(),
+                    'transaction_id'  => $master->id,
+                    'currency_code'   => $row['currency_code'],
+                    'denomination_id' => $row['denomination_id'] ?? null,
+                    'currency_name'   => $row['currency_name'],
+                    'unit_price'      => $row['rate'],
+                    'amount'          => $row['amount'],
+                    'total'           => $row['total'],
+                    'created_by'      => Auth::id(),
                 ]);
+
+                // Update inventory: BUY = stock increases by foreign amount
+                if (!empty($row['denomination_id'])) {
+                    $inventoryService->recordBuy(
+                        (int) $this->counterId,
+                        $row['currency_code'],
+                        $row['denomination_id'],
+                        $row['amount'],
+                        $row['rate'],
+                        $master->id,
+                        Auth::id()
+                    );
+                }
             }
 
             // Save passport OCR data to customer if we have it

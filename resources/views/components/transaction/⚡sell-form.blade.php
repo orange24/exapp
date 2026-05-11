@@ -76,6 +76,7 @@ new class extends Component
         if (! $denomId || ! $this->counterId) {
             $this->currentRate = 0;
             $this->currentTotal = 0;
+            $this->boothAmount = 0;
             return;
         }
         $cr = CounterRate::where('counter_id', $this->counterId)
@@ -88,6 +89,13 @@ new class extends Component
         } else {
             $this->currentRate = $cr ? (float) $cr->rate_sell : 0;
         }
+
+        // ดึงจำนวนเงินในบูธจาก stock
+        $stock = \App\Models\CounterStock::where('counter_id', $this->counterId)
+            ->where('denomination_id', $denomId)
+            ->first();
+        $this->boothAmount = $stock ? (float) $stock->quantity : 0;
+
         $this->recalcTotal();
     }
 
@@ -128,6 +136,7 @@ new class extends Component
         $this->rows[] = [
             'currency_code'      => $denom?->currency_code ?? '',
             'currency_name'      => $denom?->display_name ?? '',
+            'denomination_id'    => (int) $this->selectedCurrency,
             'amount'             => $this->addAmount,       // THB ที่ลูกค้ากรอกมาเต็มๆ
             'rate'               => $this->currentRate,
             'total'              => $foreignAmount,         // เงินต่างประเทศที่ให้ลูกค้า
@@ -144,6 +153,7 @@ new class extends Component
         $this->rows[] = [
             'currency_code'      => $denom?->currency_code ?? '',
             'currency_name'      => $denom?->display_name ?? '',
+            'denomination_id'    => (int) $this->selectedCurrency,
             'amount'             => $this->adjustedThb,
             'rate'               => $this->currentRate,
             'total'              => $this->adjustedTotal,
@@ -204,10 +214,13 @@ new class extends Component
                 'updated_by'           => Auth::id(),
             ]);
 
+            $inventoryService = app(\App\Services\InventoryService::class);
+
             foreach ($this->rows as $row) {
                 TransactionDetail::create([
                     'transaction_id'     => $master->id,
                     'currency_code'      => $row['currency_code'],
+                    'denomination_id'    => $row['denomination_id'] ?? null,
                     'currency_name'      => $row['currency_name'],
                     'unit_price'         => $row['rate'],
                     'amount'             => $row['amount'],
@@ -215,6 +228,19 @@ new class extends Component
                     'discount_rate_sell' => $row['discount_rate_sell'] ?? 0,
                     'created_by'         => Auth::id(),
                 ]);
+
+                // Update inventory: SELL = stock decreases by foreign currency amount (total)
+                if (!empty($row['denomination_id'])) {
+                    $inventoryService->recordSell(
+                        (int) $this->counterId,
+                        $row['currency_code'],
+                        $row['denomination_id'],
+                        $row['total'],       // foreign currency amount given to customer
+                        $row['rate'],
+                        $master->id,
+                        Auth::id()
+                    );
+                }
             }
 
             if ($this->passportImageB64 && $this->ocrPassportNo) {

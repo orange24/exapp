@@ -14,7 +14,17 @@ use App\Http\Controllers\Admin\DenominationController;
 use App\Http\Controllers\Admin\RateSettingController;
 use App\Http\Controllers\Admin\BranchController;
 use App\Http\Controllers\Api\OcrController;
+use App\Http\Controllers\Inventory\InventoryController;
+use App\Http\Controllers\Report\AccountingSummaryController;
+use App\Http\Controllers\Report\AvgRateSummaryController;
+use App\Http\Controllers\Report\CashierPerformanceReportController;
+use App\Http\Controllers\Report\CustomerTransactionReportController;
+use App\Http\Controllers\Report\BotMonthlyReportController;
 use App\Http\Controllers\Report\DailyReportController;
+use App\Http\Controllers\Report\ProfitLossReportController;
+use App\Http\Controllers\Report\StockMovementReportController;
+use App\Http\Controllers\Report\StockValuationReportController;
+use App\Http\Controllers\Report\TransferReportController;
 use Illuminate\Support\Facades\Route;
 
 // ─── Public ──────────────────────────────────────────────────────────────────
@@ -122,8 +132,63 @@ Route::middleware(['auth', 'session.check'])->group(function () {
     // Module 1: Password Change
     Route::get('/change-password', fn() => view('user.change-password'))->name('user.change-password');
 
+    // Inventory
+    Route::get('/inventory', [InventoryController::class, 'index'])->name('inventory.index');
+    Route::get('/inventory/movements', [InventoryController::class, 'movements'])->name('inventory.movements');
+    Route::get('/inventory/borrow-return', [InventoryController::class, 'borrowReturn'])->name('inventory.borrow-return');
+    Route::get('/inventory/disbursement', [InventoryController::class, 'disbursement'])->name('inventory.disbursement');
+    Route::get('/inventory/intraday-return', [InventoryController::class, 'intradayReturn'])->name('inventory.intraday-return');
+    Route::get('/inventory/open-close-day', [InventoryController::class, 'openCloseDay'])->name('inventory.open-close-day');
+    Route::get('/inventory/booking', [InventoryController::class, 'booking'])->name('inventory.booking');
+    Route::get('/inventory/adjustment', [InventoryController::class, 'adjustment'])->name('inventory.adjustment');
+
+    // Accounting
+    Route::get('/accounting/journal', fn() => view('accounting.journal'))->name('accounting.journal');
+    Route::get('/accounting/ledger', fn() => view('accounting.ledger'))->name('accounting.ledger');
+
     // Reports
     Route::get('/reports/daily', [DailyReportController::class, 'index'])->name('reports.daily');
     Route::post('/reports/daily/export', [DailyReportController::class, 'exportExcel'])->name('reports.daily.export');
+
+    // Accounting Summary Report (All Branches) — admin/auditor only
+    Route::get('/reports/accounting-summary', [AccountingSummaryController::class, 'index'])->name('reports.accounting-summary');
+    Route::post('/reports/accounting-summary/export', [AccountingSummaryController::class, 'exportExcel'])->name('reports.accounting-summary.export');
+
+    // Summary Report Average Rate — admin/auditor only
+    Route::get('/reports/avg-rate', [AvgRateSummaryController::class, 'index'])->name('reports.avg-rate');
+    Route::post('/reports/avg-rate/export', [AvgRateSummaryController::class, 'exportExcel'])->name('reports.avg-rate.export');
+
+    // Stock Movement Report
+    Route::get('/reports/stock-movement', [StockMovementReportController::class, 'index'])->name('reports.stock-movement');
+    Route::post('/reports/stock-movement/export', [StockMovementReportController::class, 'exportExcel'])->name('reports.stock-movement.export');
+
+    // Transfer Report
+    Route::get('/reports/transfer', [TransferReportController::class, 'index'])->name('reports.transfer');
+    Route::post('/reports/transfer/export', [TransferReportController::class, 'exportExcel'])->name('reports.transfer.export');
+
+    // FX Profit/Loss Report
+    Route::get('/reports/profit-loss', [ProfitLossReportController::class, 'index'])->name('reports.profit-loss');
+    Route::post('/reports/profit-loss/export', [ProfitLossReportController::class, 'exportExcel'])->name('reports.profit-loss.export');
+
+    // Stock Valuation Report
+    Route::get('/reports/stock-valuation', [StockValuationReportController::class, 'index'])->name('reports.stock-valuation');
+    Route::post('/reports/stock-valuation/export', [StockValuationReportController::class, 'exportExcel'])->name('reports.stock-valuation.export');
+
+    // Cashier Performance Report
+    Route::get('/reports/cashier', [CashierPerformanceReportController::class, 'index'])->name('reports.cashier');
+    Route::post('/reports/cashier/export', [CashierPerformanceReportController::class, 'exportExcel'])->name('reports.cashier.export');
+
+    // Customer Transaction Report
+    Route::get('/reports/customer-transaction', [CustomerTransactionReportController::class, 'index'])->name('reports.customer-transaction');
+    Route::post('/reports/customer-transaction/export', [CustomerTransactionReportController::class, 'exportExcel'])->name('reports.customer-transaction.export');
+
+    // BOT Monthly MC Report (รายงานประจำเดือน ธปท.)
+    Route::get('/reports/bot-monthly', [BotMonthlyReportController::class, 'index'])->name('reports.bot-monthly');
+    Route::post('/reports/bot-monthly/export', [BotMonthlyReportController::class, 'exportExcel'])->name('reports.bot-monthly.export');
+    Route::post('/reports/bot-monthly/settings', [BotMonthlyReportController::class, 'updateSettings'])->name('reports.bot-monthly.settings');
+
+    // BOT Report Staging (จัดการข้อมูลก่อนส่ง ธปท.)
+    Route::get('/reports/bot-staging', fn() => view('reports.bot-staging'))->name('reports.bot-staging');
+    Route::get('/reports/bot-staging/{report}/export', [BotMonthlyReportController::class, 'exportFromStaging'])->name('reports.bot-monthly.export-staging');
 });
 

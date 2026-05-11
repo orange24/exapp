@@ -172,12 +172,32 @@
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                 </button>
             </div>
-            <div class="p-6">
+            <div class="p-6 relative">
                 <template x-if="loadingDetail">
                     <div class="text-center py-8 text-gray-500">กำลังโหลด...</div>
                 </template>
                 <template x-if="!loadingDetail && detailData">
                     <div>
+                        {{-- CANCEL Stamp --}}
+                        <template x-if="detailData.flag_cancel === 'Y'">
+                            <div class="absolute top-4 right-6 pointer-events-none" style="transform: rotate(-18deg);">
+                                <div style="border: 4px solid #dc2626; border-radius: 12px; padding: 6px 24px; opacity: 0.85;">
+                                    <span style="font-size: 32px; font-weight: 900; color: #dc2626; letter-spacing: 4px; line-height: 1;">ยกเลิก</span>
+                                    <br>
+                                    <span style="font-size: 14px; font-weight: 700; color: #dc2626; letter-spacing: 6px;">CANCELLED</span>
+                                </div>
+                            </div>
+                        </template>
+                        <template x-if="detailData.flag_cancel === 'R'">
+                            <div class="absolute top-4 right-6 pointer-events-none" style="transform: rotate(-18deg);">
+                                <div style="border: 4px solid #d97706; border-radius: 12px; padding: 6px 24px; opacity: 0.85;">
+                                    <span style="font-size: 28px; font-weight: 900; color: #d97706; letter-spacing: 3px; line-height: 1;">รอยกเลิก</span>
+                                    <br>
+                                    <span style="font-size: 12px; font-weight: 700; color: #d97706; letter-spacing: 4px;">PENDING CANCEL</span>
+                                </div>
+                            </div>
+                        </template>
+
                         <div class="grid grid-cols-2 gap-3 mb-4 text-sm">
                             <div><span class="text-gray-500">เลขที่:</span> <span class="font-mono font-medium" x-text="detailData.trns_no"></span></div>
                             <div><span class="text-gray-500">วันที่:</span> <span x-text="detailData.trns_datetime"></span></div>
@@ -186,6 +206,43 @@
                             <div><span class="text-gray-500">ลูกค้า:</span> <span x-text="detailData.cust_name || '-'"></span></div>
                             <div><span class="text-gray-500">ผู้บันทึก:</span> <span x-text="detailData.created_by || '-'"></span></div>
                         </div>
+
+                        {{-- Passport / Customer Info --}}
+                        <template x-if="detailData.customer">
+                            <div class="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                                <h4 class="text-xs font-semibold text-gray-600 uppercase mb-3">ข้อมูลลูกค้า / Passport</h4>
+                                <div class="flex gap-4">
+                                    {{-- Passport Photo --}}
+                                    <template x-if="detailData.customer.passport_photo">
+                                        <div class="flex-shrink-0">
+                                            <a :href="detailData.customer.passport_photo" target="_blank">
+                                                <img :src="detailData.customer.passport_photo"
+                                                     alt="Passport Photo"
+                                                     class="w-32 h-auto rounded-lg border border-gray-300 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+                                                     style="max-height: 180px; object-fit: contain;">
+                                            </a>
+                                            <p class="text-xs text-blue-500 mt-1 text-center">คลิกเพื่อขยาย</p>
+                                        </div>
+                                    </template>
+                                    {{-- Customer Detail --}}
+                                    <div class="flex-1 grid grid-cols-2 gap-2 text-sm">
+                                        <div>
+                                            <span class="text-gray-500">ประเภทเอกสาร:</span>
+                                            <span class="font-medium" x-text="detailData.customer.id_type || '-'"></span>
+                                        </div>
+                                        <div>
+                                            <span class="text-gray-500">เลขเอกสาร:</span>
+                                            <span class="font-mono font-medium" x-text="detailData.customer.id_number || '-'"></span>
+                                        </div>
+                                        <div>
+                                            <span class="text-gray-500">สัญชาติ:</span>
+                                            <span class="font-medium" x-text="detailData.customer.nationality || '-'"></span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+
                         <table class="w-full text-sm border border-gray-200 rounded">
                             <thead class="bg-gray-50">
                                 <tr>

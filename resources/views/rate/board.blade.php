@@ -235,12 +235,12 @@
 
                         {{-- Buy --}}
                         <td class="td-buy {{ $rate->rate_buy == 0 ? 'zero-rate' : '' }}">
-                            {{ $rate->rate_buy > 0 ? number_format($rate->rate_buy, 4) : '—' }}
+                            {{ $rate->rate_buy > 0 ? rtrim(rtrim(number_format($rate->rate_buy, 4), '0'), '.') : '—' }}
                         </td>
 
                         {{-- Sell --}}
                         <td class="td-sell {{ $rate->rate_sell == 0 ? 'zero-rate' : '' }}">
-                            {{ $rate->rate_sell > 0 ? number_format($rate->rate_sell, 4) : '—' }}
+                            {{ $rate->rate_sell > 0 ? rtrim(rtrim(number_format($rate->rate_sell, 4), '0'), '.') : '—' }}
                         </td>
                     </tr>
                 @endforeach

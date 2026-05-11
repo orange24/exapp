@@ -148,6 +148,81 @@ function counterSelector() {
 }
 </script>
 
+@php
+    $counterId = session('working_counter_id');
+    $cutoff = \App\Models\Setting::get('WORKING_CUT_OFF', '03:00:00');
+    $today = now()->format('Y-m-d');
+    $dateStart = "{$today} {$cutoff}";
+    $dateEnd = now()->addDay()->format('Y-m-d') . " {$cutoff}";
+
+    // Today's transactions for this counter
+    $todayQuery = \App\Models\TransactionMaster::where('flag_cancel', 'N')
+        ->where('trns_datetime', '>', $dateStart)
+        ->where('trns_datetime', '<=', $dateEnd);
+    if ($counterId) {
+        $todayQuery->where('counter_id', $counterId);
+    }
+
+    $buyCount = (clone $todayQuery)->where('trns_type', 'BUYING')->count();
+    $sellCount = (clone $todayQuery)->where('trns_type', 'SELLING')->count();
+
+    $buyTotal = \App\Models\TransactionDetail::whereIn('transaction_id',
+        (clone $todayQuery)->where('trns_type', 'BUYING')->pluck('id')
+    )->sum('total');
+
+    $sellTotal = \App\Models\TransactionDetail::whereIn('transaction_id',
+        (clone $todayQuery)->where('trns_type', 'SELLING')->pluck('id')
+    )->sum('total');
+
+    // Pending cancellations
+    $pendingCancel = \App\Models\TransactionMaster::where('flag_cancel', 'R')->count();
+
+    // Active bookings
+    $activeBookings = \App\Models\Booking::where('status', 'pending')
+        ->where('expires_at', '>', now())->count();
+
+    // Stock value for this counter
+    $stockValue = 0;
+    if ($counterId) {
+        $stockValue = \App\Models\CounterStock::where('counter_id', $counterId)
+            ->whereNotNull('denomination_id')
+            ->selectRaw('SUM(quantity * avg_cost) as total')
+            ->value('total') ?? 0;
+    }
+
+    // Top currencies by volume today
+    $topCurrencies = collect();
+    if ($counterId) {
+        $topCurrencies = \App\Models\TransactionDetail::whereIn('transaction_id',
+            (clone $todayQuery)->pluck('id')
+        )
+        ->selectRaw('currency_code, SUM(amount) as total_amount, SUM(total) as total_thb')
+        ->groupBy('currency_code')
+        ->orderByDesc('total_thb')
+        ->limit(5)
+        ->get();
+    }
+@endphp
+
+{{-- Welcome bar --}}
+<div class="bg-white rounded-xl shadow border border-gray-200 p-4 mb-6">
+    <div class="flex items-center justify-between">
+        <div>
+            <h2 class="text-lg font-bold text-gray-800">{{ auth()->user()->name }}</h2>
+            <p class="text-sm text-gray-500">
+                สาขา: <strong>{{ auth()->user()->branch?->branch_name ?? '—' }}</strong>
+                &nbsp;|&nbsp; เคาน์เตอร์: <strong>{{ session('working_counter_name', '—') }}</strong>
+                &nbsp;|&nbsp; บทบาท: <strong>{{ auth()->user()->role?->display_name ?? '—' }}</strong>
+            </p>
+        </div>
+        <div class="text-right text-sm text-gray-500">
+            <div class="text-lg font-bold" style="color:#0e513a;">{{ now()->format('d/m/Y') }}</div>
+            <div>{{ now()->format('H:i') }} น.</div>
+        </div>
+    </div>
+</div>
+
+{{-- Quick Actions --}}
 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
     <a href="{{ route('transaction.buy') }}"
        class="bg-white rounded-xl shadow border border-gray-200 p-6 flex items-center gap-4 hover:shadow-md transition-shadow group">
@@ -190,13 +265,91 @@ function counterSelector() {
     </a>
 </div>
 
-<div class="bg-white rounded-xl shadow border border-gray-200 p-6">
-    <h2 class="text-lg font-bold text-gray-800 mb-2">ยินดีต้อนรับ, {{ auth()->user()->name }}</h2>
-    <p class="text-sm text-gray-500">
-        สาขา: <strong>{{ auth()->user()->branch?->branch_name ?? '—' }}</strong>
-        &nbsp;|&nbsp; เคาน์เตอร์: <strong>{{ session('working_counter_name', '—') }}</strong>
-        &nbsp;|&nbsp; บทบาท: <strong>{{ auth()->user()->role?->display_name ?? '—' }}</strong>
-        &nbsp;|&nbsp; วันที่: <strong>{{ now()->format('d/m/Y H:i') }}</strong>
-    </p>
+{{-- Metrics Cards --}}
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+    {{-- Buy Today --}}
+    <div class="bg-white rounded-xl shadow border border-gray-200 p-5">
+        <div class="flex items-center justify-between mb-2">
+            <span class="text-sm text-gray-500">ซื้อวันนี้</span>
+            <span class="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-green-100">
+                <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                </svg>
+            </span>
+        </div>
+        <div class="text-2xl font-bold text-green-700">{{ $buyCount }}</div>
+        <div class="text-xs text-gray-400 mt-1">{{ number_format($buyTotal, 2) }} THB</div>
+    </div>
+
+    {{-- Sell Today --}}
+    <div class="bg-white rounded-xl shadow border border-gray-200 p-5">
+        <div class="flex items-center justify-between mb-2">
+            <span class="text-sm text-gray-500">ขายวันนี้</span>
+            <span class="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-red-100">
+                <svg class="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/>
+                </svg>
+            </span>
+        </div>
+        <div class="text-2xl font-bold text-red-700">{{ $sellCount }}</div>
+        <div class="text-xs text-gray-400 mt-1">{{ number_format($sellTotal, 2) }} THB</div>
+    </div>
+
+    {{-- Stock Value --}}
+    <div class="bg-white rounded-xl shadow border border-gray-200 p-5">
+        <div class="flex items-center justify-between mb-2">
+            <span class="text-sm text-gray-500">มูลค่าสต็อก</span>
+            <span class="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-blue-100">
+                <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+                </svg>
+            </span>
+        </div>
+        <div class="text-2xl font-bold text-blue-700">{{ number_format($stockValue, 0) }}</div>
+        <div class="text-xs text-gray-400 mt-1">THB</div>
+    </div>
+
+    {{-- Alerts --}}
+    <div class="bg-white rounded-xl shadow border border-gray-200 p-5">
+        <div class="flex items-center justify-between mb-2">
+            <span class="text-sm text-gray-500">แจ้งเตือน</span>
+            <span class="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-yellow-100">
+                <svg class="w-4 h-4 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+                </svg>
+            </span>
+        </div>
+        <div class="flex flex-col gap-1">
+            @if ($pendingCancel > 0)
+                <a href="{{ route('admin.transactions') }}" class="text-xs text-yellow-700 hover:underline">
+                    รอยกเลิก: <strong>{{ $pendingCancel }}</strong> รายการ
+                </a>
+            @endif
+            @if ($activeBookings > 0)
+                <a href="{{ route('inventory.booking') }}" class="text-xs text-purple-700 hover:underline">
+                    Booking: <strong>{{ $activeBookings }}</strong> รายการ
+                </a>
+            @endif
+            @if ($pendingCancel == 0 && $activeBookings == 0)
+                <span class="text-xs text-gray-400">ไม่มีรายการค้าง</span>
+            @endif
+        </div>
+    </div>
 </div>
+
+{{-- Top currencies today --}}
+@if ($topCurrencies->isNotEmpty())
+<div class="bg-white rounded-xl shadow border border-gray-200 p-5">
+    <h3 class="text-sm font-semibold text-gray-700 mb-3">สกุลเงินที่มีปริมาณสูงสุดวันนี้</h3>
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+        @foreach ($topCurrencies as $tc)
+            <div class="text-center p-3 bg-gray-50 rounded-lg">
+                <div class="text-lg font-bold" style="color:#0e513a;">{{ $tc->currency_code }}</div>
+                <div class="text-sm text-gray-600">{{ number_format($tc->total_amount, 2) }}</div>
+                <div class="text-xs text-gray-400">{{ number_format($tc->total_thb, 0) }} THB</div>
+            </div>
+        @endforeach
+    </div>
+</div>
+@endif
 @endsection

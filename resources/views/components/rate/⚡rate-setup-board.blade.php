@@ -34,23 +34,38 @@ new class extends Component
             ->orderBy('seq')
             ->get();
 
+        // ดึงราคาวันนี้
         $existingRates = CounterRate::where('counter_id', $this->counterId)
             ->whereDate('rate_date', today())
             ->whereNotNull('denomination_id')
             ->get()
             ->keyBy('denomination_id');
 
+        // ถ้าวันนี้ยังไม่มีราคาเลย → ดึงราคาล่าสุดมาแสดงแทน
+        $latestRates = collect();
+        if ($existingRates->isEmpty()) {
+            $latestRates = CounterRate::where('counter_id', $this->counterId)
+                ->whereNotNull('denomination_id')
+                ->orderByDesc('rate_date')
+                ->get()
+                ->unique('denomination_id')
+                ->keyBy('denomination_id');
+        }
+
         $this->rates = [];
         foreach ($denoms as $denom) {
             $existing = $existingRates->get($denom->id);
+            $fallback = $latestRates->get($denom->id);
+            $source = $existing ?? $fallback;
+
             $this->rates[$denom->id] = [
                 'currency_code'  => $denom->currency_code,
                 'display_name'   => $denom->display_name,
                 'country'        => $denom->currency?->country ?? '',
                 'flag'           => strtolower($denom->currency_code) . '.png',
-                'buy'            => $existing ? (float) $existing->rate_buy  : 0,
-                'sell'           => $existing ? (float) $existing->rate_sell : 0,
-                'discount'       => $existing ? (float) $existing->sell_discount_rate : 0,
+                'buy'            => $source ? (float) $source->rate_buy  : 0,
+                'sell'           => $source ? (float) $source->rate_sell : 0,
+                'discount'       => $source ? (float) $source->sell_discount_rate : 0,
             ];
         }
     }
@@ -62,11 +77,22 @@ new class extends Component
         $sourceCounter = Counter::where('counter_code', $this->copyFromCode)->first();
         if (! $sourceCounter) return;
 
+        // ดึงราคาวันนี้ของเคาน์เตอร์ต้นทาง
         $sourceRates = CounterRate::where('counter_id', $sourceCounter->id)
             ->whereDate('rate_date', today())
             ->whereNotNull('denomination_id')
             ->get()
             ->keyBy('denomination_id');
+
+        // ถ้าวันนี้ยังไม่มี → ดึงราคาล่าสุด
+        if ($sourceRates->isEmpty()) {
+            $sourceRates = CounterRate::where('counter_id', $sourceCounter->id)
+                ->whereNotNull('denomination_id')
+                ->orderByDesc('rate_date')
+                ->get()
+                ->unique('denomination_id')
+                ->keyBy('denomination_id');
+        }
 
         foreach ($this->rates as $denomId => &$row) {
             if ($sourceRates->has($denomId)) {

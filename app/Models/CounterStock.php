@@ -9,7 +9,10 @@ class CounterStock extends Model
 {
     protected $table = 'counter_stock';
 
-    protected $fillable = ['counter_id', 'currency_code', 'quantity', 'hold_amount'];
+    protected $fillable = [
+        'counter_id', 'currency_code', 'denomination_id',
+        'quantity', 'hold_amount', 'avg_cost', 'total_cost_value',
+    ];
 
     public function counter()
     {
@@ -19,6 +22,11 @@ class CounterStock extends Model
     public function currency()
     {
         return $this->belongsTo(Currency::class, 'currency_code', 'currency_code');
+    }
+
+    public function denomination()
+    {
+        return $this->belongsTo(CurrencyDenomination::class, 'denomination_id');
     }
 
     public function getAvailableAttribute(): float

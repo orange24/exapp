@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Customer;
 use App\Models\CustomerDocument;
+use App\Models\TransactionMaster;
 use Illuminate\Http\Request;
 
 class CustomerController extends Controller
@@ -45,15 +46,17 @@ class CustomerController extends Controller
      */
     public function show(Customer $customer)
     {
-        $customer->load(['transactions.details', 'transactions' => function ($q) {
-            $q->orderBy('created_at', 'desc')->limit(50);
-        }]);
+        $transactions = TransactionMaster::where('customer_id', $customer->id)
+            ->with('details')
+            ->orderBy('trns_datetime', 'desc')
+            ->limit(50)
+            ->get();
 
         $documents = CustomerDocument::where('customer_id', $customer->id)
             ->orderBy('created_at', 'desc')
             ->get();
 
-        return view('admin.customers.show', compact('customer', 'documents'));
+        return view('admin.customers.show', compact('customer', 'transactions', 'documents'));
     }
 
     /**

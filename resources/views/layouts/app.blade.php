@@ -181,8 +181,123 @@
                 </div>
             </div>
 
+            {{-- Inventory --}}
+            <div class="pt-2" x-data="{ open: {{ request()->routeIs('inventory.*') ? 'true' : 'false' }} }">
+                <button @click="open = !open" x-show="sidebarOpen" type="button"
+                        class="w-full flex items-center justify-between px-2 py-1 text-xs font-semibold text-[#0e513a] uppercase tracking-wider hover:text-[#137050] transition-colors">
+                    <span>คลังเงินตรา</span>
+                    <svg class="w-3 h-3 transition-transform" :class="open && 'rotate-180'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
+                <div x-show="open" x-transition>
+                <a href="{{ route('inventory.index') }}"
+                   class="sidebar-link {{ request()->routeIs('inventory.index') ? 'active' : '' }}">
+                    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+                    </svg>
+                    <span x-show="sidebarOpen">สต็อกเงินตรา (Inventory)</span>
+                </a>
+                <a href="{{ route('inventory.movements') }}"
+                   class="sidebar-link {{ request()->routeIs('inventory.movements') ? 'active' : '' }}">
+                    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
+                    </svg>
+                    <span x-show="sidebarOpen">ประวัติเคลื่อนไหว (Movements)</span>
+                </a>
+                <a href="{{ route('inventory.borrow-return') }}"
+                   class="sidebar-link {{ request()->routeIs('inventory.borrow-return') ? 'active' : '' }}">
+                    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
+                    </svg>
+                    <span x-show="sidebarOpen">ยืม/คืนสินค้า (Borrow)</span>
+                </a>
+                <a href="{{ route('inventory.disbursement') }}"
+                   class="sidebar-link {{ request()->routeIs('inventory.disbursement') ? 'active' : '' }}">
+                    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
+                    </svg>
+                    <span x-show="sidebarOpen">เบิกจ่าย (Disbursement)</span>
+                </a>
+                <a href="{{ route('inventory.intraday-return') }}"
+                   class="sidebar-link {{ request()->routeIs('inventory.intraday-return') ? 'active' : '' }}">
+                    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/>
+                    </svg>
+                    <span x-show="sidebarOpen">คืนระหว่างวัน (Return)</span>
+                </a>
+                <a href="{{ route('inventory.open-close-day') }}"
+                   class="sidebar-link {{ request()->routeIs('inventory.open-close-day') ? 'active' : '' }}">
+                    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                    </svg>
+                    <span x-show="sidebarOpen">เปิด/ปิดวัน (Open/Close)</span>
+                </a>
+                <a href="{{ route('inventory.booking') }}"
+                   class="sidebar-link {{ request()->routeIs('inventory.booking') ? 'active' : '' }}">
+                    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <span x-show="sidebarOpen">จอง/Hold (Booking)</span>
+                </a>
+                <a href="{{ route('inventory.adjustment') }}"
+                   class="sidebar-link {{ request()->routeIs('inventory.adjustment') ? 'active' : '' }}">
+                    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
+                    </svg>
+                    <span x-show="sidebarOpen">ปรับปรุงสต็อก (Adjust)</span>
+                </a>
+                </div>
+            </div>
+
+            {{-- Accounting --}}
+            <div class="pt-2" x-data="{ open: {{ request()->routeIs('accounting.*') ? 'true' : 'false' }} }">
+                <button @click="open = !open" x-show="sidebarOpen" type="button"
+                        class="w-full flex items-center justify-between px-2 py-1 text-xs font-semibold text-[#0e513a] uppercase tracking-wider hover:text-[#137050] transition-colors">
+                    <span>บัญชี</span>
+                    <svg class="w-3 h-3 transition-transform" :class="open && 'rotate-180'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
+                <div x-show="open" x-transition>
+                <a href="{{ route('accounting.journal') }}"
+                   class="sidebar-link {{ request()->routeIs('accounting.journal') ? 'active' : '' }}">
+                    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                    <span x-show="sidebarOpen">สมุดรายวัน (Journal)</span>
+                </a>
+                <a href="{{ route('accounting.ledger') }}"
+                   class="sidebar-link {{ request()->routeIs('accounting.ledger') ? 'active' : '' }}">
+                    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                    </svg>
+                    <span x-show="sidebarOpen">บัญชีแยกประเภท (Ledger)</span>
+                </a>
+                <a href="{{ route('admin.accounts.index') }}"
+                   class="sidebar-link {{ request()->routeIs('admin.accounts.*') ? 'active' : '' }}">
+                    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
+                    </svg>
+                    <span x-show="sidebarOpen">ผังบัญชี (Chart)</span>
+                </a>
+                </div>
+            </div>
+
             {{-- Reports --}}
             <div class="pt-2" x-data="{ open: {{ request()->routeIs('reports.*') || request()->routeIs('admin.transactions') ? 'true' : 'false' }} }">
+
                 <button @click="open = !open" x-show="sidebarOpen" type="button"
                         class="w-full flex items-center justify-between px-2 py-1 text-xs font-semibold text-[#0e513a] uppercase tracking-wider hover:text-[#137050] transition-colors">
                     <span>รายงาน</span>
@@ -207,11 +322,87 @@
                     </svg>
                     <span x-show="sidebarOpen">สรุปประจำวัน (Daily)</span>
                 </a>
+                @if (auth()->user()->isAdmin() || auth()->user()->role?->name === 'auditor')
+                <a href="{{ route('reports.accounting-summary') }}"
+                   class="sidebar-link {{ request()->routeIs('reports.accounting-summary') ? 'active' : '' }}">
+                    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                    </svg>
+                    <span x-show="sidebarOpen">สรุปยอดบัญชี (Acc Summary)</span>
+                </a>
+                <a href="{{ route('reports.avg-rate') }}"
+                   class="sidebar-link {{ request()->routeIs('reports.avg-rate') ? 'active' : '' }}">
+                    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"/>
+                    </svg>
+                    <span x-show="sidebarOpen">สรุป Avg Rate</span>
+                </a>
+                @endif
+                <a href="{{ route('reports.stock-movement') }}"
+                   class="sidebar-link {{ request()->routeIs('reports.stock-movement') ? 'active' : '' }}">
+                    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
+                    </svg>
+                    <span x-show="sidebarOpen">เคลื่อนไหวสต็อก (Movement)</span>
+                </a>
+                <a href="{{ route('reports.transfer') }}"
+                   class="sidebar-link {{ request()->routeIs('reports.transfer') ? 'active' : '' }}">
+                    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
+                    </svg>
+                    <span x-show="sidebarOpen">โอน/ยืม/คืน (Transfer)</span>
+                </a>
+                <a href="{{ route('reports.profit-loss') }}"
+                   class="sidebar-link {{ request()->routeIs('reports.profit-loss') ? 'active' : '' }}">
+                    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+                    </svg>
+                    <span x-show="sidebarOpen">กำไร-ขาดทุน (P&L)</span>
+                </a>
+                <a href="{{ route('reports.stock-valuation') }}"
+                   class="sidebar-link {{ request()->routeIs('reports.stock-valuation') ? 'active' : '' }}">
+                    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+                    </svg>
+                    <span x-show="sidebarOpen">มูลค่าสต็อก (Valuation)</span>
+                </a>
+                <a href="{{ route('reports.cashier') }}"
+                   class="sidebar-link {{ request()->routeIs('reports.cashier') ? 'active' : '' }}">
+                    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                    </svg>
+                    <span x-show="sidebarOpen">ผลงานพนักงาน (Cashier)</span>
+                </a>
+                <a href="{{ route('reports.customer-transaction') }}"
+                   class="sidebar-link {{ request()->routeIs('reports.customer-transaction') ? 'active' : '' }}">
+                    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+                    </svg>
+                    <span x-show="sidebarOpen">ธุรกรรมลูกค้า (Customer)</span>
+                </a>
+                @if (auth()->user()->isAdmin())
+                <a href="{{ route('reports.bot-staging') }}"
+                   class="sidebar-link {{ request()->routeIs('reports.bot-staging') || request()->routeIs('reports.bot-monthly*') ? 'active' : '' }}">
+                    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+                    </svg>
+                    <span x-show="sidebarOpen">รายงาน ธปท. (BOT)</span>
+                </a>
+                @endif
                 </div>
             </div>
 
             {{-- Master Data --}}
-            <div class="pt-2" x-data="{ open: {{ request()->routeIs('admin.currencies.*') || request()->routeIs('admin.customers.*') || request()->routeIs('admin.accounts.*') ? 'true' : 'false' }} }">
+            <div class="pt-2" x-data="{ open: {{ request()->routeIs('admin.currencies.*') || request()->routeIs('admin.customers.*') ? 'true' : 'false' }} }">
                 <button @click="open = !open" x-show="sidebarOpen" type="button"
                         class="w-full flex items-center justify-between px-2 py-1 text-xs font-semibold text-[#0e513a] uppercase tracking-wider hover:text-[#137050] transition-colors">
                     <span>ข้อมูลหลัก</span>
@@ -235,14 +426,6 @@
                               d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
                     </svg>
                     <span x-show="sidebarOpen">ลูกค้า (Customers)</span>
-                </a>
-                <a href="{{ route('admin.accounts.index') }}"
-                   class="sidebar-link {{ request()->routeIs('admin.accounts.*') ? 'active' : '' }}">
-                    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                              d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
-                    </svg>
-                    <span x-show="sidebarOpen">ผังบัญชี (Accounts)</span>
                 </a>
                 </div>
             </div>

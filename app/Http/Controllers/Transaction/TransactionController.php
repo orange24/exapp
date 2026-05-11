@@ -92,6 +92,9 @@ class TransactionController extends Controller
             'updated_by' => Auth::id(),
         ]);
 
+        // Reverse inventory movements for cancelled transaction
+        app(\App\Services\InventoryService::class)->reverseMovement($transaction->id, Auth::id());
+
         return response()->json([
             'success' => true,
             'message' => 'อนุมัติยกเลิกเรียบร้อยแล้ว (Cancellation approved)',
@@ -105,6 +108,11 @@ class TransactionController extends Controller
     {
         $transaction->load(['details', 'customer', 'counter', 'createdBy']);
 
+        $passportPhotoUrl = null;
+        if ($transaction->customer?->passport_photo) {
+            $passportPhotoUrl = asset('storage/' . $transaction->customer->passport_photo);
+        }
+
         return response()->json([
             'success' => true,
             'data' => [
@@ -117,6 +125,12 @@ class TransactionController extends Controller
                 'flag_cancel' => $transaction->flag_cancel,
                 'cancel_reason' => $transaction->cancel_reason,
                 'created_by' => $transaction->createdBy?->name,
+                'customer' => $transaction->customer ? [
+                    'id_type' => $transaction->customer->id_type,
+                    'id_number' => $transaction->customer->id_number,
+                    'nationality' => $transaction->customer->nationality,
+                    'passport_photo' => $passportPhotoUrl,
+                ] : null,
                 'details' => $transaction->details->map(fn ($d) => [
                     'currency_code' => $d->currency_code,
                     'currency_name' => $d->currency_name,
