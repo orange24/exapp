@@ -84,6 +84,19 @@
         </div>
 
         {{-- Nav --}}
+        @php
+            $hiddenMenus = config('app.hidden_menus', '');
+            $hiddenList = $hiddenMenus ? array_map('trim', preg_split('/[,|]/', $hiddenMenus)) : [];
+            // Helper: check if a route name is visible (not hidden)
+            $menuOn = function(string $route) use ($hiddenList) {
+                return !in_array($route, $hiddenList);
+            };
+            // Helper: check if any route in a section is visible
+            $sectionOn = function(array $routes) use ($hiddenList) {
+                foreach ($routes as $r) { if (!in_array($r, $hiddenList)) return true; }
+                return true;
+            };
+        @endphp
         <nav class="flex-1 p-3 space-y-1 overflow-y-auto">
             <a href="{{ route('dashboard') }}"
                class="sidebar-link {{ request()->routeIs('dashboard') ? 'active' : '' }}">
@@ -95,6 +108,7 @@
             </a>
 
             {{-- Transactions --}}
+            @if($sectionOn(['transaction.buy', 'transaction.sell', 'transaction.my']))
             <div class="pt-2" x-data="{ open: {{ request()->routeIs('transaction.*') ? 'true' : 'false' }} }">
                 <button @click="open = !open" x-show="sidebarOpen" type="button"
                         class="w-full flex items-center justify-between px-2 py-1 text-xs font-semibold text-[#0e513a] uppercase tracking-wider hover:text-[#137050] transition-colors">
@@ -104,6 +118,7 @@
                     </svg>
                 </button>
                 <div x-show="open" x-transition>
+                @if($menuOn('transaction.buy'))
                 <a href="{{ route('transaction.buy') }}"
                    class="sidebar-link {{ request()->routeIs('transaction.buy') ? 'active' : '' }}">
                     <svg class="w-5 h-5 flex-shrink-0 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -112,6 +127,8 @@
                     </svg>
                     <span x-show="sidebarOpen">รับซื้อ (Buy)</span>
                 </a>
+                @endif
+                @if($menuOn('transaction.sell'))
                 <a href="{{ route('transaction.sell') }}"
                    class="sidebar-link {{ request()->routeIs('transaction.sell') ? 'active' : '' }}">
                     <svg class="w-5 h-5 flex-shrink-0 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -120,6 +137,8 @@
                     </svg>
                     <span x-show="sidebarOpen">จ่ายขาย (Sell)</span>
                 </a>
+                @endif
+                @if($menuOn('transaction.my'))
                 <a href="{{ route('transaction.my') }}"
                    class="sidebar-link {{ request()->routeIs('transaction.my') ? 'active' : '' }}">
                     <svg class="w-5 h-5 flex-shrink-0 text-[#0e513a]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -128,10 +147,13 @@
                     </svg>
                     <span x-show="sidebarOpen">รายการของฉัน (My Trans)</span>
                 </a>
+                @endif
                 </div>
             </div>
+            @endif
 
             {{-- Rates --}}
+            @if($sectionOn(['admin.rate.index', 'admin.rate-settings.index', 'rate.board']))
             <div class="pt-2" x-data="{ open: {{ request()->routeIs('admin.rate.*') || request()->routeIs('admin.rate-settings.*') ? 'true' : 'false' }} }">
                 <button @click="open = !open" x-show="sidebarOpen" type="button"
                         class="w-full flex items-center justify-between px-2 py-1 text-xs font-semibold text-[#0e513a] uppercase tracking-wider hover:text-[#137050] transition-colors">
@@ -141,6 +163,7 @@
                     </svg>
                 </button>
                 <div x-show="open" x-transition>
+                @if($menuOn('admin.rate.index'))
                 <a href="{{ route('admin.rate.index') }}"
                    class="sidebar-link {{ request()->routeIs('admin.rate.*') ? 'active' : '' }}">
                     <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -149,6 +172,8 @@
                     </svg>
                     <span x-show="sidebarOpen">ตั้งราคา</span>
                 </a>
+                @endif
+                @if($menuOn('admin.rate-settings.index'))
                 <a href="{{ route('admin.rate-settings.index') }}"
                    class="sidebar-link {{ request()->routeIs('admin.rate-settings.*') ? 'active' : '' }}">
                     <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -159,6 +184,8 @@
                     </svg>
                     <span x-show="sidebarOpen">ตั้งค่าคำนวณ (Rate Calc)</span>
                 </a>
+                @endif
+                @if($menuOn('rate.board'))
                 @php
                     $workingCounterCode = null;
                     $wcId = session('working_counter_id');
@@ -178,10 +205,13 @@
                     <span x-show="sidebarOpen">ดูเรทสาขา</span>
                 </a>
                 @endif
+                @endif
                 </div>
             </div>
+            @endif
 
             {{-- Inventory --}}
+            @if($sectionOn(['inventory.index', 'inventory.movements', 'inventory.borrow-return', 'inventory.disbursement', 'inventory.intraday-return', 'inventory.open-close-day', 'inventory.booking', 'inventory.adjustment']))
             <div class="pt-2" x-data="{ open: {{ request()->routeIs('inventory.*') ? 'true' : 'false' }} }">
                 <button @click="open = !open" x-show="sidebarOpen" type="button"
                         class="w-full flex items-center justify-between px-2 py-1 text-xs font-semibold text-[#0e513a] uppercase tracking-wider hover:text-[#137050] transition-colors">
@@ -191,6 +221,7 @@
                     </svg>
                 </button>
                 <div x-show="open" x-transition>
+                @if($menuOn('inventory.index'))
                 <a href="{{ route('inventory.index') }}"
                    class="sidebar-link {{ request()->routeIs('inventory.index') ? 'active' : '' }}">
                     <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -199,6 +230,8 @@
                     </svg>
                     <span x-show="sidebarOpen">สต็อกเงินตรา (Inventory)</span>
                 </a>
+                @endif
+                @if($menuOn('inventory.movements'))
                 <a href="{{ route('inventory.movements') }}"
                    class="sidebar-link {{ request()->routeIs('inventory.movements') ? 'active' : '' }}">
                     <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -207,6 +240,8 @@
                     </svg>
                     <span x-show="sidebarOpen">ประวัติเคลื่อนไหว (Movements)</span>
                 </a>
+                @endif
+                @if($menuOn('inventory.borrow-return'))
                 <a href="{{ route('inventory.borrow-return') }}"
                    class="sidebar-link {{ request()->routeIs('inventory.borrow-return') ? 'active' : '' }}">
                     <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -215,6 +250,8 @@
                     </svg>
                     <span x-show="sidebarOpen">ยืม/คืนสินค้า (Borrow)</span>
                 </a>
+                @endif
+                @if($menuOn('inventory.disbursement'))
                 <a href="{{ route('inventory.disbursement') }}"
                    class="sidebar-link {{ request()->routeIs('inventory.disbursement') ? 'active' : '' }}">
                     <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -223,6 +260,8 @@
                     </svg>
                     <span x-show="sidebarOpen">เบิกจ่าย (Disbursement)</span>
                 </a>
+                @endif
+                @if($menuOn('inventory.intraday-return'))
                 <a href="{{ route('inventory.intraday-return') }}"
                    class="sidebar-link {{ request()->routeIs('inventory.intraday-return') ? 'active' : '' }}">
                     <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -231,6 +270,8 @@
                     </svg>
                     <span x-show="sidebarOpen">คืนระหว่างวัน (Return)</span>
                 </a>
+                @endif
+                @if($menuOn('inventory.open-close-day'))
                 <a href="{{ route('inventory.open-close-day') }}"
                    class="sidebar-link {{ request()->routeIs('inventory.open-close-day') ? 'active' : '' }}">
                     <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -239,6 +280,8 @@
                     </svg>
                     <span x-show="sidebarOpen">เปิด/ปิดวัน (Open/Close)</span>
                 </a>
+                @endif
+                @if($menuOn('inventory.booking'))
                 <a href="{{ route('inventory.booking') }}"
                    class="sidebar-link {{ request()->routeIs('inventory.booking') ? 'active' : '' }}">
                     <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -247,6 +290,8 @@
                     </svg>
                     <span x-show="sidebarOpen">จอง/Hold (Booking)</span>
                 </a>
+                @endif
+                @if($menuOn('inventory.adjustment'))
                 <a href="{{ route('inventory.adjustment') }}"
                    class="sidebar-link {{ request()->routeIs('inventory.adjustment') ? 'active' : '' }}">
                     <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -255,10 +300,13 @@
                     </svg>
                     <span x-show="sidebarOpen">ปรับปรุงสต็อก (Adjust)</span>
                 </a>
+                @endif
                 </div>
             </div>
+            @endif
 
             {{-- Accounting --}}
+            @if($sectionOn(['accounting.journal', 'accounting.ledger', 'admin.accounts.index']))
             <div class="pt-2" x-data="{ open: {{ request()->routeIs('accounting.*') ? 'true' : 'false' }} }">
                 <button @click="open = !open" x-show="sidebarOpen" type="button"
                         class="w-full flex items-center justify-between px-2 py-1 text-xs font-semibold text-[#0e513a] uppercase tracking-wider hover:text-[#137050] transition-colors">
@@ -268,6 +316,7 @@
                     </svg>
                 </button>
                 <div x-show="open" x-transition>
+                @if($menuOn('accounting.journal'))
                 <a href="{{ route('accounting.journal') }}"
                    class="sidebar-link {{ request()->routeIs('accounting.journal') ? 'active' : '' }}">
                     <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -276,6 +325,8 @@
                     </svg>
                     <span x-show="sidebarOpen">สมุดรายวัน (Journal)</span>
                 </a>
+                @endif
+                @if($menuOn('accounting.ledger'))
                 <a href="{{ route('accounting.ledger') }}"
                    class="sidebar-link {{ request()->routeIs('accounting.ledger') ? 'active' : '' }}">
                     <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -284,6 +335,8 @@
                     </svg>
                     <span x-show="sidebarOpen">บัญชีแยกประเภท (Ledger)</span>
                 </a>
+                @endif
+                @if($menuOn('admin.accounts.index'))
                 <a href="{{ route('admin.accounts.index') }}"
                    class="sidebar-link {{ request()->routeIs('admin.accounts.*') ? 'active' : '' }}">
                     <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -292,10 +345,13 @@
                     </svg>
                     <span x-show="sidebarOpen">ผังบัญชี (Chart)</span>
                 </a>
+                @endif
                 </div>
             </div>
+            @endif
 
             {{-- Reports --}}
+            @if($sectionOn(['admin.transactions', 'reports.daily', 'reports.accounting-summary', 'reports.avg-rate', 'reports.stock-movement', 'reports.transfer', 'reports.profit-loss', 'reports.stock-valuation', 'reports.cashier', 'reports.customer-transaction', 'reports.bot-staging']))
             <div class="pt-2" x-data="{ open: {{ request()->routeIs('reports.*') || request()->routeIs('admin.transactions') ? 'true' : 'false' }} }">
 
                 <button @click="open = !open" x-show="sidebarOpen" type="button"
@@ -306,6 +362,7 @@
                     </svg>
                 </button>
                 <div x-show="open" x-transition>
+                @if($menuOn('admin.transactions'))
                 <a href="{{ route('admin.transactions') }}"
                    class="sidebar-link {{ request()->routeIs('admin.transactions') ? 'active' : '' }}">
                     <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -314,6 +371,8 @@
                     </svg>
                     <span x-show="sidebarOpen">ค้นหารายการ (Search Trans)</span>
                 </a>
+                @endif
+                @if($menuOn('reports.daily'))
                 <a href="{{ route('reports.daily') }}"
                    class="sidebar-link {{ request()->routeIs('reports.daily') ? 'active' : '' }}">
                     <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -322,7 +381,9 @@
                     </svg>
                     <span x-show="sidebarOpen">สรุปประจำวัน (Daily)</span>
                 </a>
+                @endif
                 @if (auth()->user()->isAdmin() || auth()->user()->role?->name === 'auditor')
+                @if($menuOn('reports.accounting-summary'))
                 <a href="{{ route('reports.accounting-summary') }}"
                    class="sidebar-link {{ request()->routeIs('reports.accounting-summary') ? 'active' : '' }}">
                     <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -331,6 +392,8 @@
                     </svg>
                     <span x-show="sidebarOpen">สรุปยอดบัญชี (Acc Summary)</span>
                 </a>
+                @endif
+                @if($menuOn('reports.avg-rate'))
                 <a href="{{ route('reports.avg-rate') }}"
                    class="sidebar-link {{ request()->routeIs('reports.avg-rate') ? 'active' : '' }}">
                     <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -340,6 +403,8 @@
                     <span x-show="sidebarOpen">สรุป Avg Rate</span>
                 </a>
                 @endif
+                @endif
+                @if($menuOn('reports.stock-movement'))
                 <a href="{{ route('reports.stock-movement') }}"
                    class="sidebar-link {{ request()->routeIs('reports.stock-movement') ? 'active' : '' }}">
                     <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -348,6 +413,8 @@
                     </svg>
                     <span x-show="sidebarOpen">เคลื่อนไหวสต็อก (Movement)</span>
                 </a>
+                @endif
+                @if($menuOn('reports.transfer'))
                 <a href="{{ route('reports.transfer') }}"
                    class="sidebar-link {{ request()->routeIs('reports.transfer') ? 'active' : '' }}">
                     <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -356,6 +423,8 @@
                     </svg>
                     <span x-show="sidebarOpen">โอน/ยืม/คืน (Transfer)</span>
                 </a>
+                @endif
+                @if($menuOn('reports.profit-loss'))
                 <a href="{{ route('reports.profit-loss') }}"
                    class="sidebar-link {{ request()->routeIs('reports.profit-loss') ? 'active' : '' }}">
                     <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -364,6 +433,8 @@
                     </svg>
                     <span x-show="sidebarOpen">กำไร-ขาดทุน (P&L)</span>
                 </a>
+                @endif
+                @if($menuOn('reports.stock-valuation'))
                 <a href="{{ route('reports.stock-valuation') }}"
                    class="sidebar-link {{ request()->routeIs('reports.stock-valuation') ? 'active' : '' }}">
                     <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -372,6 +443,8 @@
                     </svg>
                     <span x-show="sidebarOpen">มูลค่าสต็อก (Valuation)</span>
                 </a>
+                @endif
+                @if($menuOn('reports.cashier'))
                 <a href="{{ route('reports.cashier') }}"
                    class="sidebar-link {{ request()->routeIs('reports.cashier') ? 'active' : '' }}">
                     <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -380,6 +453,8 @@
                     </svg>
                     <span x-show="sidebarOpen">ผลงานพนักงาน (Cashier)</span>
                 </a>
+                @endif
+                @if($menuOn('reports.customer-transaction'))
                 <a href="{{ route('reports.customer-transaction') }}"
                    class="sidebar-link {{ request()->routeIs('reports.customer-transaction') ? 'active' : '' }}">
                     <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -388,7 +463,9 @@
                     </svg>
                     <span x-show="sidebarOpen">ธุรกรรมลูกค้า (Customer)</span>
                 </a>
+                @endif
                 @if (auth()->user()->isAdmin())
+                @if($menuOn('reports.bot-staging'))
                 <a href="{{ route('reports.bot-staging') }}"
                    class="sidebar-link {{ request()->routeIs('reports.bot-staging') || request()->routeIs('reports.bot-monthly*') ? 'active' : '' }}">
                     <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -398,10 +475,13 @@
                     <span x-show="sidebarOpen">รายงาน ธปท. (BOT)</span>
                 </a>
                 @endif
+                @endif
                 </div>
             </div>
+            @endif
 
             {{-- Master Data --}}
+            @if($sectionOn(['admin.currencies.index', 'admin.customers.index']))
             <div class="pt-2" x-data="{ open: {{ request()->routeIs('admin.currencies.*') || request()->routeIs('admin.customers.*') ? 'true' : 'false' }} }">
                 <button @click="open = !open" x-show="sidebarOpen" type="button"
                         class="w-full flex items-center justify-between px-2 py-1 text-xs font-semibold text-[#0e513a] uppercase tracking-wider hover:text-[#137050] transition-colors">
@@ -411,6 +491,7 @@
                     </svg>
                 </button>
                 <div x-show="open" x-transition>
+                @if($menuOn('admin.currencies.index'))
                 <a href="{{ route('admin.currencies.index') }}"
                    class="sidebar-link {{ request()->routeIs('admin.currencies.*') ? 'active' : '' }}">
                     <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -419,6 +500,8 @@
                     </svg>
                     <span x-show="sidebarOpen">สกุลเงิน (Currencies)</span>
                 </a>
+                @endif
+                @if($menuOn('admin.customers.index'))
                 <a href="{{ route('admin.customers.index') }}"
                    class="sidebar-link {{ request()->routeIs('admin.customers.*') ? 'active' : '' }}">
                     <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -427,11 +510,14 @@
                     </svg>
                     <span x-show="sidebarOpen">ลูกค้า (Customers)</span>
                 </a>
+                @endif
                 </div>
             </div>
+            @endif
 
             {{-- Admin --}}
             @if (auth()->user()?->isAdmin())
+            @if($sectionOn(['admin.branches.index', 'admin.users.index', 'admin.permissions.index', 'admin.sessions']))
             <div class="pt-2" x-data="{ open: {{ request()->routeIs('admin.users.*') || request()->routeIs('admin.permissions.*') || request()->routeIs('admin.sessions') || request()->routeIs('admin.branches.*') ? 'true' : 'false' }} }">
                 <button @click="open = !open" x-show="sidebarOpen" type="button"
                         class="w-full flex items-center justify-between px-2 py-1 text-xs font-semibold text-[#0e513a] uppercase tracking-wider hover:text-[#137050] transition-colors">
@@ -441,6 +527,7 @@
                     </svg>
                 </button>
                 <div x-show="open" x-transition>
+                @if($menuOn('admin.branches.index'))
                 <a href="{{ route('admin.branches.index') }}"
                    class="sidebar-link {{ request()->routeIs('admin.branches.*') ? 'active' : '' }}">
                     <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -449,6 +536,8 @@
                     </svg>
                     <span x-show="sidebarOpen">จัดการสาขา (Branches)</span>
                 </a>
+                @endif
+                @if($menuOn('admin.users.index'))
                 <a href="{{ route('admin.users.index') }}"
                    class="sidebar-link {{ request()->routeIs('admin.users.*') ? 'active' : '' }}">
                     <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -457,6 +546,8 @@
                     </svg>
                     <span x-show="sidebarOpen">จัดการผู้ใช้ (Users)</span>
                 </a>
+                @endif
+                @if($menuOn('admin.permissions.index'))
                 <a href="{{ route('admin.permissions.index') }}"
                    class="sidebar-link {{ request()->routeIs('admin.permissions.*') ? 'active' : '' }}">
                     <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -465,6 +556,8 @@
                     </svg>
                     <span x-show="sidebarOpen">สิทธิ์ (Permissions)</span>
                 </a>
+                @endif
+                @if($menuOn('admin.sessions'))
                 <a href="{{ route('admin.sessions') }}"
                    class="sidebar-link {{ request()->routeIs('admin.sessions') ? 'active' : '' }}">
                     <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -473,8 +566,10 @@
                     </svg>
                     <span x-show="sidebarOpen">จัดการ Session</span>
                 </a>
+                @endif
                 </div>
             </div>
+            @endif
             @endif
         </nav>
 

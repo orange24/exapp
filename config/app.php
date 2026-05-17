@@ -123,4 +123,15 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Enabled Menus (Feature Launch Control)
+    |--------------------------------------------------------------------------
+    | Comma-separated route names of sub-menus to show.
+    | Use '*' to enable all menus.
+    |
+    */
+
+    'hidden_menus' => env('HIDDEN_MENUS', ''),
+
 ];
