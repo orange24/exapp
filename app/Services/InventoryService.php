@@ -301,6 +301,90 @@ class InventoryService
         });
     }
 
+    /**
+     * Cancel a completed transfer — reverse stock movements and restore quantities.
+     */
+    public function cancelTransfer(int $transferId, int $userId): StockTransfer
+    {
+        return DB::transaction(function () use ($transferId, $userId) {
+            $transfer = StockTransfer::lockForUpdate()->findOrFail($transferId);
+
+            if ($transfer->status !== 'completed') {
+                throw new \RuntimeException('ไม่สามารถยกเลิกรายการที่ไม่ใช่สถานะ completed');
+            }
+
+            $amount       = (float) $transfer->amount;
+            $unitPrice    = (float) $transfer->unit_price;
+            $currencyCode = $transfer->currency_code;
+            $denomId      = $transfer->denomination_id;
+
+            // Reverse: add back to source (from_counter)
+            $fromStock = CounterStock::lockForUpdate()->firstOrCreate(
+                ['counter_id' => $transfer->from_counter_id, 'currency_code' => $currencyCode, 'denomination_id' => $denomId],
+                ['quantity' => 0, 'hold_amount' => 0, 'avg_cost' => 0, 'total_cost_value' => 0]
+            );
+            if (!$fromStock->wasRecentlyCreated) {
+                $fromStock = CounterStock::lockForUpdate()->find($fromStock->id);
+            }
+
+            $oldFromQty = (float) $fromStock->quantity;
+            $oldFromAvg = (float) $fromStock->avg_cost;
+            $newFromQty = $oldFromQty + $amount;
+            if ($newFromQty > 0) {
+                $fromStock->avg_cost = ($oldFromQty * $oldFromAvg + $amount * $unitPrice) / $newFromQty;
+            }
+            $fromStock->quantity = $newFromQty;
+            $fromStock->total_cost_value = $fromStock->quantity * (float) $fromStock->avg_cost;
+            $fromStock->save();
+
+            // Reverse: subtract from destination (to_counter)
+            $toStock = CounterStock::lockForUpdate()->firstOrCreate(
+                ['counter_id' => $transfer->to_counter_id, 'currency_code' => $currencyCode, 'denomination_id' => $denomId],
+                ['quantity' => 0, 'hold_amount' => 0, 'avg_cost' => 0, 'total_cost_value' => 0]
+            );
+            if (!$toStock->wasRecentlyCreated) {
+                $toStock = CounterStock::lockForUpdate()->find($toStock->id);
+            }
+            $toStock->quantity = (float) $toStock->quantity - $amount;
+            $toStock->total_cost_value = $toStock->quantity * (float) $toStock->avg_cost;
+            $toStock->save();
+
+            // Record reversal movements
+            StockMovement::create([
+                'counter_id'     => $transfer->from_counter_id,
+                'currency_code'  => $currencyCode,
+                'denomination_id' => $denomId,
+                'movement_type'  => 'transfer_in',
+                'amount'         => $amount,
+                'unit_price'     => $unitPrice,
+                'reference_type' => 'transfer_cancel',
+                'reference_id'   => $transfer->id,
+                'note'           => 'ยกเลิกรายการ ' . $transfer->transfer_no,
+                'moved_by'       => $userId,
+                'moved_at'       => now(),
+            ]);
+
+            StockMovement::create([
+                'counter_id'     => $transfer->to_counter_id,
+                'currency_code'  => $currencyCode,
+                'denomination_id' => $denomId,
+                'movement_type'  => 'transfer_out',
+                'amount'         => -$amount,
+                'unit_price'     => $unitPrice,
+                'reference_type' => 'transfer_cancel',
+                'reference_id'   => $transfer->id,
+                'note'           => 'ยกเลิกรายการ ' . $transfer->transfer_no,
+                'moved_by'       => $userId,
+                'moved_at'       => now(),
+            ]);
+
+            // Mark transfer as cancelled
+            $transfer->update(['status' => 'cancelled']);
+
+            return $transfer;
+        });
+    }
+
     private function transferNote(string $type, string $direction): string
     {
         return match ($type) {

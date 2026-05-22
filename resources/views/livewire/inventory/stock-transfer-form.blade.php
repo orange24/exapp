@@ -201,7 +201,9 @@
                         <th class="px-4 py-3 text-right font-semibold">ต้นทุน</th>
                         <th class="px-4 py-3 text-left font-semibold">ผู้ทำ</th>
                         <th class="px-4 py-3 text-left font-semibold">วันที่/เวลา</th>
+                        <th class="px-4 py-3 text-center font-semibold">สถานะ</th>
                         <th class="px-4 py-3 text-left font-semibold">หมายเหตุ</th>
+                        <th class="px-4 py-3 text-center font-semibold">จัดการ</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -235,11 +237,30 @@
                             <td class="px-4 py-2 text-right">{{ $tf->unit_price > 0 ? number_format($tf->unit_price, 4) : '—' }}</td>
                             <td class="px-4 py-2 text-gray-600 text-xs">{{ $tf->createdByUser->name ?? '—' }}</td>
                             <td class="px-4 py-2 whitespace-nowrap text-xs">{{ $tf->transferred_at?->format('d/m/Y H:i') }}</td>
+                            <td class="px-4 py-2 text-center">
+                                @if ($tf->status === 'cancelled')
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">ยกเลิก</span>
+                                @else
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">สำเร็จ</span>
+                                @endif
+                            </td>
                             <td class="px-4 py-2 text-gray-500 text-xs">{{ $tf->note ?? '' }}</td>
+                            <td class="px-4 py-2 text-center">
+                                @if ($tf->status === 'completed')
+                                    <button type="button"
+                                            wire:click="cancelTransfer({{ $tf->id }})"
+                                            wire:confirm="ยืนยันยกเลิกรายการ {{ $tf->transfer_no }}? สต็อกจะถูกคืนกลับ"
+                                            class="text-red-600 hover:text-red-800 text-xs font-medium">
+                                        ยกเลิก
+                                    </button>
+                                @else
+                                    <span class="text-gray-400 text-xs">—</span>
+                                @endif
+                            </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="11" class="px-4 py-8 text-center text-gray-400">ไม่มีรายการ</td>
+                            <td colspan="13" class="px-4 py-8 text-center text-gray-400">ไม่มีรายการ</td>
                         </tr>
                     @endforelse
                 </tbody>

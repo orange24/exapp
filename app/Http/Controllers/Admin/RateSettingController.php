@@ -7,6 +7,7 @@ use App\Models\Counter;
 use App\Models\CounterRate;
 use App\Models\CurrencyDenomination;
 use App\Models\RateSettingAdjustment;
+use App\Models\RateChangeLog;
 use App\Models\RateSettingMaster;
 use Illuminate\Http\Request;
 
@@ -199,6 +200,15 @@ class RateSettingController extends Controller
                 $calBuy  = $adj ? $adj->cal_rate_buy : 0;
                 $calSell = $adj ? $adj->cal_rate_sell : 0;
 
+                $newBuy  = $mainRate->rate_buy + $calBuy;
+                $newSell = $mainRate->rate_sell + $calSell;
+
+                // Read old rate for logging
+                $old = CounterRate::where('counter_id', $counter->id)
+                    ->where('denomination_id', $denomId)
+                    ->whereDate('rate_date', $today)
+                    ->first();
+
                 CounterRate::updateOrCreate(
                     [
                         'counter_id'      => $counter->id,
@@ -207,10 +217,22 @@ class RateSettingController extends Controller
                     ],
                     [
                         'currency_code' => $mainRate->currency_code,
-                        'rate_buy'      => $mainRate->rate_buy + $calBuy,
-                        'rate_sell'     => $mainRate->rate_sell + $calSell,
+                        'rate_buy'      => $newBuy,
+                        'rate_sell'     => $newSell,
                         'set_by'        => auth()->id(),
                     ]
+                );
+
+                RateChangeLog::logChange(
+                    counterId: $counter->id,
+                    denomId: $denomId,
+                    currencyCode: $mainRate->currency_code,
+                    oldBuy: $old ? (float) $old->rate_buy : null,
+                    oldSell: $old ? (float) $old->rate_sell : null,
+                    newBuy: $newBuy,
+                    newSell: $newSell,
+                    source: 'rate_setting',
+                    ref: $rateSetting->group_name,
                 );
             }
             $updatedCounters++;

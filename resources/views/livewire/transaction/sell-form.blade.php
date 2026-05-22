@@ -17,11 +17,30 @@
     {{-- Customer + Passport --}}
     <div class="mb-4 p-3 bg-gray-50 border border-gray-200 rounded">
         <div class="flex flex-wrap gap-3 items-end">
-            <div class="flex-1 min-w-48">
+            <div class="flex-1 min-w-48 relative" x-data="{ showNameDrop: false }">
                 <label class="block text-sm font-medium text-gray-700 mb-1">ชื่อลูกค้า</label>
                 <input type="text" wire:model.blur="custName"
-                       placeholder="ชื่อ-นามสกุล / Name"
+                       x-on:input.debounce.300ms="$wire.searchCustomers($event.target.value); showNameDrop = true"
+                       x-on:focus="if($event.target.value.length >= 2) { $wire.searchCustomers($event.target.value); showNameDrop = true }"
+                       x-on:click.away="showNameDrop = false"
+                       placeholder="ชื่อลูกค้า"
+                       autocomplete="off"
                        class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
+                @if ($showSuggestions && count($customerSuggestions) > 0)
+                <div x-show="showNameDrop" x-cloak
+                     style="position:absolute; z-index:50; left:0; right:0; top:100%; margin-top:2px; max-height:240px; overflow-y:auto; background:#fff; border:1px solid #d1d5db; border-radius:6px; box-shadow:0 4px 12px rgba(0,0,0,0.15);">
+                    @foreach ($customerSuggestions as $sug)
+                    <button type="button"
+                            wire:click="selectCustomer({{ $sug['id'] }})"
+                            x-on:click="showNameDrop = false"
+                            class="w-full text-left px-3 py-2 hover:bg-blue-50 border-b border-gray-100 last:border-0 transition-colors"
+                            style="display:block;">
+                        <div class="font-semibold text-sm text-gray-800">{{ $sug['name'] }}</div>
+                        <div class="text-xs text-gray-500">{{ $sug['id_number'] }} &middot; {{ $sug['nationality'] }}</div>
+                    </button>
+                    @endforeach
+                </div>
+                @endif
             </div>
             {{-- Booth-to-Booth discount toggle --}}
             <div class="flex items-center gap-2 mt-1">
@@ -62,16 +81,60 @@
             <input type="file" x-ref="fileInput" accept="image/*" class="hidden" @change="handleFileSelect($event)">
         </div>
 
-        @if ($ocrPassportNo)
-            <div class="mt-3 p-2 bg-green-50 border border-green-200 rounded text-sm">
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
-                    <div><span class="text-gray-500">Passport:</span> <strong>{{ $ocrPassportNo }}</strong></div>
-                    <div><span class="text-gray-500">Name:</span> <strong>{{ $ocrFirstName }} {{ $ocrLastName }}</strong></div>
-                    <div><span class="text-gray-500">Nationality:</span> <strong>{{ $ocrNationality }}</strong></div>
-                    <div><span class="text-gray-500">Expiry:</span> <strong>{{ $ocrExpiry }}</strong></div>
+        {{-- Passport info (always visible, editable) --}}
+        <div class="mt-3 p-2 bg-green-50 border border-green-200 rounded text-sm"
+             x-data="{ showDropdown: false, saved: false }"
+             x-on:customer-updated.window="saved = true; setTimeout(() => saved = false, 3000)">
+            <div class="grid grid-cols-3 gap-2">
+                <div class="relative">
+                    <label class="text-gray-500 text-xs">Passport No</label>
+                    <input type="text" wire:model.blur="ocrPassportNo"
+                           x-on:input.debounce.300ms="$wire.searchCustomers($event.target.value); showDropdown = true"
+                           x-on:focus="if($event.target.value.length >= 2) { $wire.searchCustomers($event.target.value); showDropdown = true }"
+                           x-on:click.away="showDropdown = false"
+                           placeholder="เลขพาสปอร์ต / ค้นหา"
+                           autocomplete="off"
+                           class="w-full border border-green-300 rounded px-2 py-1 text-sm font-semibold focus:ring-2 focus:ring-green-400 bg-white">
+                    @if ($showSuggestions && count($customerSuggestions) > 0)
+                    <div x-show="showDropdown" x-cloak
+                         style="position:absolute; z-index:50; left:0; right:0; top:100%; margin-top:2px; max-height:240px; overflow-y:auto; background:#fff; border:1px solid #d1d5db; border-radius:6px; box-shadow:0 4px 12px rgba(0,0,0,0.15);">
+                        @foreach ($customerSuggestions as $sug)
+                        <button type="button"
+                                wire:click="selectCustomer({{ $sug['id'] }})"
+                                x-on:click="showDropdown = false"
+                                class="w-full text-left px-3 py-2 hover:bg-green-50 border-b border-gray-100 last:border-0 transition-colors"
+                                style="display:block;">
+                            <div class="font-semibold text-sm text-gray-800">{{ $sug['id_number'] }}</div>
+                            <div class="text-xs text-gray-500">{{ $sug['name'] }} &middot; {{ $sug['nationality'] }}</div>
+                        </button>
+                        @endforeach
+                    </div>
+                    @endif
+                </div>
+                <div>
+                    <label class="text-gray-500 text-xs">Nationality</label>
+                    <input type="text" wire:model.blur="ocrNationality"
+                           placeholder="สัญชาติ"
+                           class="w-full border border-green-300 rounded px-2 py-1 text-sm font-semibold focus:ring-2 focus:ring-green-400 bg-white">
+                </div>
+                <div>
+                    <label class="text-gray-500 text-xs">Expiry</label>
+                    <input type="text" wire:model.blur="ocrExpiry"
+                           placeholder="วันหมดอายุ"
+                           class="w-full border border-green-300 rounded px-2 py-1 text-sm font-semibold focus:ring-2 focus:ring-green-400 bg-white">
                 </div>
             </div>
-        @endif
+            @if ($showPrintSlip && $savedTransactionId)
+            <div class="mt-2 flex items-center gap-2">
+                <button type="button" wire:click="updateCustomerInfo" wire:loading.attr="disabled"
+                        class="px-4 py-1.5 bg-green-600 text-white text-xs rounded hover:bg-green-700 font-semibold disabled:opacity-60">
+                    <span wire:loading.remove wire:target="updateCustomerInfo">บันทึกข้อมูลลูกค้า</span>
+                    <span wire:loading wire:target="updateCustomerInfo">กำลังบันทึก...</span>
+                </button>
+                <span x-show="saved" x-cloak x-transition class="text-green-600 text-xs font-semibold">บันทึกแล้ว!</span>
+            </div>
+            @endif
+        </div>
     </div>
 
     {{-- Passport Camera + Crop Modal --}}
@@ -124,6 +187,7 @@
     </template>
 
     {{-- Add currency row — Sell: ลูกค้าให้ THB → แลกเงินต่างประเทศ --}}
+    @if (! $showPrintSlip)
     <div class="mb-4 p-3 bg-red-50 border border-red-200 rounded">
         <div class="flex flex-wrap gap-3 items-end">
             <div style="width:200px; flex-shrink:0;">
@@ -206,8 +270,11 @@
         </div>
     @endif
 
+    @endif
+
     {{-- Transaction rows --}}
-    @if (count($rows) > 0)
+    @php $displayRows = $showPrintSlip ? $savedRows : $rows; @endphp
+    @if (count($displayRows) > 0)
         <div class="mb-4 overflow-x-auto">
             <table class="w-full text-sm border-collapse">
                 <thead>
@@ -217,11 +284,13 @@
                         <th class="px-3 py-2 text-right">ลูกค้าได้ (ต่างประเทศ)</th>
                         <th class="px-3 py-2 text-right">อัตราขาย</th>
                         <th class="px-3 py-2 text-right">รับจากลูกค้า (THB)</th>
+                        @if (! $showPrintSlip)
                         <th class="px-3 py-2 text-center w-16">ลบ</th>
+                        @endif
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach ($rows as $i => $row)
+                    @foreach ($displayRows as $i => $row)
                         <tr class="border-b border-gray-200 hover:bg-gray-50">
                             <td class="px-3 py-2 text-gray-400">{{ $i + 1 }}</td>
                             <td class="px-3 py-2 font-semibold">
@@ -230,10 +299,12 @@
                             <td class="px-3 py-2 text-right font-mono font-bold text-red-700">{{ number_format($row['total'], 0) }}</td>
                             <td class="px-3 py-2 text-right font-mono">{{ number_format($row['rate'], 4) }}</td>
                             <td class="px-3 py-2 text-right font-mono font-bold">{{ number_format($row['amount'], 0) }}</td>
+                            @if (! $showPrintSlip)
                             <td class="px-3 py-2 text-center">
                                 <button wire:click="removeRow({{ $i }})" type="button"
                                         class="text-red-500 hover:text-red-700 font-bold">✕</button>
                             </td>
+                            @endif
                         </tr>
                     @endforeach
                 </tbody>
@@ -241,9 +312,9 @@
                     <tr class="bg-gray-100 font-bold">
                         <td colspan="4" class="px-3 py-2 text-right">รวม THB รับจากลูกค้า</td>
                         <td class="px-3 py-2 text-right font-mono text-lg text-red-800">
-                            {{ number_format(collect($rows)->sum('amount'), 0) }}
+                            {{ number_format(collect($displayRows)->sum('amount'), 0) }}
                         </td>
-                        <td></td>
+                        @if (! $showPrintSlip)<td></td>@endif
                     </tr>
                 </tfoot>
             </table>
@@ -253,17 +324,23 @@
     @if ($showPrintSlip && $savedTransactionId)
         <div class="mb-4 p-3 bg-green-50 border border-green-300 rounded flex items-center justify-between">
             <span class="text-green-700 font-semibold">บันทึกสำเร็จ!</span>
-            <button type="button"
-                    onclick="document.getElementById('print-iframe').src = '{{ route('transaction.print', $savedTransactionId) }}?print=Y&t=' + Date.now();"
-                    class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm">
-                พิมพ์อีกครั้ง
-            </button>
+            <div class="flex gap-2">
+                <button type="button" wire:click="newTransaction"
+                        class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-semibold">
+                    + สร้างใหม่
+                </button>
+                <button type="button"
+                        onclick="document.getElementById('print-iframe').src = '{{ route('transaction.print', $savedTransactionId) }}?print=Y&t=' + Date.now();"
+                        class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm">
+                    พิมพ์อีกครั้ง
+                </button>
+            </div>
         </div>
         <iframe id="print-iframe" src="{{ route('transaction.print', $savedTransactionId) }}?print=Y"
                 style="position:absolute; width:0; height:0; border:none; overflow:hidden;"></iframe>
     @endif
 
-    @if (count($rows) > 0)
+    @if (count($rows) > 0 && ! $showPrintSlip)
         <div class="flex justify-end gap-3">
             <button wire:click="saveTransaction" wire:loading.attr="disabled" type="button"
                     class="px-6 py-2 bg-[#0e513a] text-white rounded font-bold hover:bg-[#0a3d2d] disabled:opacity-60">

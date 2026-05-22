@@ -9,6 +9,7 @@ use App\Models\TransactionMaster;
 use App\Models\TransactionDetail;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
 
 new class extends Component
 {
@@ -38,6 +39,7 @@ new class extends Component
     // Result
     public ?int $savedTransactionId = null;
     public bool $showPrintSlip = false;
+    public array $savedRows = [];
 
     // Passport capture (same as buy form)
     public string $passportImageB64 = '';
@@ -243,15 +245,16 @@ new class extends Component
                 }
             }
 
-            if ($this->passportImageB64 && $this->ocrPassportNo) {
+            // Save customer data if we have passport no (from OCR or manual input)
+            if ($this->ocrPassportNo) {
                 $this->savePassportCustomer($master);
             }
 
             $this->savedTransactionId = $master->id;
         });
 
+        $this->savedRows = $this->rows;
         $this->rows = [];
-        $this->custName = '';
         $this->showPrintSlip = true;
         $this->dispatch('transaction-saved', id: $this->savedTransactionId);
     }
@@ -267,28 +270,164 @@ new class extends Component
 
     protected function savePassportCustomer(TransactionMaster $master): void
     {
-        $imagePath = null;
+        $imageData = [];
         if ($this->passportImageB64) {
-            $imageData = base64_decode(preg_replace('/^data:image\/\w+;base64,/', '', $this->passportImageB64));
-            $filename  = 'passports/' . now()->format('Y/m') . '/' . uniqid('pp_') . '.jpg';
-            \Illuminate\Support\Facades\Storage::disk('public')->put($filename, $imageData);
-            $imagePath = $filename;
+            $decoded  = base64_decode(preg_replace('/^data:image\/\w+;base64,/', '', $this->passportImageB64));
+            $filename = 'passports/' . now()->format('Y/m') . '/' . uniqid('pp_') . '.jpg';
+            \Illuminate\Support\Facades\Storage::disk('public')->put($filename, $decoded);
+            $imageData['passport_photo'] = $filename;
         }
+
+        $firstName = $this->ocrFirstName;
+        $lastName  = $this->ocrLastName;
+        if (! $firstName && ! $lastName && $this->custName) {
+            $parts = preg_split('/\s+/', trim($this->custName), 2);
+            $firstName = $parts[0] ?? '';
+            $lastName  = $parts[1] ?? '';
+        }
+
         $customer = Customer::updateOrCreate(
             ['id_type' => 'passport', 'id_number' => $this->ocrPassportNo],
-            [
-                'name_en'         => trim($this->ocrFirstName . ' ' . $this->ocrLastName),
-                'first_name'      => $this->ocrFirstName,
-                'last_name'       => $this->ocrLastName,
+            array_merge([
+                'name_en'         => $this->custName ?: trim($firstName . ' ' . $lastName),
+                'first_name'      => $firstName,
+                'last_name'       => $lastName,
                 'nationality'     => $this->ocrNationality,
                 'date_of_birth'   => $this->ocrDob ?: null,
                 'passport_expiry' => $this->ocrExpiry ?: null,
-                'passport_photo'  => $imagePath,
                 'kyc_status'      => 'approved',
-            ]
+            ], $imageData)
         );
         $master->update(['customer_id' => $customer->id]);
         $this->customerId = $customer->id;
+    }
+
+    // Autocomplete search
+    public string $passportSearch = '';
+    public array $customerSuggestions = [];
+    public bool $showSuggestions = false;
+
+    public function searchCustomers(string $term): void
+    {
+        $this->passportSearch = $term;
+        if (mb_strlen($term) < 2) {
+            $this->customerSuggestions = [];
+            $this->showSuggestions = false;
+            return;
+        }
+
+        $this->customerSuggestions = Customer::where(function ($q) use ($term) {
+                $q->where('id_number', 'like', "%{$term}%")
+                  ->orWhere('name_en', 'like', "%{$term}%")
+                  ->orWhere('first_name', 'like', "%{$term}%")
+                  ->orWhere('last_name', 'like', "%{$term}%")
+                  ->orWhere('name_th', 'like', "%{$term}%");
+            })
+            ->orderByDesc('updated_at')
+            ->limit(8)
+            ->get()
+            ->map(fn ($c) => [
+                'id'          => $c->id,
+                'id_number'   => $c->id_number ?? '',
+                'name'        => $c->name_en ?: trim(($c->first_name ?? '') . ' ' . ($c->last_name ?? '')),
+                'nationality' => $c->nationality ?? '',
+                'expiry'      => $c->passport_expiry ? Carbon::parse($c->passport_expiry)->format('Y-m-d') : '',
+                'first_name'  => $c->first_name ?? '',
+                'last_name'   => $c->last_name ?? '',
+            ])
+            ->toArray();
+
+        $this->showSuggestions = count($this->customerSuggestions) > 0;
+    }
+
+    public function selectCustomer(int $id): void
+    {
+        $customer = Customer::find($id);
+        if (! $customer) return;
+
+        $this->customerId     = $customer->id;
+        $this->ocrPassportNo  = $customer->id_number ?? '';
+        $this->ocrFirstName   = $customer->first_name ?? '';
+        $this->ocrLastName    = $customer->last_name ?? '';
+        $this->ocrNationality = $customer->nationality ?? '';
+        $this->ocrDob         = $customer->date_of_birth ? Carbon::parse($customer->date_of_birth)->format('Y-m-d') : '';
+        $this->ocrExpiry      = $customer->passport_expiry ? Carbon::parse($customer->passport_expiry)->format('Y-m-d') : '';
+        $this->custName       = $customer->name_en ?: trim($this->ocrFirstName . ' ' . $this->ocrLastName);
+        $this->passportSearch = '';
+        $this->showSuggestions = false;
+    }
+
+    public function hideSuggestions(): void
+    {
+        $this->showSuggestions = false;
+    }
+
+    public function updateCustomerInfo(): void
+    {
+        if (! $this->ocrPassportNo || ! $this->savedTransactionId) return;
+
+        $firstName = $this->ocrFirstName;
+        $lastName  = $this->ocrLastName;
+        if (! $firstName && ! $lastName && $this->custName) {
+            $parts = preg_split('/\s+/', trim($this->custName), 2);
+            $firstName = $parts[0] ?? '';
+            $lastName  = $parts[1] ?? '';
+        }
+
+        $imageData = [];
+        if ($this->passportImageB64) {
+            $decoded  = base64_decode(preg_replace('/^data:image\/\w+;base64,/', '', $this->passportImageB64));
+            $filename = 'passports/' . now()->format('Y/m') . '/' . uniqid('pp_') . '.jpg';
+            \Illuminate\Support\Facades\Storage::disk('public')->put($filename, $decoded);
+            $imageData['passport_photo'] = $filename;
+        }
+
+        $customer = Customer::updateOrCreate(
+            ['id_type' => 'passport', 'id_number' => $this->ocrPassportNo],
+            array_merge([
+                'name_en'         => $this->custName ?: trim($firstName . ' ' . $lastName),
+                'first_name'      => $firstName,
+                'last_name'       => $lastName,
+                'nationality'     => $this->ocrNationality,
+                'date_of_birth'   => $this->ocrDob ?: null,
+                'passport_expiry' => $this->ocrExpiry ?: null,
+                'kyc_status'      => 'approved',
+            ], $imageData)
+        );
+
+        $master = TransactionMaster::find($this->savedTransactionId);
+        if ($master) {
+            $master->update(['customer_id' => $customer->id, 'cust_name' => $this->custName]);
+        }
+        $this->customerId = $customer->id;
+        $this->dispatch('customer-updated');
+    }
+
+    public function newTransaction(): void
+    {
+        $this->custName         = '';
+        $this->customerId       = null;
+        $this->rows             = [];
+        $this->savedRows        = [];
+        $this->selectedCurrency = '';
+        $this->addAmount        = 0;
+        $this->currentRate      = 0;
+        $this->currentTotal     = 0;
+        $this->boothAmount      = 0;
+        $this->savedTransactionId = null;
+        $this->showPrintSlip    = false;
+        $this->passportImageB64 = '';
+        $this->ocrFirstName     = '';
+        $this->ocrLastName      = '';
+        $this->ocrNationality   = '';
+        $this->ocrDob           = '';
+        $this->ocrPassportNo    = '';
+        $this->ocrExpiry        = '';
+        $this->passportSearch   = '';
+        $this->customerSuggestions = [];
+        $this->showSuggestions  = false;
+        $this->isDiscountBooth  = false;
+        $this->discountBoothCode = '';
     }
 
     public function receiveOcrData(array $data): void

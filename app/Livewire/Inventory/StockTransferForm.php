@@ -156,6 +156,23 @@ class StockTransferForm extends Component
         session()->flash('success', 'บันทึกรายการสำเร็จ');
     }
 
+    public function cancelTransfer(int $transferId): void
+    {
+        $transfer = StockTransfer::find($transferId);
+        if (! $transfer || $transfer->status !== 'completed') {
+            session()->flash('error', 'ไม่สามารถยกเลิกรายการนี้ได้');
+            return;
+        }
+
+        try {
+            $service = app(InventoryService::class);
+            $service->cancelTransfer($transferId, Auth::id());
+            session()->flash('success', "ยกเลิกรายการ {$transfer->transfer_no} สำเร็จ — สต็อกคืนกลับเรียบร้อย");
+        } catch (\Throwable $e) {
+            session()->flash('error', 'เกิดข้อผิดพลาด: ' . $e->getMessage());
+        }
+    }
+
     public function getTransfersProperty()
     {
         $query = StockTransfer::with(['fromCounter.branch', 'toCounter.branch', 'denomination', 'currency', 'createdByUser'])

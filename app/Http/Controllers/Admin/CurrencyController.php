@@ -11,10 +11,21 @@ class CurrencyController extends Controller
     /**
      * List all currencies.
      */
-    public function index()
+    public function index(Request $request)
     {
-        $currencies = Currency::withCount('denominations')
-            ->orderBy('seq')->orderBy('currency_code')->paginate(50);
+        $query = Currency::withCount('denominations');
+
+        if ($search = $request->input('search')) {
+            $query->where(function ($q) use ($search) {
+                $q->where('currency_code', 'like', "%{$search}%")
+                  ->orWhere('currency_name', 'like', "%{$search}%")
+                  ->orWhere('currency_name_th', 'like', "%{$search}%")
+                  ->orWhere('country', 'like', "%{$search}%");
+            });
+        }
+
+        $currencies = $query->orderBy('seq')->orderBy('currency_code')->paginate(50)
+            ->withQueryString();
 
         return view('admin.currencies.index', compact('currencies'));
     }

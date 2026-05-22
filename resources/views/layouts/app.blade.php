@@ -153,7 +153,7 @@
             @endif
 
             {{-- Rates --}}
-            @if($sectionOn(['admin.rate.index', 'admin.rate-settings.index', 'rate.board']))
+            @if($sectionOn(['admin.rate.index', 'admin.rate-settings.index', 'admin.superrich-rates', 'rate.board']))
             <div class="pt-2" x-data="{ open: {{ request()->routeIs('admin.rate.*') || request()->routeIs('admin.rate-settings.*') ? 'true' : 'false' }} }">
                 <button @click="open = !open" x-show="sidebarOpen" type="button"
                         class="w-full flex items-center justify-between px-2 py-1 text-xs font-semibold text-[#0e513a] uppercase tracking-wider hover:text-[#137050] transition-colors">
@@ -183,6 +183,16 @@
                               d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
                     </svg>
                     <span x-show="sidebarOpen">ตั้งค่าคำนวณ (Rate Calc)</span>
+                </a>
+                @endif
+                @if($menuOn('admin.superrich-rates'))
+                <a href="{{ route('admin.superrich-rates') }}"
+                   class="sidebar-link {{ request()->routeIs('admin.superrich-rates') ? 'active' : '' }}">
+                    <svg class="w-5 h-5 flex-shrink-0 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                    </svg>
+                    <span x-show="sidebarOpen">SuperRich อ้างอิง</span>
                 </a>
                 @endif
                 @if($menuOn('rate.board'))

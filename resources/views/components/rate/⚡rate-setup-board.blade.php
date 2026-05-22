@@ -6,6 +6,7 @@ use App\Models\Counter;
 use App\Models\Currency;
 use App\Models\CurrencyDenomination;
 use App\Models\CounterRate;
+use App\Models\RateChangeLog;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
 
@@ -132,6 +133,12 @@ new class extends Component
         $userId = Auth::id();
 
         foreach ($this->rates as $denomId => $row) {
+            // Read old rate for logging
+            $old = CounterRate::where('counter_id', $this->counterId)
+                ->where('denomination_id', $denomId)
+                ->whereDate('rate_date', $today)
+                ->first();
+
             CounterRate::updateOrCreate(
                 [
                     'counter_id'      => $this->counterId,
@@ -145,6 +152,17 @@ new class extends Component
                     'sell_discount_rate' => $row['discount'],
                     'set_by'             => $userId,
                 ]
+            );
+
+            RateChangeLog::logChange(
+                counterId: $this->counterId,
+                denomId: (int) $denomId,
+                currencyCode: $row['currency_code'],
+                oldBuy: $old ? (float) $old->rate_buy : null,
+                oldSell: $old ? (float) $old->rate_sell : null,
+                newBuy: (float) $row['buy'],
+                newSell: (float) $row['sell'],
+                source: 'manual',
             );
         }
 

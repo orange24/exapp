@@ -127,6 +127,9 @@ Route::middleware(['auth', 'session.check'])->group(function () {
         Route::resource('rate-settings', RateSettingController::class)->except(['show'])->parameter('rate-settings', 'rateSetting');
         Route::post('/rate-settings/{rateSetting}/copy-from', [RateSettingController::class, 'copyFrom'])->name('rate-settings.copy-from');
         Route::post('/rate-settings/{rateSetting}/apply', [RateSettingController::class, 'applyRates'])->name('rate-settings.apply');
+
+        // SuperRich Reference Rates
+        Route::get('/superrich-rates', fn() => view('admin.superrich-rates'))->name('superrich-rates');
     });
 
     // Module 1: Password Change

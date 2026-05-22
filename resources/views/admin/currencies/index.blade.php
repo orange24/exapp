@@ -21,6 +21,23 @@
     @endif
 
     <div class="bg-white shadow rounded-lg overflow-hidden">
+        <div class="px-4 py-3 border-b bg-gray-50">
+            <form method="GET" action="{{ route('admin.currencies.index') }}" class="flex gap-2">
+                <input type="text" name="search" value="{{ request('search') }}"
+                       placeholder="ค้นหา รหัส, ชื่อ, ประเทศ..."
+                       class="flex-1 border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-[#0e513a] focus:border-[#0e513a]">
+                <button type="submit"
+                        class="px-4 py-2 bg-[#0e513a] text-white rounded text-sm font-medium hover:bg-[#0a3d2d]">
+                    ค้นหา
+                </button>
+                @if (request('search'))
+                <a href="{{ route('admin.currencies.index') }}"
+                   class="px-4 py-2 bg-gray-200 text-gray-700 rounded text-sm font-medium hover:bg-gray-300">
+                    ล้าง
+                </a>
+                @endif
+            </form>
+        </div>
         <div class="overflow-x-auto">
             <table class="w-full text-sm">
                 <thead class="bg-gray-50 border-b">
