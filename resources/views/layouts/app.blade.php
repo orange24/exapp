@@ -108,7 +108,7 @@
             </a>
 
             {{-- Transactions --}}
-            @if($sectionOn(['transaction.buy', 'transaction.sell', 'transaction.my']))
+            @if($sectionOn(['transaction.buy', 'transaction.sell', 'transaction.my', 'admin.bank-sales']))
             <div class="pt-2" x-data="{ open: {{ request()->routeIs('transaction.*') ? 'true' : 'false' }} }">
                 <button @click="open = !open" x-show="sidebarOpen" type="button"
                         class="w-full flex items-center justify-between px-2 py-1 text-xs font-semibold text-[#0e513a] uppercase tracking-wider hover:text-[#137050] transition-colors">
@@ -146,6 +146,16 @@
                               d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
                     </svg>
                     <span x-show="sidebarOpen">รายการของฉัน (My Trans)</span>
+                </a>
+                @endif
+                @if($menuOn('admin.bank-sales'))
+                <a href="{{ route('admin.bank-sales') }}"
+                   class="sidebar-link {{ request()->routeIs('admin.bank-sales') ? 'active' : '' }}">
+                    <svg class="w-5 h-5 flex-shrink-0 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+                    </svg>
+                    <span x-show="sidebarOpen">ขายธนาคาร (Bank Sale)</span>
                 </a>
                 @endif
                 </div>

@@ -38,6 +38,15 @@
                     @error('currencyCode') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
                 </div>
                 <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">ธนบัตร (Denomination)</label>
+                    <select wire:model.live="denominationId" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                        <option value="">-- เลือกธนบัตร --</option>
+                        @foreach ($this->denominations as $d)
+                            <option value="{{ $d->id }}">{{ $d->display_name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">จำนวนเงิน</label>
                     <input type="number" step="0.01" wire:model.blur="amount" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="0.00">
                     @error('amount') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
@@ -132,6 +141,11 @@
                                     <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">ยืนยันแล้ว</span>
                                 @elseif ($bk->status === 'cancelled')
                                     <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">ยกเลิก</span>
+                                @elseif ($bk->status === 'expired')
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-200 text-gray-600">หมดอายุ</span>
+                                @endif
+                                @if ($bk->transaction_id)
+                                    <div class="mt-1"><span class="text-xs text-blue-600 font-mono">{{ $bk->transaction?->trns_no }}</span></div>
                                 @endif
                             </td>
                             <td class="px-4 py-2 text-xs {{ $isExpired ? 'text-red-500 font-semibold' : '' }}">

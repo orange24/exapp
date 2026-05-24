@@ -183,6 +183,10 @@ new class extends Component
                 $this->savePassportCustomer($master);
             }
 
+            // Auto GL Journal
+            $master->load('details');
+            app(\App\Services\AutoJournalService::class)->createFromTransaction($master);
+
             $this->savedTransactionId = $master->id;
         });
 

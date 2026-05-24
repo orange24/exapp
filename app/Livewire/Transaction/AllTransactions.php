@@ -57,6 +57,17 @@ class AllTransactions extends Component
             'updated_by' => Auth::id(),
         ]);
 
+        // Reverse inventory
+        app(\App\Services\InventoryService::class)->reverseMovement($transaction->id, Auth::id());
+
+        // Reverse GL journal if exists
+        $originalJournal = \App\Models\JournalEntry::where('source_type', 'transaction')
+            ->where('source_id', $transaction->id)->first();
+        if ($originalJournal) {
+            $originalJournal->load('lines');
+            app(\App\Services\AutoJournalService::class)->createReversal($originalJournal);
+        }
+
         session()->flash('success', 'อนุมัติยกเลิกเรียบร้อยแล้ว');
     }
 

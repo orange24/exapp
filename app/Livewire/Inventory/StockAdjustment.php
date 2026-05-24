@@ -145,6 +145,15 @@ class StockAdjustment extends Component
                 'moved_by' => Auth::id(),
                 'moved_at' => now(),
             ]);
+
+            // Auto GL Journal
+            app(\App\Services\AutoJournalService::class)->createFromAdjustment(
+                (int) $this->counterId,
+                $this->currencyCode,
+                $adjustAmount,
+                (float) $stock->avg_cost,
+                $this->note,
+            );
         });
 
         $this->resetForm();

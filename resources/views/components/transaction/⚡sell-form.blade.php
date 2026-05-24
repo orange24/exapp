@@ -4,6 +4,7 @@ use Livewire\Component;
 use Livewire\Attributes\Computed;
 use App\Models\Counter;
 use App\Models\CounterRate;
+use App\Models\CounterStock;
 use App\Models\Customer;
 use App\Models\TransactionMaster;
 use App\Models\TransactionDetail;
@@ -250,6 +251,10 @@ new class extends Component
                 $this->savePassportCustomer($master);
             }
 
+            // Auto GL Journal
+            $master->load('details');
+            app(\App\Services\AutoJournalService::class)->createFromTransaction($master);
+
             $this->savedTransactionId = $master->id;
         });
 
@@ -473,6 +478,35 @@ new class extends Component
         return Counter::where('is_active', true)
             ->where('id', '!=', $this->counterId ?? 0)
             ->get();
+    }
+
+    #[Computed]
+    public function stockInfo(): ?array
+    {
+        if (! $this->selectedCurrency || ! $this->counterId) return null;
+
+        $stock = CounterStock::where('counter_id', $this->counterId)
+            ->where('denomination_id', $this->selectedCurrency)->first();
+        $rate = CounterRate::where('counter_id', $this->counterId)
+            ->where('denomination_id', $this->selectedCurrency)
+            ->whereDate('rate_date', today())->first();
+
+        $avgCost  = (float) ($stock?->avg_cost ?? 0);
+        $buyRate  = (float) ($rate?->rate_buy ?? 0);
+        $sellRate = (float) ($rate?->rate_sell ?? 0);
+
+        return [
+            'quantity'    => (float) ($stock?->quantity ?? 0),
+            'hold'        => (float) ($stock?->hold_amount ?? 0),
+            'available'   => (float) ($stock?->available ?? 0),
+            'avg_cost'    => $avgCost,
+            'buy_rate'    => $buyRate,
+            'sell_rate'   => $sellRate,
+            'buy_margin'  => $buyRate > 0 ? round($buyRate - $avgCost, 4) : 0,
+            'sell_margin' => $sellRate > 0 ? round($sellRate - $avgCost, 4) : 0,
+            'spread'      => ($buyRate > 0 && $sellRate > 0) ? round($sellRate - $buyRate, 4) : 0,
+            'denom_label' => $rate?->denomination?->display_name ?? '',
+        ];
     }
 
     public function render()

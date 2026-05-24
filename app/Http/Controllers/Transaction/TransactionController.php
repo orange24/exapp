@@ -95,6 +95,14 @@ class TransactionController extends Controller
         // Reverse inventory movements for cancelled transaction
         app(\App\Services\InventoryService::class)->reverseMovement($transaction->id, Auth::id());
 
+        // Reverse GL journal if exists
+        $originalJournal = \App\Models\JournalEntry::where('source_type', 'transaction')
+            ->where('source_id', $transaction->id)->first();
+        if ($originalJournal) {
+            $originalJournal->load('lines');
+            app(\App\Services\AutoJournalService::class)->createReversal($originalJournal);
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'อนุมัติยกเลิกเรียบร้อยแล้ว (Cancellation approved)',

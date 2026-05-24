@@ -297,6 +297,9 @@ class InventoryService
                 'moved_at' => now(),
             ]);
 
+            // Auto GL Journal
+            app(AutoJournalService::class)->createFromTransfer($transfer);
+
             return $transfer;
         });
     }
@@ -380,6 +383,14 @@ class InventoryService
 
             // Mark transfer as cancelled
             $transfer->update(['status' => 'cancelled']);
+
+            // Reverse GL journal if exists
+            $originalJournal = \App\Models\JournalEntry::where('source_type', 'transfer')
+                ->where('source_id', $transfer->id)->first();
+            if ($originalJournal) {
+                $originalJournal->load('lines');
+                app(AutoJournalService::class)->createReversal($originalJournal);
+            }
 
             return $transfer;
         });

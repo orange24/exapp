@@ -130,6 +130,9 @@ Route::middleware(['auth', 'session.check'])->group(function () {
 
         // SuperRich Reference Rates
         Route::get('/superrich-rates', fn() => view('admin.superrich-rates'))->name('superrich-rates');
+
+        // Sell to Bank
+        Route::get('/bank-sales', fn() => view('admin.bank-sales'))->name('bank-sales');
     });
 
     // Module 1: Password Change

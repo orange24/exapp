@@ -8,6 +8,10 @@ use App\Models\CounterStock;
 use App\Models\Currency;
 use App\Models\CurrencyDenomination;
 use App\Models\Customer;
+use App\Models\TransactionMaster;
+use App\Models\TransactionDetail;
+use App\Services\AutoJournalService;
+use App\Services\InventoryService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Livewire\Component;
@@ -21,6 +25,7 @@ class BookingManager extends Component
     public bool $showForm = false;
     public string $type = 'buy';
     public string $currencyCode = '';
+    public string $denominationId = '';
     public string $amount = '';
     public string $rate = '';
     public string $customerName = '';
@@ -46,10 +51,22 @@ class BookingManager extends Component
         return Currency::where('is_active', true)->orderBy('seq')->get();
     }
 
+    public function getDenominationsProperty()
+    {
+        if (! $this->currencyCode) return collect();
+        return CurrencyDenomination::where('currency_code', $this->currencyCode)
+            ->where('is_active', true)->orderBy('seq')->get();
+    }
+
+    public function updatedCurrencyCode(): void
+    {
+        $this->denominationId = '';
+    }
+
     public function getBookingsProperty()
     {
         $counterId = session('working_counter_id');
-        $query = Booking::with(['counter.branch', 'customer', 'createdBy'])
+        $query = Booking::with(['counter.branch', 'customer', 'createdBy', 'transaction', 'denomination'])
             ->orderByDesc('created_at');
 
         if ($counterId && !Auth::user()->isAdmin()) {
@@ -109,6 +126,7 @@ class BookingManager extends Component
                 'customer_id' => $this->customerId ?: null,
                 'counter_id' => $counterId,
                 'currency_code' => $this->currencyCode,
+                'denomination_id' => $this->denominationId ?: null,
                 'amount' => (float) $this->amount,
                 'rate' => (float) $this->rate,
                 'type' => $this->type,
@@ -138,18 +156,134 @@ class BookingManager extends Component
             return;
         }
 
-        DB::transaction(function () use ($booking) {
-            $booking->update(['status' => 'confirmed']);
+        // Check if expired
+        if ($booking->isExpired()) {
+            $this->expireBooking($booking);
+            session()->flash('error', 'Booking หมดอายุแล้ว — stock ถูกปล่อยคืน');
+            return;
+        }
 
-            // Release hold for sell bookings
+        DB::transaction(function () use ($booking) {
+            // Release hold first
+            if ($booking->type === 'sell' && $booking->hold_amount > 0) {
+                CounterStock::where('counter_id', $booking->counter_id)
+                    ->where('currency_code', $booking->currency_code)
+                    ->decrement('hold_amount', (float) $booking->hold_amount);
+            }
+
+            // Create real transaction from booking
+            $trnsType = $booking->type === 'sell' ? 'SELLING' : 'BUYING';
+            $prefix = $booking->type === 'sell' ? 'S' : 'B';
+            $docNo = $this->generateDocNo($prefix);
+            $counter = Counter::find($booking->counter_id);
+
+            $thbAmount = round($booking->amount * $booking->rate, 2);
             if ($booking->type === 'sell') {
+                // Sell: amount = THB from customer, total = foreign given
+                $foreignAmount = $booking->amount;
+                $thbAmount = round($foreignAmount * $booking->rate, 0);
+            }
+
+            $master = TransactionMaster::create([
+                'trns_no'        => $docNo,
+                'trns_type'      => $trnsType,
+                'counter_id'     => $booking->counter_id,
+                'counter_name'   => $counter?->counter_name,
+                'customer_id'    => $booking->customer_id,
+                'cust_name'      => $booking->customer?->name_en ?? $booking->customerName ?? '',
+                'convert_currency_to' => 'THB',
+                'trns_datetime'  => now(),
+                'created_by'     => Auth::id(),
+                'updated_by'     => Auth::id(),
+            ]);
+
+            // Determine denomination
+            $denomId = $booking->denomination_id;
+            $denom = $denomId ? CurrencyDenomination::find($denomId) : null;
+
+            if ($booking->type === 'sell') {
+                TransactionDetail::create([
+                    'transaction_id'  => $master->id,
+                    'currency_code'   => $booking->currency_code,
+                    'denomination_id' => $denomId,
+                    'currency_name'   => $denom?->display_name ?? $booking->currency_code,
+                    'unit_price'      => $booking->rate,
+                    'amount'          => $thbAmount,        // THB from customer
+                    'total'           => $booking->amount,  // foreign given
+                    'created_by'      => Auth::id(),
+                ]);
+
+                // Cut inventory
+                if ($denomId) {
+                    app(InventoryService::class)->recordSell(
+                        $booking->counter_id,
+                        $booking->currency_code,
+                        $denomId,
+                        $booking->amount,
+                        $booking->rate,
+                        $master->id,
+                        Auth::id()
+                    );
+                }
+            } else {
+                // Buy: amount = foreign, total = THB
+                TransactionDetail::create([
+                    'transaction_id'  => $master->id,
+                    'currency_code'   => $booking->currency_code,
+                    'denomination_id' => $denomId,
+                    'currency_name'   => $denom?->display_name ?? $booking->currency_code,
+                    'unit_price'      => $booking->rate,
+                    'amount'          => $booking->amount,
+                    'total'           => $thbAmount,
+                    'created_by'      => Auth::id(),
+                ]);
+
+                if ($denomId) {
+                    app(InventoryService::class)->recordBuy(
+                        $booking->counter_id,
+                        $booking->currency_code,
+                        $denomId,
+                        $booking->amount,
+                        $booking->rate,
+                        $master->id,
+                        Auth::id()
+                    );
+                }
+            }
+
+            // Auto GL Journal
+            $master->load('details');
+            app(AutoJournalService::class)->createFromTransaction($master);
+
+            // Link booking to transaction
+            $booking->update([
+                'status' => 'confirmed',
+                'transaction_id' => $master->id,
+            ]);
+        });
+
+        session()->flash('success', 'ยืนยัน Booking สำเร็จ — สร้างรายการซื้อ/ขายเรียบร้อย');
+    }
+
+    private function expireBooking(Booking $booking): void
+    {
+        DB::transaction(function () use ($booking) {
+            $booking->update(['status' => 'expired']);
+            if ($booking->type === 'sell' && $booking->hold_amount > 0) {
                 CounterStock::where('counter_id', $booking->counter_id)
                     ->where('currency_code', $booking->currency_code)
                     ->decrement('hold_amount', (float) $booking->hold_amount);
             }
         });
+    }
 
-        session()->flash('success', 'ยืนยัน Booking สำเร็จ — นำไปทำรายการซื้อ/ขายต่อได้');
+    private function generateDocNo(string $prefix): string
+    {
+        $today = now()->format('Ymd');
+        $last = TransactionMaster::where('trns_no', 'like', $prefix . $today . '%')
+            ->orderByDesc('trns_no')->first();
+        $seq = $last ? (int) substr($last->trns_no, -4) + 1 : 1;
+        return $prefix . $today . str_pad($seq, 4, '0', STR_PAD_LEFT);
     }
 
     public function cancelBooking(int $id): void
@@ -179,6 +313,7 @@ class BookingManager extends Component
         $this->showForm = false;
         $this->type = 'buy';
         $this->currencyCode = '';
+        $this->denominationId = '';
         $this->amount = '';
         $this->rate = '';
         $this->customerName = '';

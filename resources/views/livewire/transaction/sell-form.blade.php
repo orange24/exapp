@@ -1,4 +1,7 @@
 <div class="p-4" x-data="buyForm()">
+<div class="flex gap-4">
+{{-- Main Form Area --}}
+<div class="flex-1 min-w-0">
     {{-- Header --}}
     <div class="flex items-center justify-between mb-4">
         <h2 class="text-xl font-bold text-gray-800">จ่ายขายเงินตราต่างประเทศ (Sell)</h2>
@@ -349,6 +352,87 @@
             </button>
         </div>
     @endif
+
+</div>{{-- end Main Form Area --}}
+
+{{-- Side Panel: Stock Info --}}
+<div class="w-64 flex-shrink-0 hidden lg:block">
+    <div class="sticky top-4">
+        <div class="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
+            <div class="px-4 py-3" style="background:#0e513a;">
+                <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                    </svg>
+                    Stock Info
+                </h3>
+            </div>
+
+            @if ($this->stockInfo)
+                @php $si = $this->stockInfo; @endphp
+                <div class="p-4">
+                    <div class="text-center mb-3">
+                        <span class="text-lg font-bold" style="color:#0e513a;">{{ $si['denom_label'] }}</span>
+                    </div>
+
+                    <div class="space-y-2 text-sm">
+                        <div class="flex justify-between py-1 border-b border-gray-100">
+                            <span class="text-gray-500">Stock</span>
+                            <span class="font-mono font-bold">{{ number_format($si['quantity'], 2) }}</span>
+                        </div>
+                        <div class="flex justify-between py-1 border-b border-gray-100">
+                            <span class="text-gray-500">Hold</span>
+                            <span class="font-mono {{ $si['hold'] > 0 ? 'text-orange-600 font-bold' : 'text-gray-400' }}">{{ number_format($si['hold'], 2) }}</span>
+                        </div>
+                        <div class="flex justify-between py-1 border-b border-gray-100">
+                            <span class="text-gray-500">Available</span>
+                            <span class="font-mono font-bold {{ $si['available'] > 0 ? 'text-green-700' : 'text-red-600' }}">{{ number_format($si['available'], 2) }}</span>
+                        </div>
+                    </div>
+
+                    <div class="mt-3 pt-3 border-t border-gray-200 space-y-2 text-sm">
+                        <div class="flex justify-between py-1 border-b border-gray-100">
+                            <span class="text-gray-500">Avg Cost</span>
+                            <span class="font-mono text-blue-700">{{ number_format($si['avg_cost'], 4) }}</span>
+                        </div>
+                        <div class="flex justify-between py-1 border-b border-gray-100">
+                            <span class="text-gray-500">Buy Rate</span>
+                            <span class="font-mono font-bold text-green-700">{{ number_format($si['buy_rate'], 4) }}</span>
+                        </div>
+                        <div class="flex justify-between py-1 border-b border-gray-100">
+                            <span class="text-gray-500">Sell Rate</span>
+                            <span class="font-mono font-bold text-red-700">{{ number_format($si['sell_rate'], 4) }}</span>
+                        </div>
+                    </div>
+
+                    <div class="mt-3 pt-3 border-t border-gray-200 space-y-2 text-sm">
+                        <div class="flex justify-between py-1">
+                            <span class="text-gray-500">Buy Margin</span>
+                            <span class="font-mono {{ $si['buy_margin'] >= 0 ? 'text-green-600' : 'text-red-600' }}">
+                                {{ $si['buy_margin'] >= 0 ? '+' : '' }}{{ number_format($si['buy_margin'], 4) }}
+                            </span>
+                        </div>
+                        <div class="flex justify-between py-1">
+                            <span class="text-gray-500">Sell Margin</span>
+                            <span class="font-mono {{ $si['sell_margin'] >= 0 ? 'text-green-600' : 'text-red-600' }}">
+                                {{ $si['sell_margin'] >= 0 ? '+' : '' }}{{ number_format($si['sell_margin'], 4) }}
+                            </span>
+                        </div>
+                        <div class="flex justify-between py-1 border-t border-gray-200 pt-2">
+                            <span class="text-gray-500 font-medium">Spread</span>
+                            <span class="font-mono font-bold text-blue-800">{{ number_format($si['spread'], 4) }}</span>
+                        </div>
+                    </div>
+                </div>
+            @else
+                <div class="p-6 text-center text-gray-400 text-sm">
+                    เลือกสกุลเงินเพื่อดูข้อมูล
+                </div>
+            @endif
+        </div>
+    </div>
+</div>
+</div>{{-- end flex --}}
 
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css">
 <script>
