@@ -97,7 +97,8 @@ new class extends Component
         $stock = \App\Models\CounterStock::where('counter_id', $this->counterId)
             ->where('denomination_id', $denomId)
             ->first();
-        $this->boothAmount = $stock ? (float) $stock->quantity : 0;
+        // ใช้ available (quantity - hold_amount) ป้องกันขาย stock ที่ถูก reserve
+        $this->boothAmount = $stock ? (float) $stock->quantity - (float) $stock->hold_amount : 0;
 
         $this->recalcTotal();
     }

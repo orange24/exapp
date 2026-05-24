@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Feature Plan — Sell to Bank + Booking Enhancement + Side Panel + Auto GL</title>
+<style>
+  :root { --primary: #0e513a; --bg: #f8fafc; --card: #fff; --border: #e2e8f0; --text: #1e293b; --muted: #64748b; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; padding: 20px; max-width: 1200px; margin: 0 auto; }
+  h1 { color: var(--primary); font-size: 1.8rem; margin-bottom: 8px; }
+  h2 { color: var(--primary); font-size: 1.3rem; margin: 32px 0 12px; padding-bottom: 6px; border-bottom: 2px solid var(--primary); }
+  h3 { color: #334155; font-size: 1.05rem; margin: 20px 0 8px; }
+  h4 { color: var(--muted); font-size: 0.9rem; margin: 12px 0 6px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .subtitle { color: var(--muted); margin-bottom: 24px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 20px; margin-bottom: 16px; }
+  .card-accent { border-left: 4px solid var(--primary); }
+  .card-warn { border-left: 4px solid #f59e0b; }
+  .card-info { border-left: 4px solid #3b82f6; }
+  .card-red { border-left: 4px solid #ef4444; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
+  .badge-green { background: #dcfce7; color: #166534; }
+  .badge-blue { background: #dbeafe; color: #1e40af; }
+  .badge-yellow { background: #fef3c7; color: #92400e; }
+  .badge-red { background: #fee2e2; color: #991b1b; }
+  .badge-gray { background: #f1f5f9; color: #475569; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin: 8px 0; }
+  th { background: var(--primary); color: #fff; padding: 8px 10px; text-align: left; font-weight: 600; }
+  td { padding: 6px 10px; border-bottom: 1px solid var(--border); }
+  tr:nth-child(even) { background: #f8fafc; }
+  code { background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-size: 0.82rem; font-family: 'SF Mono', 'Menlo', monospace; }
+  pre { background: #1e293b; color: #e2e8f0; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 0.8rem; line-height: 1.5; margin: 8px 0; }
+  pre .kw { color: #c084fc; } pre .str { color: #86efac; } pre .cmt { color: #64748b; } pre .fn { color: #60a5fa; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+  @media (max-width: 768px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+  .mockup { background: #1a1a2e; color: #e2e8f0; padding: 16px; border-radius: 8px; font-family: monospace; font-size: 0.75rem; line-height: 1.5; white-space: pre; overflow-x: auto; }
+  .mockup .title { color: #facc15; font-weight: bold; }
+  .mockup .btn { color: #86efac; }
+  .mockup .warn { color: #fb923c; }
+  .mockup .dim { color: #64748b; }
+  .mockup .accent { color: #60a5fa; }
+  .seq-diagram { background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 16px; font-family: monospace; font-size: 0.78rem; white-space: pre; overflow-x: auto; line-height: 1.6; }
+  .phase { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; margin-right: 8px; }
+  .phase-1 { background: #dcfce7; color: #166534; }
+  .phase-2 { background: #dbeafe; color: #1e40af; }
+  .phase-3 { background: #fef3c7; color: #92400e; }
+  .file-tree { font-family: monospace; font-size: 0.82rem; line-height: 1.8; }
+  .file-tree .new { color: #16a34a; font-weight: 600; }
+  .file-tree .mod { color: #2563eb; }
+  .file-tree .dim { color: #94a3b8; }
+  .toc { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 16px 20px; margin-bottom: 24px; }
+  .toc a { color: var(--primary); text-decoration: none; font-size: 0.9rem; }
+  .toc a:hover { text-decoration: underline; }
+  .toc ol { padding-left: 20px; }
+  .toc li { margin: 4px 0; }
+  .assumption { list-style: none; padding: 0; }
+  .assumption li { padding: 6px 0 6px 24px; position: relative; }
+  .assumption li::before { content: "⚠"; position: absolute; left: 0; }
+</style>
+</head>
+<body>
+
+<h1>Feature Plan: Inventory & Accounting Enhancement</h1>
+<p class="subtitle">Sell to Bank + Booking Enhancement + Buy/Sell Side Panel + Auto GL Journal — Discussion Document</p>
+
+<div class="toc">
+  <strong>สารบัญ</strong>
+  <ol>
+    <li><a href="#overview">Overview & Phasing</a></li>
+    <li><a href="#phase1">Phase 1: Auto GL Journal + Account Mapping</a></li>
+    <li><a href="#phase2">Phase 2: Side Panel Real-Time Stock Info</a></li>
+    <li><a href="#phase3">Phase 3: Booking Enhancement</a></li>
+    <li><a href="#phase4">Phase 4: Sell to Bank (Full Workflow)</a></li>
+    <li><a href="#files">File Structure & Modifications</a></li>
+    <li><a href="#permissions">Permissions & Access Control</a></li>
+    <li><a href="#assumptions">Assumptions</a></li>
+  </ol>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="overview">1. Overview & Phasing</h2>
+
+<div class="card card-accent">
+  <h3>Implementation Phases</h3>
+  <p style="margin-bottom:12px">ทำเป็น phase เพราะ feature หลัง depend on feature ก่อน</p>
+  <table>
+    <tr><th>Phase</th><th>Feature</th><th>เหตุผล</th><th>ขนาดงาน</th></tr>
+    <tr>
+      <td><span class="phase phase-1">P1</span></td>
+      <td><strong>Auto GL Journal + Account Mapping</strong></td>
+      <td>Foundation — ทุก feature ที่เหลือต้องสร้าง journal</td>
+      <td>~3-4 ชม.</td>
+    </tr>
+    <tr>
+      <td><span class="phase phase-1">P1</span></td>
+      <td><strong>Side Panel Stock Info</strong></td>
+      <td>ง่ายสุด + user ใช้งานได้ทันที</td>
+      <td>~1-2 ชม.</td>
+    </tr>
+    <tr>
+      <td><span class="phase phase-2">P2</span></td>
+      <td><strong>Booking Enhancement</strong></td>
+      <td>ปรับของที่มี: auto-expire, confirm→sell, reserved tracking</td>
+      <td>~2-3 ชม.</td>
+    </tr>
+    <tr>
+      <td><span class="phase phase-3">P3</span></td>
+      <td><strong>Sell to Bank</strong></td>
+      <td>ใหญ่สุด — ต้องมี GL + reserve + multi-branch + transit + P&L</td>
+      <td>~6-8 ชม.</td>
+    </tr>
+  </table>
+</div>
+
+<div class="card card-warn">
+  <h3>Dependency Graph</h3>
+<pre style="background:#fff;color:#334155;padding:12px;">
+  Auto GL Journal ──────► Booking Enhancement
+       │                         │
+       │                         ▼
+       └───────────────► Sell to Bank (ต้องมี GL + Reserve)
+       │
+       └──► Side Panel (independent — ทำพร้อมได้)
+</pre>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="phase1">2. Phase 1A: Auto GL Journal + Account Mapping</h2>
+
+<div class="card card-accent">
+  <h3>แนวคิด</h3>
+  <p>สร้าง <code>TransactionAccountMapping</code> config ที่ map transaction type → GL accounts<br>
+  แล้วสร้าง <code>AutoJournalService</code> ที่ถูกเรียกทุกครั้งที่มี transaction → สร้าง JournalEntry + JournalLine อัตโนมัติ</p>
+</div>
+
+<h3>Account Mapping Table</h3>
+<div class="card">
+  <table>
+    <tr><th>Transaction Type</th><th>Dr (Debit)</th><th>Cr (Credit)</th><th>P&L</th></tr>
+    <tr>
+      <td><span class="badge badge-green">BUY</span> ซื้อจากลูกค้า</td>
+      <td>1400 สินค้าคงเหลือ FX<br><small>+ 5100 ต้นทุนซื้อ FX</small></td>
+      <td>1100 เงินสด THB</td>
+      <td>ยังไม่รับรู้</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-red">SELL</span> ขายลูกค้า</td>
+      <td>1100 เงินสด THB</td>
+      <td>1400 สินค้าคงเหลือ FX<br><small>+ 4200/5200 กำไร/ขาดทุน FX</small></td>
+      <td>รับรู้ P&L ทันที</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-blue">TRANSFER</span> โอนระหว่างสาขา</td>
+      <td>1400 FX Inventory (ปลายทาง)</td>
+      <td>1400 FX Inventory (ต้นทาง)</td>
+      <td>ไม่เกิด P&L</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-yellow">ADJUST</span> ปรับสต็อก</td>
+      <td>1400 FX Inventory (เพิ่ม)<br><small>หรือ 5900 ค่าใช้จ่ายอื่น (ลด)</small></td>
+      <td>5900 ค่าใช้จ่ายอื่น (เพิ่ม)<br><small>หรือ 1400 FX Inventory (ลด)</small></td>
+      <td>อาจมีผลต่าง</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-red">SELL_BANK</span> ขายธนาคาร</td>
+      <td>1200 เงินฝากธนาคาร</td>
+      <td>1400 FX Inventory<br><small>+ 4200/5200 กำไร/ขาดทุน FX</small></td>
+      <td>รับรู้ P&L ทันที</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-gray">VOID</span> กลับรายการ</td>
+      <td colspan="2">สลับ Dr/Cr ของรายการเดิม</td>
+      <td>แก้ด้วยรายการกลับ</td>
+    </tr>
+  </table>
+</div>
+
+<h3>Database: config table</h3>
+<div class="card">
+<pre>
+<span class="cmt">-- New migration: create_transaction_account_mappings_table</span>
+
+transaction_account_mappings
+├── id
+├── trns_type       <span class="str">'BUYING','SELLING','SELLING_BANK','TRANSFER','ADJUST','VOID'</span>
+├── debit_account_id    <span class="cmt">→ FK accounts</span>
+├── credit_account_id   <span class="cmt">→ FK accounts</span>
+├── pl_debit_account_id <span class="cmt">→ FK accounts (nullable, for gain/loss)</span>
+├── pl_credit_account_id <span class="cmt">→ FK accounts (nullable)</span>
+├── description
+├── is_active
+├── timestamps
+</pre>
+</div>
+
+<h3>AutoJournalService — Core Logic</h3>
+<div class="card">
+<pre>
+<span class="kw">class</span> <span class="fn">AutoJournalService</span>
+{
+    <span class="kw">public function</span> <span class="fn">createFromTransaction</span>(TransactionMaster $txn): JournalEntry
+    {
+        $mapping = TransactionAccountMapping::where(<span class="str">'trns_type'</span>, $txn->trns_type)->first();
+
+        $entry = JournalEntry::create([
+            <span class="str">'entry_no'</span>    => <span class="str">'AJ'</span> . now()->format(<span class="str">'Ymd'</span>) . str_pad(...),
+            <span class="str">'entry_date'</span>  => today(),
+            <span class="str">'description'</span> => <span class="str">"Auto: {$txn->trns_no}"</span>,
+            <span class="str">'type'</span>        => <span class="str">'auto'</span>,
+            <span class="str">'source_type'</span> => <span class="str">'transaction'</span>,
+            <span class="str">'source_id'</span>   => $txn->id,
+            <span class="str">'branch_id'</span>   => $txn->counter->branch_id,
+        ]);
+
+        $totalThb = $txn->totalThb;
+        $costValue = <span class="cmt">// sum(detail.amount * avg_cost) for each currency line</span>
+
+        <span class="cmt">// Main entry: Dr/Cr ตาม mapping</span>
+        JournalLine::create([<span class="str">'debit'</span> => $totalThb, <span class="str">'account_id'</span> => $mapping->debit_account_id]);
+        JournalLine::create([<span class="str">'credit'</span> => $costValue, <span class="str">'account_id'</span> => $mapping->credit_account_id]);
+
+        <span class="cmt">// P&L entry (ถ้ามี gain/loss)</span>
+        <span class="kw">if</span> ($totalThb > $costValue && $mapping->pl_credit_account_id) {
+            JournalLine::create([<span class="str">'credit'</span> => $totalThb - $costValue,
+                                 <span class="str">'account_id'</span> => $mapping->pl_credit_account_id]); <span class="cmt">// FX Gain</span>
+        } <span class="kw">elseif</span> ($totalThb < $costValue && $mapping->pl_debit_account_id) {
+            JournalLine::create([<span class="str">'debit'</span> => $costValue - $totalThb,
+                                 <span class="str">'account_id'</span> => $mapping->pl_debit_account_id]); <span class="cmt">// FX Loss</span>
+        }
+
+        <span class="kw">return</span> $entry;
+    }
+}
+</pre>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="phase2">3. Phase 1B: Side Panel Real-Time Stock Info</h2>
+
+<div class="card card-info">
+  <h3>แนวคิด</h3>
+  <p>เพิ่ม panel ด้านขวาในหน้า Buy/Sell แสดง stock ปัจจุบัน, avg cost, published rate, margin<br>
+  อัปเดต real-time เมื่อเลือก currency/denomination เปลี่ยน</p>
+</div>
+
+<h3>UI Mockup — Buy Form + Side Panel</h3>
+<div class="mockup">
+┌─────────────────────────────────────────────┬──────────────────────────┐
+│ <span class="title">รับซื้อเงินตราต่างประเทศ (Buy)</span>                │ <span class="accent">📊 Stock Info</span>             │
+│                                             │                          │
+│ ┌─ ชื่อลูกค้า ────────────────────────────┐ │ <span class="dim">เมื่อเลือก denomination:</span>   │
+│ │ JOHN DOE                                │ │                          │
+│ └─────────────────────────────────────────┘ │ <span class="warn">USD 100-50</span>               │
+│                                             │ ─────────────────────── │
+│ ┌─ Passport ─────────────────────────────┐  │ Stock:    <span class="btn">12,500.00</span>      │
+│ │ Passport No │ Nationality │ Expiry     │  │ Hold:         <span class="warn">500.00</span>      │
+│ │ AB1234567   │ USA         │ 2028-05    │  │ Available: <span class="btn">12,000.00</span>     │
+│ └─────────────────────────────────────────┘ │ ─────────────────────── │
+│                                             │ Avg Cost:    <span class="accent">32.4500</span>     │
+│ ┌─ สกุลเงิน ─────────────────────────────┐ │ Buy Rate:    <span class="btn">32.5900</span>     │
+│ │ USD 100-50 │ 100 │ 32.5900 │ 3,259.00  │ │ Sell Rate:   <span class="warn">32.6300</span>     │
+│ └─────────────────────────────────────────┘ │ ─────────────────────── │
+│                                             │ <span class="dim">Margin:</span>                  │
+│ ┌─ รายการ ────────────────────────────────┐ │ Buy margin:  <span class="btn">+0.1400</span>     │
+│ │ # │ สกุลเงิน  │ จำนวน  │ rate │ THB    │ │ Sell margin: <span class="btn">+0.1800</span>     │
+│ │ 1 │ USD 100-50│ 100.00│32.59│3259.00│ │ Spread:      <span class="accent">0.0400</span>     │
+│ └─────────────────────────────────────────┘ │ ─────────────────────── │
+│                                             │ <span class="dim">Updated: 14:32:05</span>       │
+│ [<span class="btn">บันทึก & พิมพ์</span>]                            │                          │
+└─────────────────────────────────────────────┴──────────────────────────┘
+</div>
+
+<div class="card">
+  <h4>Implementation</h4>
+  <p>เพิ่ม computed property <code>stockInfo</code> ใน buy-form/sell-form component<br>
+  Trigger เมื่อ <code>selectedCurrency</code> เปลี่ยน → query CounterStock + CounterRate ของเคาน์เตอร์ปัจจุบัน</p>
+<pre>
+<span class="cmt">// ใน buy-form component class</span>
+#[Computed]
+<span class="kw">public function</span> <span class="fn">stockInfo</span>(): ?array
+{
+    <span class="kw">if</span> (!$this->selectedCurrency || !$this->counterId) <span class="kw">return null</span>;
+
+    $stock = CounterStock::where(<span class="str">'counter_id'</span>, $this->counterId)
+        ->where(<span class="str">'denomination_id'</span>, $this->selectedCurrency)->first();
+    $rate  = CounterRate::where(<span class="str">'counter_id'</span>, $this->counterId)
+        ->where(<span class="str">'denomination_id'</span>, $this->selectedCurrency)
+        ->whereDate(<span class="str">'rate_date'</span>, today())->first();
+
+    <span class="kw">return</span> [
+        <span class="str">'quantity'</span>  => $stock?->quantity ?? 0,
+        <span class="str">'hold'</span>      => $stock?->hold_amount ?? 0,
+        <span class="str">'available'</span> => $stock?->available ?? 0,
+        <span class="str">'avg_cost'</span>  => $stock?->avg_cost ?? 0,
+        <span class="str">'buy_rate'</span>  => $rate?->rate_buy ?? 0,
+        <span class="str">'sell_rate'</span> => $rate?->rate_sell ?? 0,
+    ];
+}
+</pre>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="phase3">4. Phase 2: Booking Enhancement</h2>
+
+<div class="card card-accent">
+  <h3>ปัจจุบัน vs เป้าหมาย</h3>
+  <div class="grid-2">
+    <div>
+      <h4>ปัจจุบัน</h4>
+      <ul>
+        <li>✅ hold_amount เพิ่มตอน create booking</li>
+        <li>✅ hold_amount ลดตอน confirm/cancel</li>
+        <li>❌ ไม่มี auto-expire</li>
+        <li>❌ confirm ไม่สร้าง transaction จริง</li>
+        <li>❌ ไม่มี GL journal</li>
+      </ul>
+    </div>
+    <div>
+      <h4>เป้าหมาย</h4>
+      <ul>
+        <li>✅ Reserved Stock ทันที</li>
+        <li>✅ Auto-expire → release hold_amount</li>
+        <li>✅ Confirm → สร้าง Sell transaction จาก reserved</li>
+        <li>✅ Cancel → release stock + GL reversal</li>
+        <li>✅ Auto GL: Dr 2300 เงินรับล่วงหน้า / Cr 1400 Inventory</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<h3>Booking Status Flow</h3>
+<div class="seq-diagram">
+  Customer Request          Staff                    System
+       │                      │                        │
+       │── ขอจองเงิน ────────►│                        │
+       │                      │── createBooking() ────►│
+       │                      │                        │── hold_amount += amount
+       │                      │                        │── status = 'pending'
+       │                      │                        │── set expires_at
+       │                      │                        │
+       │                      │                        │◄── [Scheduler: every 1min]
+       │                      │                        │    check expired bookings
+       │                      │                        │    → auto cancel + release
+       │                      │                        │
+       │── ยืนยัน ───────────►│                        │
+       │                      │── confirmBooking() ───►│
+       │                      │                        │── hold_amount -= amount
+       │                      │                        │── create TransactionMaster (SELLING)
+       │                      │                        │── recordSell() on InventoryService
+       │                      │                        │── AutoJournalService::create()
+       │                      │                        │── status = 'confirmed'
+       │                      │                        │
+       │── ยกเลิก ───────────►│                        │
+       │                      │── cancelBooking() ────►│
+       │                      │                        │── hold_amount -= amount
+       │                      │                        │── status = 'cancelled'
+       │                      │                        │── release notification
+</div>
+
+<div class="card">
+  <h4>New: Scheduled Auto-Expire Command</h4>
+<pre>
+<span class="cmt">// app/Console/Commands/ExpireBookings.php</span>
+<span class="kw">class</span> <span class="fn">ExpireBookings</span> <span class="kw">extends</span> Command
+{
+    <span class="kw">protected</span> $signature = <span class="str">'bookings:expire'</span>;
+
+    <span class="kw">public function</span> <span class="fn">handle</span>()
+    {
+        $expired = Booking::where(<span class="str">'status'</span>, <span class="str">'pending'</span>)
+            ->where(<span class="str">'expires_at'</span>, <span class="str">'<'</span>, now())->get();
+
+        <span class="kw">foreach</span> ($expired <span class="kw">as</span> $booking) {
+            <span class="cmt">// Release hold_amount on CounterStock</span>
+            CounterStock::where(...)
+                ->decrement(<span class="str">'hold_amount'</span>, $booking->amount);
+            $booking->update([<span class="str">'status'</span> => <span class="str">'expired'</span>]);
+        }
+    }
+}
+</pre>
+  <p><code>Schedule: $schedule->command('bookings:expire')->everyMinute();</code></p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="phase4">5. Phase 3: Sell to Bank (Full Workflow)</h2>
+
+<div class="card card-red">
+  <h3>ภาพรวม Flow</h3>
+  <p>Feature ใหญ่ที่สุด — ต้องมี multi-source reserve, in-transit tracking, P&L calculation, auto journal</p>
+</div>
+
+<h3>Sequence Diagram: Sell to Bank Full Flow</h3>
+<div class="seq-diagram">
+  Treasury/CEO              System                     Branch Counter
+       │                      │                              │
+       │── สร้างรายการ ───────►│                              │
+       │   Sell USD 80,000    │                              │
+       │   Bank: กสิกร        │                              │
+       │   Source:            │                              │
+       │     HQ = 50,000     │── Reserve 50,000 @ HQ ──────►│ HQ: Available -50k
+       │     Patong = 30,000  │── Reserve 30,000 @ Patong ──►│ Patong: Available -30k
+       │                      │                              │
+       │                      │── Status: RESERVED           │
+       │                      │── hold_amount += on both     │
+       │                      │                              │
+       │── [ขนเงินจาก Patong] │                              │
+       │                      │── Status: IN_TRANSIT         │
+       │                      │   (Patong 30k กำลังส่ง)     │
+       │                      │                              │
+       │── [เงินถึง / ส่งธนาคาร]                             │
+       │                      │── Status: DELIVERED          │
+       │                      │                              │
+       │── ยืนยันขายสำเร็จ ──►│                              │
+       │                      │── ตัด stock จริง ────────────►│ HQ: quantity -50k
+       │                      │                              │ Patong: quantity -30k
+       │                      │── คำนวณ P&L:                │
+       │                      │   Revenue = 80k × bank_rate │
+       │                      │   COGS = 80k × avg_cost     │
+       │                      │   Gain/Loss = Revenue - COGS│
+       │                      │                              │
+       │                      │── Auto Journal:              │
+       │                      │   Dr 1200 เงินฝากธนาคาร     │
+       │                      │   Cr 1400 FX Inventory       │
+       │                      │   Dr/Cr 4200/5200 FX P&L    │
+       │                      │                              │
+       │                      │── Status: COMPLETED          │
+       │                      │── Audit Log + Rate Change Log│
+       │                      │                              │
+       │── [ยกเลิก] ─────────►│                              │
+       │                      │── Release hold_amount ──────►│ Available +80k (คืน)
+       │                      │── Status: CANCELLED          │
+       │                      │── Reverse GL (if posted)     │
+</div>
+
+<h3>Database: bank_sales table</h3>
+<div class="card">
+<pre>
+bank_sales
+├── id
+├── sale_no             <span class="str">'BS20260520001'</span>
+├── bank_name           <span class="str">'กสิกรไทย'</span>
+├── bank_account        <span class="dim">(nullable)</span>
+├── currency_code       <span class="str">'USD'</span>
+├── denomination_id     <span class="cmt">→ FK currency_denominations (nullable)</span>
+├── total_amount        <span class="cmt">decimal(15,2) — จำนวนรวมที่ขาย</span>
+├── bank_rate           <span class="cmt">decimal(12,6) — เรทขายธนาคาร</span>
+├── total_thb           <span class="cmt">decimal(15,2) — จำนวน THB ที่ได้</span>
+├── avg_cost_at_sale    <span class="cmt">decimal(12,6) — weighted avg cost ณ เวลาขาย</span>
+├── total_cost          <span class="cmt">decimal(15,2) — total_amount × avg_cost</span>
+├── profit_loss         <span class="cmt">decimal(15,2) — total_thb - total_cost</span>
+├── settlement_method   <span class="str">'bank_transfer' | 'cash' | 'cheque'</span>
+├── status              <span class="str">'draft' → 'reserved' → 'in_transit' → 'delivered' → 'completed' | 'cancelled'</span>
+├── notes
+├── journal_entry_id    <span class="cmt">→ FK journal_entries (nullable)</span>
+├── created_by          <span class="cmt">→ FK users</span>
+├── approved_by         <span class="cmt">→ FK users (nullable)</span>
+├── completed_at        <span class="cmt">timestamp (nullable)</span>
+├── timestamps
+
+bank_sale_sources <span class="cmt">(แหล่งที่มาของเงิน — multi-branch)</span>
+├── id
+├── bank_sale_id        <span class="cmt">→ FK bank_sales</span>
+├── counter_id          <span class="cmt">→ FK counters</span>
+├── amount              <span class="cmt">decimal(15,2) — จำนวนจากสาขานี้</span>
+├── avg_cost            <span class="cmt">decimal(12,6) — avg cost ของสาขานี้</span>
+├── status              <span class="str">'reserved' → 'in_transit' → 'delivered' | 'released'</span>
+├── transit_at          <span class="cmt">timestamp (nullable)</span>
+├── delivered_at        <span class="cmt">timestamp (nullable)</span>
+├── timestamps
+</pre>
+</div>
+
+<h3>UI Mockup — Sell to Bank</h3>
+<div class="mockup">
+┌──────────────────────────────────────────────────────────────────────────┐
+│ <span class="title">ขายเงินตราให้ธนาคาร (Sell to Bank)</span>                                    │
+│                                                                          │
+│ ┌─ ข้อมูลหลัก ─────────────────────────────────────────────────────────┐│
+│ │ ธนาคาร: [กสิกรไทย ▼]   สกุลเงิน: [USD ▼]   ธนบัตร: [100-50 ▼]    ││
+│ │ จำนวนรวม: [80,000]     เรทขาย: [32.6500]   วิธีรับเงิน: [โอน ▼]   ││
+│ └────────────────────────────────────────────────────────────────────────┘│
+│                                                                          │
+│ ┌─ <span class="accent">แหล่งสต็อก (Source Branches)</span> ────────────────────────────────────────┐│
+│ │ ☑ เคาน์เตอร์ 1 (BKK-HQ)  Available: 65,000  │ จำนวน: [50,000]     ││
+│ │ ☑ เคาน์เตอร์ 3 (Patong)   Available: 42,000  │ จำนวน: [30,000]     ││
+│ │ ☐ เคาน์เตอร์ 4 (Kata)     Available: 15,000  │ จำนวน: [     ]     ││
+│ │                                                                      ││
+│ │ <span class="warn">รวมจัดสรร: 80,000 / 80,000 ✓</span>                                       ││
+│ └────────────────────────────────────────────────────────────────────────┘│
+│                                                                          │
+│ ┌─ <span class="btn">สรุป P&L Preview</span> ──────────────────────────────────────────────────┐│
+│ │ Revenue:    80,000 × 32.6500 = 2,612,000.00 THB                     ││
+│ │ COGS:       80,000 × 32.4500 = 2,596,000.00 THB  (avg cost)        ││
+│ │ <span class="btn">Profit:     +16,000.00 THB</span>                                          ││
+│ └────────────────────────────────────────────────────────────────────────┘│
+│                                                                          │
+│                     [<span class="dim">ยกเลิก</span>]  [<span class="btn">สร้างรายการ (Reserve Stock)</span>]             │
+└──────────────────────────────────────────────────────────────────────────┘
+
+┌─ <span class="title">รายการขายธนาคาร</span> ──────────────────────────────────────────────────────┐
+│ # │ เลขที่       │ ธนาคาร  │ สกุลเงิน│ จำนวน   │ สถานะ         │ จัดการ│
+│ 1 │ BS20260520001│ กสิกร   │ USD     │ 80,000  │ <span class="warn">🟡 Reserved</span>    │ ...  │
+│ 2 │ BS20260519001│ กรุงเทพ │ EUR     │ 50,000  │ <span class="accent">🔵 In Transit</span>  │ ...  │
+│ 3 │ BS20260518001│ กสิกร   │ GBP     │ 30,000  │ <span class="btn">🟢 Completed</span>   │ ...  │
+│ 4 │ BS20260517001│ ไทยพาณิชย│ JPY    │ 500,000 │ <span class="dim">⚫ Cancelled</span>   │      │
+└──────────────────────────────────────────────────────────────────────────┘
+</div>
+
+<!-- ============================================================ -->
+<h2 id="files">6. File Structure & Modifications</h2>
+
+<div class="card">
+<div class="file-tree">
+<span class="dim">database/migrations/</span>
+  <span class="new">+ 2026_05_20_..._create_transaction_account_mappings_table.php</span>
+  <span class="new">+ 2026_05_20_..._create_bank_sales_table.php</span>
+  <span class="new">+ 2026_05_20_..._create_bank_sale_sources_table.php</span>
+  <span class="new">+ 2026_05_20_..._add_status_to_bookings_table.php</span>  <span class="dim">(add 'expired' status)</span>
+
+<span class="dim">app/Models/</span>
+  <span class="new">+ TransactionAccountMapping.php</span>
+  <span class="new">+ BankSale.php</span>
+  <span class="new">+ BankSaleSource.php</span>
+  <span class="mod">~ Booking.php</span>  <span class="dim">(add 'expired' status, expiry scope)</span>
+
+<span class="dim">app/Services/</span>
+  <span class="new">+ AutoJournalService.php</span>       <span class="dim">— Auto GL Journal creation</span>
+  <span class="new">+ BankSaleService.php</span>          <span class="dim">— Reserve, transit, complete, cancel workflow</span>
+  <span class="mod">~ InventoryService.php</span>          <span class="dim">— Hook AutoJournalService</span>
+
+<span class="dim">app/Livewire/</span>
+  <span class="new">+ Rate/BankSaleManager.php</span>     <span class="dim">— Full Sell to Bank Livewire component</span>
+  <span class="mod">~ Inventory/BookingManager.php</span>  <span class="dim">— confirmBooking→sell, auto-expire logic</span>
+
+<span class="dim">app/Console/Commands/</span>
+  <span class="new">+ ExpireBookings.php</span>           <span class="dim">— Scheduled auto-expire</span>
+
+<span class="dim">resources/views/</span>
+  <span class="new">+ livewire/rate/bank-sale-manager.blade.php</span>
+  <span class="new">+ admin/bank-sales.blade.php</span>   <span class="dim">— Page wrapper</span>
+  <span class="mod">~ livewire/transaction/buy-form.blade.php</span>   <span class="dim">— Add side panel</span>
+  <span class="mod">~ livewire/transaction/sell-form.blade.php</span>  <span class="dim">— Add side panel</span>
+  <span class="mod">~ components/transaction/⚡buy-form.blade.php</span> <span class="dim">— Add stockInfo computed</span>
+  <span class="mod">~ components/transaction/⚡sell-form.blade.php</span> <span class="dim">— Add stockInfo computed</span>
+
+<span class="dim">routes/</span>
+  <span class="mod">~ web.php</span>  <span class="dim">— Add /admin/bank-sales route</span>
+
+<span class="dim">resources/views/layouts/</span>
+  <span class="mod">~ app.blade.php</span>  <span class="dim">— Add sidebar menus</span>
+
+<span class="dim">config/</span>
+  <span class="mod">~ app.php</span>  <span class="dim">— Schedule booking:expire command</span>
+</div>
+</div>
+
+<h3>Files: Summary Count</h3>
+<div class="grid-3">
+  <div class="card" style="text-align:center;">
+    <div style="font-size:2rem;font-weight:700;color:#16a34a;">12</div>
+    <div style="font-size:0.8rem;color:#64748b;">New files</div>
+  </div>
+  <div class="card" style="text-align:center;">
+    <div style="font-size:2rem;font-weight:700;color:#2563eb;">9</div>
+    <div style="font-size:0.8rem;color:#64748b;">Modified files</div>
+  </div>
+  <div class="card" style="text-align:center;">
+    <div style="font-size:2rem;font-weight:700;color:#7c3aed;">4</div>
+    <div style="font-size:0.8rem;color:#64748b;">New DB tables</div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="permissions">7. Permissions & Access Control</h2>
+
+<div class="card card-warn">
+  <h3>สิทธิ์ที่ต้องเพิ่ม</h3>
+  <p>ระบบปัจจุบันมี 30 permissions (6 modules × 5 actions) — ต้องเพิ่ม module ใหม่</p>
+  <table>
+    <tr><th>Permission</th><th>Role: Admin</th><th>Role: Staff</th><th>Role: Auditor</th><th>เหตุผล</th></tr>
+    <tr>
+      <td><code>bank_sale.read</code></td><td>✅</td><td>❌</td><td>✅</td>
+      <td>ดูรายการขายธนาคาร</td>
+    </tr>
+    <tr>
+      <td><code>bank_sale.write</code></td><td>✅</td><td>❌</td><td>❌</td>
+      <td>สร้าง/แก้ไขรายการขายธนาคาร</td>
+    </tr>
+    <tr>
+      <td><code>bank_sale.approve</code></td><td>✅</td><td>❌</td><td>❌</td>
+      <td>อนุมัติ/ปฏิเสธ — ต้องเป็น Treasury/CEO</td>
+    </tr>
+    <tr>
+      <td><code>bank_sale.complete</code></td><td>✅</td><td>❌</td><td>❌</td>
+      <td>ยืนยันขายสำเร็จ + ตัด stock จริง</td>
+    </tr>
+    <tr>
+      <td><code>bank_sale.cancel</code></td><td>✅</td><td>❌</td><td>❌</td>
+      <td>ยกเลิก + release stock</td>
+    </tr>
+    <tr>
+      <td><code>journal.auto_post</code></td><td>✅</td><td>❌</td><td>❌</td>
+      <td>Post auto journal entries</td>
+    </tr>
+    <tr>
+      <td><code>adjustment.approve</code></td><td>✅</td><td>❌</td><td>❌</td>
+      <td>อนุมัติ stock adjustment (ใหม่)</td>
+    </tr>
+    <tr>
+      <td><code>transfer.approve</code></td><td>✅</td><td>❌</td><td>❌</td>
+      <td>อนุมัติ stock transfer (ใหม่)</td>
+    </tr>
+  </table>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="assumptions">8. Assumptions</h2>
+
+<div class="card card-info">
+  <ul class="assumption">
+    <li><strong>Weighted Average Cost (WAC)</strong> — ยังคงใช้ WAC เป็นวิธีคำนวณต้นทุน (ไม่เปลี่ยนเป็น FIFO/LIFO)</li>
+    <li><strong>Single Currency per Bank Sale</strong> — ขายธนาคาร 1 รายการ = 1 สกุลเงิน (ถ้าขายหลายสกุลต้องสร้างหลายรายการ)</li>
+    <li><strong>Bank list จาก config/dropdown</strong> — ไม่สร้าง banks table แยก ใช้ dropdown ค่าคงที่ก่อน (เพิ่ม CRUD ทีหลังถ้าจำเป็น)</li>
+    <li><strong>In-Transit ไม่ตัด stock ทันที</strong> — stock ถูก reserve (hold_amount) แต่ยังไม่ตัดจริง จนกว่า status=completed</li>
+    <li><strong>P&L คำนวณตอน complete</strong> — ใช้ avg_cost ณ วันที่ขาย ไม่ใช่วันที่ reserve</li>
+    <li><strong>Auto Journal ไม่ auto-post</strong> — สร้าง journal entry แต่ is_posted=false ต้องให้ accounting review ก่อน post</li>
+    <li><strong>Booking auto-expire</strong> — ต้อง run scheduler (Cloud Run ต้อง setup cron job หรือ Cloud Scheduler)</li>
+    <li><strong>ไม่ลบรายการจริง</strong> — ใช้ status cancel/void เท่านั้น ไม่ hard delete</li>
+    <li><strong>Side Panel</strong> — แสดงเฉพาะ denomination ที่เลือก ไม่แสดงทุก denomination พร้อมกัน</li>
+    <li><strong>Permission module ใหม่</strong> — เพิ่มในระบบ permission matrix ที่มีอยู่แล้ว (<code>/admin/permissions</code>)</li>
+  </ul>
+</div>
+
+<div class="card" style="margin-top:32px;text-align:center;padding:24px;">
+  <p style="font-size:1.1rem;font-weight:600;color:var(--primary);">📋 Discussion Document — ยังไม่ลงมือทำ</p>
+  <p style="color:var(--muted);font-size:0.9rem;">รอ confirm approach ก่อน โดยเฉพาะ: Account Mapping, Bank Sale workflow stages, Permission model</p>
+</div>
+
+</body>
+</html>

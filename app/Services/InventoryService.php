@@ -98,6 +98,12 @@ class InventoryService
                 $stock = CounterStock::lockForUpdate()->find($stock->id);
             }
 
+            // Prevent negative stock
+            $available = (float) $stock->quantity - (float) $stock->hold_amount;
+            if ($foreignAmount > $available) {
+                throw new \RuntimeException("สต็อกไม่เพียงพอ (Available: " . number_format($available, 2) . ", ต้องการ: " . number_format($foreignAmount, 2) . ")");
+            }
+
             $stock->quantity = (float) $stock->quantity - $foreignAmount;
             $stock->total_cost_value = $stock->quantity * (float) $stock->avg_cost;
             $stock->save();

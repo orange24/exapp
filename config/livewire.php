@@ -64,13 +64,13 @@ return [
     |---------------------------------------------------------------------------
     | This value determines the default configuration for the artisan make command
     | You can configure the component type (sfc, mfc, class) and whether to use
-    | the high-voltage (⚡) emoji as a prefix in the sfc|mfc component names.
+    | the high-voltage emoji as a prefix in the sfc|mfc component names.
     |
     */
 
     'make_command' => [
         'type' => 'sfc', // Options: 'sfc', 'mfc', 'class'
-        'emoji' => true, // Options: true, false
+        'emoji' => false, // Options: true, false
         'with' => [
             'js' => false,
             'css' => false,

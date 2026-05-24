@@ -38,18 +38,22 @@ class AutoJournalService
                 'is_posted'   => false,
             ]);
 
-            $totalThb = (float) $txn->totalThb;
+            // For BUY: detail.total = THB paid; For SELL: detail.amount = THB received, detail.total = foreign given
+            if ($txn->trns_type === 'BUYING') {
+                $thbAmount = (float) $txn->details->sum('total');  // THB paid to customer
+            } else {
+                $thbAmount = (float) $txn->details->sum('amount'); // THB received from customer
+            }
 
-            // Calculate cost value (sum of amount × avg_cost per detail line)
+            // Calculate cost value (sum of foreign_amount × avg_cost per detail line)
             $costValue = $this->calculateCostValue($txn);
 
             if ($txn->trns_type === 'BUYING') {
                 // BUY: Dr FX Inventory (cost), Cr Cash THB (amount paid)
-                // THB paid = totalThb, FX cost = totalThb (at buy rate, cost = what we paid)
                 JournalLine::create([
                     'journal_entry_id' => $entry->id,
                     'account_id'       => $mapping->debit_account_id,  // 1400 FX Inventory
-                    'debit'            => $totalThb,
+                    'debit'            => $thbAmount,
                     'credit'           => 0,
                     'description'      => "ซื้อเงินตรา {$txn->trns_no}",
                 ]);
@@ -57,12 +61,12 @@ class AutoJournalService
                     'journal_entry_id' => $entry->id,
                     'account_id'       => $mapping->credit_account_id, // 1100 Cash THB
                     'debit'            => 0,
-                    'credit'           => $totalThb,
+                    'credit'           => $thbAmount,
                     'description'      => "จ่ายเงิน THB {$txn->trns_no}",
                 ]);
             } elseif (in_array($txn->trns_type, ['SELLING', 'SELLING_BANK'])) {
                 // SELL: Dr Cash THB (revenue), Cr FX Inventory (cost), Dr/Cr P&L (gain/loss)
-                $revenue = $totalThb;
+                $revenue = $thbAmount;
 
                 // Dr Cash/Bank
                 JournalLine::create([

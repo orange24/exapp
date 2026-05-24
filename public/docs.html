@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>คู่มือระบบ Exchange System</title>
+<style>
+  :root { --primary: #0e513a; --primary-light: #e0efe8; --bg: #f8fafc; --card: #fff; --border: #e2e8f0; --text: #1e293b; --muted: #64748b; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans Thai', sans-serif; background: var(--bg); color: var(--text); line-height: 1.7; }
+  .hero { background: linear-gradient(135deg, #0e513a 0%, #137050 50%, #1a8c5a 100%); color: #fff; padding: 48px 24px; text-align: center; }
+  .hero h1 { font-size: 2rem; margin-bottom: 8px; }
+  .hero p { opacity: 0.85; font-size: 1rem; }
+  .container { max-width: 1100px; margin: 0 auto; padding: 24px; }
+  .toc { background: var(--primary-light); border-radius: 12px; padding: 24px; margin-bottom: 32px; }
+  .toc h2 { color: var(--primary); font-size: 1.1rem; margin-bottom: 12px; }
+  .toc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; }
+  .toc a { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #fff; border-radius: 8px; text-decoration: none; color: var(--primary); font-size: 0.9rem; font-weight: 500; transition: all 0.15s; }
+  .toc a:hover { background: var(--primary); color: #fff; }
+  .toc .icon { font-size: 1.2rem; width: 28px; text-align: center; }
+  section { margin-bottom: 40px; scroll-margin-top: 20px; }
+  h2 { color: var(--primary); font-size: 1.4rem; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 3px solid var(--primary-light); display: flex; align-items: center; gap: 10px; }
+  h2 .icon { font-size: 1.5rem; }
+  h3 { color: #334155; font-size: 1.05rem; margin: 20px 0 10px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+  .card-highlight { border-left: 4px solid var(--primary); }
+  .flow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0; }
+  .flow-step { background: var(--primary-light); color: var(--primary); padding: 8px 16px; border-radius: 8px; font-weight: 600; font-size: 0.85rem; white-space: nowrap; }
+  .flow-arrow { color: var(--primary); font-weight: bold; font-size: 1.2rem; }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; }
+  .badge-green { background: #dcfce7; color: #166534; }
+  .badge-red { background: #fee2e2; color: #991b1b; }
+  .badge-blue { background: #dbeafe; color: #1e40af; }
+  .badge-yellow { background: #fef3c7; color: #92400e; }
+  .badge-gray { background: #f1f5f9; color: #475569; }
+  .badge-purple { background: #f3e8ff; color: #6b21a8; }
+  table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.85rem; margin: 12px 0; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); }
+  th { background: var(--primary); color: #fff; padding: 10px 12px; text-align: left; font-weight: 600; }
+  td { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+  tr:last-child td { border-bottom: none; }
+  tr:nth-child(even) { background: #f8fafc; }
+  .role-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+  .role-card { border-radius: 12px; padding: 20px; }
+  .role-admin { background: linear-gradient(135deg, #fef3c7, #fde68a); border: 1px solid #f59e0b; }
+  .role-staff { background: linear-gradient(135deg, #dbeafe, #bfdbfe); border: 1px solid #3b82f6; }
+  .role-auditor { background: linear-gradient(135deg, #f3e8ff, #e9d5ff); border: 1px solid #8b5cf6; }
+  .diagram { background: #1e293b; color: #e2e8f0; padding: 20px; border-radius: 12px; font-family: 'SF Mono', monospace; font-size: 0.8rem; line-height: 1.7; white-space: pre; overflow-x: auto; margin: 12px 0; }
+  .diagram .g { color: #86efac; } .diagram .r { color: #fca5a5; } .diagram .y { color: #fde68a; } .diagram .b { color: #93c5fd; } .diagram .d { color: #64748b; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+  @media (max-width: 768px) { .grid-2, .grid-3, .toc-grid { grid-template-columns: 1fr; } }
+  .stat-card { text-align: center; padding: 20px; border-radius: 12px; background: #fff; border: 1px solid var(--border); }
+  .stat-num { font-size: 2rem; font-weight: 800; color: var(--primary); }
+  .stat-label { font-size: 0.8rem; color: var(--muted); margin-top: 4px; }
+  .menu-tree { font-size: 0.9rem; line-height: 2; }
+  .menu-tree .section { font-weight: 700; color: var(--primary); }
+  .menu-tree .item { padding-left: 24px; position: relative; }
+  .menu-tree .item::before { content: "├── "; color: #94a3b8; position: absolute; left: 4px; }
+  .menu-tree .item:last-child::before { content: "└── "; }
+  footer { text-align: center; padding: 32px; color: var(--muted); font-size: 0.8rem; border-top: 1px solid var(--border); margin-top: 40px; }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <h1>Exchange System</h1>
+  <p>ระบบจัดการแลกเปลี่ยนเงินตราต่างประเทศ — คู่มือการใช้งาน</p>
+</div>
+
+<div class="container">
+
+<!-- Stats -->
+<div class="grid-3" style="margin-bottom:32px;">
+  <div class="stat-card"><div class="stat-num">36</div><div class="stat-label">สกุลเงิน</div></div>
+  <div class="stat-card"><div class="stat-num">5</div><div class="stat-label">สาขา</div></div>
+  <div class="stat-card"><div class="stat-num">6</div><div class="stat-label">เคาน์เตอร์</div></div>
+</div>
+
+<!-- TOC -->
+<div class="toc">
+  <h2>สารบัญ</h2>
+  <div class="toc-grid">
+    <a href="#login"><span class="icon">🔐</span> เข้าสู่ระบบ</a>
+    <a href="#buy"><span class="icon">💵</span> รับซื้อ (Buy)</a>
+    <a href="#sell"><span class="icon">💱</span> จ่ายขาย (Sell)</a>
+    <a href="#bank-sale"><span class="icon">🏦</span> ขายธนาคาร</a>
+    <a href="#booking"><span class="icon">📋</span> จองเงินตรา (Booking)</a>
+    <a href="#cancel"><span class="icon">❌</span> ยกเลิกรายการ</a>
+    <a href="#rate"><span class="icon">📊</span> ตั้งราคา / อัตราแลกเปลี่ยน</a>
+    <a href="#superrich"><span class="icon">⚡</span> SuperRich อ้างอิง</a>
+    <a href="#inventory"><span class="icon">📦</span> คลังเงินตรา</a>
+    <a href="#transfer"><span class="icon">🔄</span> ยืม/คืน/โอน</a>
+    <a href="#reports"><span class="icon">📈</span> รายงาน</a>
+    <a href="#accounting"><span class="icon">📒</span> บัญชี / GL Journal</a>
+    <a href="#admin"><span class="icon">⚙️</span> ตั้งค่าระบบ</a>
+    <a href="#roles"><span class="icon">👥</span> สิทธิ์ผู้ใช้งาน</a>
+  </div>
+</div>
+
+<!-- ================================ -->
+<section id="login">
+  <h2><span class="icon">🔐</span> เข้าสู่ระบบ</h2>
+  <div class="card card-highlight">
+    <p>เข้าใช้งานที่ <strong>https://exapp.softernity.com</strong></p>
+    <h3>ขั้นตอน</h3>
+    <div class="flow">
+      <span class="flow-step">เปิดเว็บ</span><span class="flow-arrow">→</span>
+      <span class="flow-step">ใส่ Email + Password</span><span class="flow-arrow">→</span>
+      <span class="flow-step">เลือกเคาน์เตอร์ทำงาน</span><span class="flow-arrow">→</span>
+      <span class="flow-step">เข้าหน้าหลัก (Dashboard)</span>
+    </div>
+    <h3>หลังล็อกอิน</h3>
+    <ul style="margin-top:8px;padding-left:20px;">
+      <li>ระบบจะตั้งเคาน์เตอร์ทำงานอัตโนมัติจากสาขาของ user</li>
+      <li>Admin สามารถเปลี่ยนเคาน์เตอร์ได้ที่ sidebar dropdown</li>
+      <li>Staff เลือกได้เฉพาะเคาน์เตอร์ในสาขาตัวเอง</li>
+      <li>ระบบบันทึก IP, Browser, อุปกรณ์ ทุกครั้งที่ login</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ================================ -->
+<section id="buy">
+  <h2><span class="icon">💵</span> รับซื้อเงินตราต่างประเทศ (Buy)</h2>
+  <div class="card">
+    <p><strong>ลูกค้านำเงินต่างประเทศมาขาย</strong> → ร้านจ่าย THB ให้ลูกค้า</p>
+    <div class="flow">
+      <span class="flow-step">กรอกชื่อลูกค้า</span><span class="flow-arrow">→</span>
+      <span class="flow-step">ถ่ายรูป/กรอก Passport</span><span class="flow-arrow">→</span>
+      <span class="flow-step">เลือกสกุลเงิน + จำนวน</span><span class="flow-arrow">→</span>
+      <span class="flow-step">บันทึก & พิมพ์</span>
+    </div>
+  </div>
+  <div class="grid-2">
+    <div class="card">
+      <h3>ข้อมูลลูกค้า & Passport</h3>
+      <ul style="padding-left:18px;">
+        <li><strong>Autocomplete</strong> — พิมพ์ชื่อหรือเลข passport → ระบบแนะนำลูกค้าเดิม</li>
+        <li><strong>ถ่ายรูป Passport</strong> → Crop เฉพาะส่วน MRZ → OCR อ่านข้อมูลอัตโนมัติ</li>
+        <li><strong>กรอกมือ</strong> — ไม่ต้องถ่ายรูปก็กรอก passport no, สัญชาติ, วันหมดอายุได้</li>
+        <li>หลังบันทึกแล้วยังแก้ไขข้อมูลลูกค้าได้ → กด "บันทึกข้อมูลลูกค้า"</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Side Panel (ด้านขวา)</h3>
+      <ul style="padding-left:18px;">
+        <li>แสดง <strong>Stock, Hold, Available</strong> ของ denomination ที่เลือก</li>
+        <li>แสดง <strong>Avg Cost, Buy Rate, Sell Rate</strong></li>
+        <li>แสดง <strong>Margin</strong> (ส่วนต่าง rate กับ cost) + <strong>Spread</strong></li>
+        <li>อัปเดตอัตโนมัติเมื่อเปลี่ยน denomination</li>
+      </ul>
+    </div>
+  </div>
+  <div class="card">
+    <h3>หลังบันทึก</h3>
+    <ul style="padding-left:18px;">
+      <li>ใบเสร็จ A5 พิมพ์อัตโนมัติ (auto print)</li>
+      <li>รายการแสดง read-only + ปุ่ม "พิมพ์อีกครั้ง"</li>
+      <li>กด <strong>"+ สร้างใหม่"</strong> เพื่อเริ่มรายการถัดไป</li>
+      <li>สต็อกเพิ่มขึ้นอัตโนมัติ + บันทึก GL Journal</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ================================ -->
+<section id="sell">
+  <h2><span class="icon">💱</span> จ่ายขายเงินตราต่างประเทศ (Sell)</h2>
+  <div class="card">
+    <p><strong>ลูกค้านำ THB มาซื้อเงินต่างประเทศ</strong> → ร้านจ่ายเงินต่างประเทศให้ลูกค้า</p>
+    <div class="flow">
+      <span class="flow-step">กรอกชื่อลูกค้า</span><span class="flow-arrow">→</span>
+      <span class="flow-step">เลือกสกุลเงิน</span><span class="flow-arrow">→</span>
+      <span class="flow-step">กรอก THB ที่ลูกค้าให้</span><span class="flow-arrow">→</span>
+      <span class="flow-step">ระบบคำนวณจำนวนเงินต่างประเทศ</span><span class="flow-arrow">→</span>
+      <span class="flow-step">บันทึก & พิมพ์</span>
+    </div>
+  </div>
+  <div class="card">
+    <h3>กรณีเงินในบูธไม่พอ</h3>
+    <p>ถ้าจำนวนเงินต่างประเทศที่คำนวณได้มากกว่าที่มีในบูธ → ระบบแสดง <strong>modal ปรับจำนวน</strong> ให้ขายเท่าที่มี พร้อมคำนวณ THB ใหม่</p>
+  </div>
+</section>
+
+<!-- ================================ -->
+<section id="bank-sale">
+  <h2><span class="icon">🏦</span> ขายเงินตราให้ธนาคาร (Sell to Bank)</h2>
+  <div class="card card-highlight">
+    <p>ขายเงินตราต่างประเทศให้ธนาคาร — รวมสต็อกจากหลายสาขา, มีระบบ Reserve + ขนส่ง + P&L</p>
+  </div>
+  <div class="card">
+    <h3>Flow การทำงาน</h3>
+    <div class="flow">
+      <span class="flow-step">สร้างรายการ</span><span class="flow-arrow">→</span>
+      <span class="flow-step" style="background:#fef3c7;color:#92400e;">Reserved</span><span class="flow-arrow">→</span>
+      <span class="flow-step" style="background:#dbeafe;color:#1e40af;">In Transit</span><span class="flow-arrow">→</span>
+      <span class="flow-step" style="background:#e0e7ff;color:#4338ca;">Delivered</span><span class="flow-arrow">→</span>
+      <span class="flow-step" style="background:#dcfce7;color:#166534;">Completed</span>
+    </div>
+  </div>
+  <div class="grid-2">
+    <div class="card">
+      <h3>สร้างรายการ</h3>
+      <ul style="padding-left:18px;">
+        <li>เลือกธนาคารปลายทาง</li>
+        <li>เลือกสกุลเงิน + ธนบัตร + จำนวน + เรทขาย</li>
+        <li>เลือกแหล่งสต็อกจากแต่ละเคาน์เตอร์/สาขา</li>
+        <li>ระบบแสดง <strong>P&L Preview</strong> (Revenue - Cost = กำไร/ขาดทุน)</li>
+        <li>กด "สร้างรายการ" → สต็อก <strong>Reserve ทันที</strong> (hold_amount เพิ่ม)</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>ยืนยันขายสำเร็จ</h3>
+      <ul style="padding-left:18px;">
+        <li>กด "ยืนยัน" → ตัดสต็อกจริงจากทุกสาขาที่เลือก</li>
+        <li>คำนวณ P&L: Revenue (จำนวน × เรทขาย) - Cost (จำนวน × avg cost)</li>
+        <li>สร้าง <strong>GL Journal อัตโนมัติ</strong>: Dr เงินฝากธนาคาร, Cr สินค้าคงเหลือ FX + กำไร/ขาดทุน</li>
+        <li>ยกเลิกได้ → สต็อก release กลับทั้งหมด</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ================================ -->
+<section id="booking">
+  <h2><span class="icon">📋</span> จองเงินตรา (Booking/Hold)</h2>
+  <div class="card">
+    <p>จองเงินตราไว้ให้ลูกค้า — กันสต็อกทันที (Reserved Stock) ลูกค้ามายืนยัน → ตัดขายจริง</p>
+    <div class="flow">
+      <span class="flow-step">สร้าง Booking</span><span class="flow-arrow">→</span>
+      <span class="flow-step" style="background:#fef3c7;color:#92400e;">รอดำเนินการ (กัน stock)</span><span class="flow-arrow">→</span>
+      <span class="flow-step" style="background:#dcfce7;color:#166534;">ยืนยัน → สร้างรายการขายจริง</span>
+    </div>
+  </div>
+  <div class="grid-2">
+    <div class="card">
+      <h3>การกันสต็อก</h3>
+      <ul style="padding-left:18px;">
+        <li>Booking ประเภท "ขาย" → hold_amount เพิ่มทันที</li>
+        <li>Available Stock = Stock - Hold (ป้องกันขายซ้ำ)</li>
+        <li>ตั้งเวลาหมดอายุได้ (1-1,440 นาที)</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Auto-Expire</h3>
+      <ul style="padding-left:18px;">
+        <li>ระบบตรวจสอบ booking หมดอายุ <strong>ทุกนาที</strong></li>
+        <li>หมดอายุ → status = expired + release stock อัตโนมัติ</li>
+        <li>ยกเลิกได้ → release stock ทันที</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ================================ -->
+<section id="cancel">
+  <h2><span class="icon">❌</span> ยกเลิกรายการ</h2>
+  <div class="card">
+    <h3>ยกเลิกธุรกรรม (Buy/Sell)</h3>
+    <div class="flow">
+      <span class="flow-step">Staff กด "ขอยกเลิก"</span><span class="flow-arrow">→</span>
+      <span class="flow-step" style="background:#fef3c7;color:#92400e;">ใส่เหตุผล → รอยกเลิก</span><span class="flow-arrow">→</span>
+      <span class="flow-step">Admin กด "อนุมัติยกเลิก"</span><span class="flow-arrow">→</span>
+      <span class="flow-step" style="background:#fee2e2;color:#991b1b;">ยกเลิกสำเร็จ</span>
+    </div>
+    <ul style="padding-left:18px;margin-top:12px;">
+      <li>สต็อกคืนกลับอัตโนมัติ (reverse inventory)</li>
+      <li>GL Journal กลับรายการอัตโนมัติ (reversal entry)</li>
+      <li>รายงานไม่รวมรายการที่ยกเลิก</li>
+      <li><strong>ไม่ลบรายการจริง</strong> — เปลี่ยน status เท่านั้น (audit trail)</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3>ยกเลิกยืม/คืน/โอน</h3>
+    <p>กดปุ่ม "ยกเลิก" ในตาราง → ระบบ reverse stock ทั้ง 2 ฝั่ง (ต้นทาง + ปลายทาง) + กลับ GL Journal</p>
+  </div>
+</section>
+
+<!-- ================================ -->
+<section id="rate">
+  <h2><span class="icon">📊</span> ตั้งราคา / อัตราแลกเปลี่ยน</h2>
+  <div class="card">
+    <h3>3 วิธีตั้งราคา</h3>
+    <table>
+      <tr><th>วิธี</th><th>คำอธิบาย</th><th>เหมาะกับ</th></tr>
+      <tr>
+        <td><strong>ตั้งราคาตรง</strong></td>
+        <td>ไปที่เคาน์เตอร์ → กรอก Buy/Sell rate ต่อ denomination</td>
+        <td>ตั้งราคาเฉพาะเคาน์เตอร์</td>
+      </tr>
+      <tr>
+        <td><strong>ตั้งค่าคำนวณ (Rate Calc)</strong></td>
+        <td>สร้างกลุ่ม → เลือกเคาน์เตอร์หลัก → ตั้ง adjustment → "คำนวณราคา" กระจายไปสาขา</td>
+        <td>ตั้งราคาหลายสาขาพร้อมกัน</td>
+      </tr>
+      <tr>
+        <td><strong>SuperRich อ้างอิง</strong></td>
+        <td>ดึงราคาจาก SuperRich → ตั้ง adjustment → สร้างชุดราคา → อนุมัติ → กระจาย</td>
+        <td>ใช้ราคาตลาดเป็นฐาน</td>
+      </tr>
+    </table>
+  </div>
+  <div class="card">
+    <h3>จอแสดงราคา (Rate Board)</h3>
+    <p>หน้าจอสาธารณะ (ไม่ต้อง login) แสดงราคาซื้อ/ขายแบบ real-time — พื้นดำ, ซื้อ = เขียว, ขาย = แดง, auto-refresh ทุก 5 นาที</p>
+  </div>
+</section>
+
+<!-- ================================ -->
+<section id="superrich">
+  <h2><span class="icon">⚡</span> SuperRich อัตราอ้างอิง</h2>
+  <div class="card">
+    <div class="flow">
+      <span class="flow-step">ดึงราคา SuperRich</span><span class="flow-arrow">→</span>
+      <span class="flow-step">ตั้งค่า Adjustment (+/-)</span><span class="flow-arrow">→</span>
+      <span class="flow-step">เลือกเคาน์เตอร์เป้าหมาย</span><span class="flow-arrow">→</span>
+      <span class="flow-step">สร้างชุดราคา</span><span class="flow-arrow">→</span>
+      <span class="flow-step" style="background:#fef3c7;color:#92400e;">รออนุมัติ</span><span class="flow-arrow">→</span>
+      <span class="flow-step" style="background:#dcfce7;color:#166534;">อนุมัติ → กระจายราคา</span>
+    </div>
+    <ul style="padding-left:18px;margin-top:12px;">
+      <li>ดึง 42 สกุลเงินจาก SuperRich Thailand API</li>
+      <li>ตั้ง adjustment +/- ต่อ denomination (เช่น SuperRich Buy 32.59 + Adj -0.10 = 32.49)</li>
+      <li>ต้อง <strong>Admin/Accounting อนุมัติ</strong> ก่อนกระจายไปสาขา</li>
+      <li>ทุกการเปลี่ยนแปลง rate มี <strong>Rate Change Log</strong></li>
+    </ul>
+  </div>
+</section>
+
+<!-- ================================ -->
+<section id="inventory">
+  <h2><span class="icon">📦</span> คลังเงินตรา (Inventory)</h2>
+  <div class="card">
+    <h3>ข้อมูลที่ติดตาม</h3>
+    <table>
+      <tr><th>ข้อมูล</th><th>คำอธิบาย</th></tr>
+      <tr><td><strong>Stock (Quantity)</strong></td><td>จำนวนเงินตราทั้งหมดในเคาน์เตอร์</td></tr>
+      <tr><td><strong>Hold Amount</strong></td><td>จำนวนที่ถูกจอง (Booking / Bank Sale)</td></tr>
+      <tr><td><strong>Available</strong></td><td>Stock - Hold = จำนวนที่พร้อมขาย</td></tr>
+      <tr><td><strong>Avg Cost</strong></td><td>ต้นทุนเฉลี่ยถ่วงน้ำหนัก (Weighted Average Cost)</td></tr>
+      <tr><td><strong>Total Cost Value</strong></td><td>Stock × Avg Cost = มูลค่ารวม</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h3>เปิด/ปิดวัน (Open/Close Day)</h3>
+    <ul style="padding-left:18px;">
+      <li><strong>เปิดวัน</strong> → บันทึก opening balance จาก stock ปัจจุบัน</li>
+      <li><strong>ปิดวัน</strong> → สรุป buy, sell, transfer in/out, closing balance</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ================================ -->
+<section id="transfer">
+  <h2><span class="icon">🔄</span> ยืม/คืน/โอนสินค้า</h2>
+  <div class="card">
+    <table>
+      <tr><th>ประเภท</th><th>คำอธิบาย</th><th>ผลต่อ Inventory</th></tr>
+      <tr>
+        <td><span class="badge badge-purple">ยืม (Borrow)</span></td>
+        <td>ยืมเงินตราจากเคาน์เตอร์อื่น</td>
+        <td>ต้นทาง -stock, ปลายทาง +stock</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-blue">คืน (Return)</span></td>
+        <td>คืนเงินตราที่ยืมมา</td>
+        <td>สลับทิศกับยืม</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-yellow">เบิกจ่าย (Disbursement)</span></td>
+        <td>เบิกจ่ายเงินให้เคาน์เตอร์ (จาก HQ)</td>
+        <td>HQ -stock, สาขา +stock</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-green">คืนระหว่างวัน (Intra-day)</span></td>
+        <td>คืนเงินกลับก่อนปิดวัน</td>
+        <td>สาขา -stock, HQ +stock</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-gray">ปรับปรุงสต็อก (Adjust)</span></td>
+        <td>ปรับเพิ่ม/ลด stock + ระบุเหตุผล</td>
+        <td>เพิ่ม/ลดโดยตรง + GL Journal</td>
+      </tr>
+    </table>
+    <p style="margin-top:12px;">ทุกรายการสามารถ <strong>ยกเลิก</strong> ได้ → reverse stock ทั้ง 2 ฝั่ง + กลับ GL Journal</p>
+  </div>
+</section>
+
+<!-- ================================ -->
+<section id="reports">
+  <h2><span class="icon">📈</span> รายงาน</h2>
+  <div class="card">
+    <table>
+      <tr><th>รายงาน</th><th>คำอธิบาย</th><th>Export</th></tr>
+      <tr><td>ค้นหารายการ (Search Trans)</td><td>ค้นหาทุกสาขา + filter ตาม counter, ประเภท, สถานะ</td><td>—</td></tr>
+      <tr><td>สรุปประจำวัน (Daily)</td><td>สรุป buying/selling ต่อวัน ต่อเคาน์เตอร์</td><td>Excel</td></tr>
+      <tr><td>สรุปยอดบัญชี (Acc Summary)</td><td>สรุปยอดทุกสาขา (Admin/Auditor only)</td><td>Excel</td></tr>
+      <tr><td>สรุป Avg Rate</td><td>อัตราเฉลี่ยถ่วงน้ำหนัก (Admin/Auditor only)</td><td>Excel</td></tr>
+      <tr><td>เคลื่อนไหวสต็อก (Movement)</td><td>ประวัติการเคลื่อนไหวของสต็อก</td><td>—</td></tr>
+      <tr><td>โอน/ยืม/คืน (Transfer)</td><td>ประวัติ transfer ระหว่างสาขา</td><td>—</td></tr>
+      <tr><td>กำไร-ขาดทุน (P&L)</td><td>สรุป FX Gain/Loss</td><td>—</td></tr>
+      <tr><td>มูลค่าสต็อก (Valuation)</td><td>มูลค่ารวมของ stock ทุก denomination</td><td>—</td></tr>
+      <tr><td>ผลงานพนักงาน (Cashier)</td><td>ยอด buy/sell ต่อพนักงาน</td><td>—</td></tr>
+      <tr><td>ธุรกรรมลูกค้า (Customer)</td><td>ประวัติธุรกรรมต่อลูกค้า</td><td>—</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- ================================ -->
+<section id="accounting">
+  <h2><span class="icon">📒</span> บัญชี / GL Journal อัตโนมัติ</h2>
+  <div class="card card-highlight">
+    <p>ระบบสร้าง <strong>Journal Entry อัตโนมัติ</strong> ทุกครั้งที่มีธุรกรรม — ไม่ต้องบันทึกบัญชีมือ</p>
+  </div>
+  <div class="card">
+    <h3>การบันทึกบัญชีอัตโนมัติ</h3>
+    <table>
+      <tr><th>ประเภท</th><th>Dr (เดบิต)</th><th>Cr (เครดิต)</th><th>P&L</th></tr>
+      <tr>
+        <td><span class="badge badge-green">ซื้อ (Buy)</span></td>
+        <td>1400 สินค้าคงเหลือ FX</td>
+        <td>1100 เงินสด THB</td>
+        <td>ยังไม่รับรู้</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-red">ขาย (Sell)</span></td>
+        <td>1100 เงินสด THB</td>
+        <td>1400 สินค้าคงเหลือ FX</td>
+        <td>4200 กำไร / 5200 ขาดทุน FX</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-blue">ขายธนาคาร</span></td>
+        <td>1200 เงินฝากธนาคาร</td>
+        <td>1400 สินค้าคงเหลือ FX</td>
+        <td>4200 กำไร / 5200 ขาดทุน FX</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-purple">โอน (Transfer)</span></td>
+        <td>1400 FX (ปลายทาง)</td>
+        <td>1400 FX (ต้นทาง)</td>
+        <td>ไม่เกิด P&L</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-yellow">ปรับสต็อก</span></td>
+        <td>1400 / 5900</td>
+        <td>5900 / 1400</td>
+        <td>อาจมีผลต่าง</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-gray">ยกเลิก (Void)</span></td>
+        <td colspan="3">กลับรายการ — สลับ Dr/Cr ของ journal เดิม</td>
+      </tr>
+    </table>
+    <p style="margin-top:12px;font-size:0.85rem;color:var(--muted);">Journal สร้างแบบ is_posted = false → ต้อง review ก่อน post</p>
+  </div>
+</section>
+
+<!-- ================================ -->
+<section id="admin">
+  <h2><span class="icon">⚙️</span> ตั้งค่าระบบ (Admin)</h2>
+  <div class="card">
+    <table>
+      <tr><th>เมนู</th><th>คำอธิบาย</th></tr>
+      <tr><td><strong>จัดการสาขา</strong></td><td>CRUD สาขา (ชื่อ, รหัส, เมือง) + เคาน์เตอร์ในแต่ละสาขา</td></tr>
+      <tr><td><strong>จัดการผู้ใช้</strong></td><td>CRUD user + กำหนด role + สาขา</td></tr>
+      <tr><td><strong>สิทธิ์ (Permissions)</strong></td><td>Role × Module matrix — 30 permissions (6 modules × 5 actions)</td></tr>
+      <tr><td><strong>จัดการ Session</strong></td><td>ดู active sessions + "เตะออก" (terminate session ทันที)</td></tr>
+      <tr><td><strong>สกุลเงิน</strong></td><td>CRUD สกุลเงิน + denomination (ธนบัตร) + ค้นหา</td></tr>
+      <tr><td><strong>ลูกค้า</strong></td><td>ทะเบียนลูกค้า + KYC + passport OCR data</td></tr>
+      <tr><td><strong>ผังบัญชี</strong></td><td>Chart of Accounts — 30 บัญชี (สินทรัพย์, หนี้สิน, ส่วนของเจ้าของ, รายได้, ค่าใช้จ่าย)</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- ================================ -->
+<section id="roles">
+  <h2><span class="icon">👥</span> สิทธิ์ผู้ใช้งาน (Roles)</h2>
+  <div class="role-grid">
+    <div class="role-card role-admin">
+      <h3 style="margin:0 0 8px;">Admin</h3>
+      <ul style="padding-left:18px;font-size:0.85rem;">
+        <li>เข้าถึงทุกเมนู + ทุกสาขา</li>
+        <li>ตั้งราคา + กระจายราคา</li>
+        <li>อนุมัติยกเลิก + approve ต่างๆ</li>
+        <li>จัดการ user + สิทธิ์ + สาขา</li>
+        <li>ขายธนาคาร + SuperRich</li>
+        <li>ดูรายงานทุกสาขา</li>
+      </ul>
+    </div>
+    <div class="role-card role-staff">
+      <h3 style="margin:0 0 8px;">Staff</h3>
+      <ul style="padding-left:18px;font-size:0.85rem;">
+        <li>ซื้อ/ขายเงินตราที่เคาน์เตอร์ตัวเอง</li>
+        <li>ดูรายการของตัวเอง</li>
+        <li>ขอยกเลิกรายการ (ต้องรอ admin อนุมัติ)</li>
+        <li>ดู stock + ทำ booking</li>
+        <li>ไม่เห็นเมนู Setting + ค้นหารายการทุกสาขา</li>
+      </ul>
+    </div>
+    <div class="role-card role-auditor">
+      <h3 style="margin:0 0 8px;">Auditor</h3>
+      <ul style="padding-left:18px;font-size:0.85rem;">
+        <li>ดูรายงานทุกสาขา (read-only)</li>
+        <li>สรุปยอดบัญชี + Avg Rate</li>
+        <li>ดู stock + movements</li>
+        <li>ไม่สามารถสร้าง/แก้ไขรายการ</li>
+        <li>Export ข้อมูลได้</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+</div>
+
+<footer>
+  <p>Exchange System v1.0 — Powered by <strong>Softernity</strong></p>
+  <p>Laravel 11 + Livewire 4 + MySQL | Deploy: GCP Cloud Run</p>
+</footer>
+
+</body>
+</html>
