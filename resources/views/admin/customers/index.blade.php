@@ -75,11 +75,9 @@
                     @forelse ($customers as $customer)
                         <tr class="hover:bg-gray-50">
                             <td class="px-4 py-3">
-                                @if ($customer->passport_photo)
+                                @if ($customer->passport_photo && file_exists(public_path('storage/' . $customer->passport_photo)))
                                     <img src="{{ asset('storage/' . $customer->passport_photo) }}"
                                          alt="Photo" class="w-10 h-10 rounded object-cover">
-                                @else
-                                    <div class="w-10 h-10 rounded bg-gray-200 flex items-center justify-center text-gray-400 text-xs">N/A</div>
                                 @endif
                             </td>
                             <td class="px-4 py-3 text-gray-600">
