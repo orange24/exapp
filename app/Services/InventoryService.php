@@ -25,7 +25,36 @@ class InventoryService
         int $transactionId,
         int $userId
     ): void {
-        DB::transaction(function () use ($counterId, $currencyCode, $denominationId, $amount, $rateBuy, $transactionId, $userId) {
+        $this->applyReceipt(
+            counterId: $counterId,
+            currencyCode: $currencyCode,
+            denominationId: $denominationId,
+            amount: $amount,
+            unitCost: $rateBuy,
+            referenceType: 'transaction',
+            referenceId: $transactionId,
+            userId: $userId,
+        );
+    }
+
+    /**
+     * Stock coming IN to a counter — the one place the weighted-average cost is calculated.
+     *
+     * ใช้ร่วมกันระหว่างการรับซื้อจากลูกค้า (recordBuy) และการรับของจากธนาคาร
+     * (BankSaleService ฝั่ง direction=buy) เพื่อไม่ให้สูตร avg_cost แตกเป็นสองชุด
+     */
+    public function applyReceipt(
+        int $counterId,
+        string $currencyCode,
+        int $denominationId,
+        float $amount,
+        float $unitCost,
+        string $referenceType,
+        int $referenceId,
+        int $userId,
+        ?string $note = null
+    ): void {
+        DB::transaction(function () use ($counterId, $currencyCode, $denominationId, $amount, $unitCost, $referenceType, $referenceId, $userId, $note) {
             // Lock and get/create counter_stock row
             $stock = CounterStock::lockForUpdate()->firstOrCreate(
                 [
@@ -47,7 +76,7 @@ class InventoryService
             $newQty = $oldQty + $amount;
 
             if ($newQty > 0) {
-                $stock->avg_cost = ($oldQty * $oldAvg + $amount * $rateBuy) / $newQty;
+                $stock->avg_cost = ($oldQty * $oldAvg + $amount * $unitCost) / $newQty;
             }
 
             $stock->quantity = $newQty;
@@ -61,9 +90,10 @@ class InventoryService
                 'denomination_id' => $denominationId,
                 'movement_type' => 'buy',
                 'amount' => $amount,
-                'unit_price' => $rateBuy,
-                'reference_type' => 'transaction',
-                'reference_id' => $transactionId,
+                'unit_price' => $unitCost,
+                'reference_type' => $referenceType,
+                'reference_id' => $referenceId,
+                'note' => $note,
                 'moved_by' => $userId,
                 'moved_at' => now(),
             ]);

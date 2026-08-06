@@ -15,6 +15,20 @@
         </div>
     @endif
 
+    {{-- ผลของปุ่ม คัดลอกราคา / ดึงราคาตั้งต้น --}}
+    @if ($notice)
+        @php
+            $noticeClass = match ($noticeType) {
+                'success' => 'bg-green-50 border-green-300 text-green-800',
+                'warn'    => 'bg-amber-50 border-amber-300 text-amber-800',
+                default   => 'bg-blue-50 border-blue-300 text-blue-800',
+            };
+        @endphp
+        <div class="mb-4 p-3 border rounded text-sm {{ $noticeClass }}">
+            {{ $notice }}
+        </div>
+    @endif
+
     {{-- Copy from / Auto Set --}}
     <div class="flex flex-wrap gap-3 mb-4 p-3 bg-blue-50 border border-blue-200 rounded">
         <div class="flex items-center gap-2">

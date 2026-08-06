@@ -65,6 +65,17 @@ class SuperrichRateService
     public function mapDenomination(string $currencyCode, string $srDenom): ?int
     {
         $srDenom = trim($srDenom);
+
+        // ถ้าสกุลนี้มีธนบัตรเดียวในระบบ ก็ไม่มีอะไรให้กำกวม — ใช้ตัวนั้นเลย
+        // ครอบคลุมเคสที่ SuperRich ส่งช่วงคนละแบบกับที่เราตั้งชื่อไว้
+        // (เช่น JPY ส่ง "10000 - 5000" แต่เราเก็บ "10000-1000") และเคสที่ส่ง "-" มา
+        $singleDenom = CurrencyDenomination::where('currency_code', $currencyCode)
+            ->where('is_active', true)
+            ->get();
+        if ($singleDenom->count() === 1) {
+            return $singleDenom->first()->id;
+        }
+
         if (! $srDenom || $srDenom === '-') return null;
 
         $maps = config('superrich.denom_map', []);

@@ -15,9 +15,14 @@ class RateController extends Controller
      */
     public function index(): \Illuminate\View\View
     {
+        $visibleBranchIds = auth()->user()->getVisibleBranchIds();
+
         $counters = Counter::with(['branch', 'rates' => function ($q) {
             $q->whereDate('rate_date', today());
-        }])->where('is_active', true)->get();
+        }])
+        ->where('is_active', true)
+        ->whereIn('branch_id', $visibleBranchIds)
+        ->get();
 
         return view('admin.rate.index', compact('counters'));
     }
@@ -28,6 +33,13 @@ class RateController extends Controller
      */
     public function setup(Counter $counter): \Illuminate\View\View
     {
+        // Check if user has access to this counter's branch
+        $visibleBranchIds = auth()->user()->getVisibleBranchIds();
+
+        if (!in_array($counter->branch_id, $visibleBranchIds)) {
+            abort(403, 'คุณไม่มีสิทธิ์เข้าถึงเคาน์เตอร์นี้');
+        }
+
         return view('admin.rate.setup', compact('counter'));
     }
 }

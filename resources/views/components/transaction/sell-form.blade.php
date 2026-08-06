@@ -8,6 +8,8 @@ use App\Models\CounterStock;
 use App\Models\Customer;
 use App\Models\TransactionMaster;
 use App\Models\TransactionDetail;
+use App\Models\Setting;
+use App\Models\WorkingDay;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
@@ -16,6 +18,7 @@ new class extends Component
 {
     public string $counterId = '';
     public string $counterCode = '';
+    public bool $showCounterModal = false;
 
     public string $custName = '';
     public ?int $customerId = null;
@@ -31,6 +34,7 @@ new class extends Component
     public string $selectedCurrency = '';  // denomination_id
     public float $addAmount = 0;           // จำนวนเงิน THB ที่ลูกค้าให้
     public float $currentRate = 0;         // อัตราขาย
+    public float $defaultRate = 0;         // rate ที่ตั้งค่าไว้ — role ที่แก้ไม่ได้จะถูกบังคับกลับมาค่านี้
     public float $currentTotal = 0;        // จำนวนเงินต่างประเทศที่ลูกค้าจะได้ = THB / rate
     public float $boothAmount = 0;         // จำนวนเงินต่างประเทศที่มีในบูธ
     public bool $showAdjustModal = false;  // แสดง modal ปรับจำนวน
@@ -53,31 +57,88 @@ new class extends Component
 
     public function mount(): void
     {
+        $user = Auth::user();
+
+        // Check if role requires counter for Buy/Sell
+        if ($user && !$user->requiresCounterForBuySell()) {
+            // Trader/Auditor should not access Buy/Sell
+            abort(403, 'Access denied. This role cannot access Buy/Sell.');
+        }
+
+        // 1st priority: session working counter (user switched)
         $sessionCounterId = session('working_counter_id');
         if ($sessionCounterId) {
             $counter = Counter::where('id', $sessionCounterId)->where('is_active', true)->first();
             if ($counter) {
                 $this->counterId   = (string) $counter->id;
                 $this->counterCode = $counter->counter_code;
+                $this->checkWorkingDayOpen($counter);
                 return;
             }
         }
 
-        $user = Auth::user();
+        // No session counter - check if need to show modal
         if ($user && $user->branch_id) {
-            $counter = Counter::where('branch_id', $user->branch_id)
-                ->where('is_active', true)->first();
-            if ($counter) {
+            $counters = Counter::where('branch_id', $user->branch_id)
+                ->where('is_active', true)->get();
+
+            if ($counters->count() === 1) {
+                // Auto-select single counter
+                $counter = $counters->first();
                 $this->counterId   = (string) $counter->id;
                 $this->counterCode = $counter->counter_code;
+                session(['working_counter_id' => $counter->id, 'working_counter_name' => $counter->counter_name]);
+                $this->checkWorkingDayOpen($counter);
+            } elseif ($counters->count() > 1) {
+                // Show modal to select
+                $this->showCounterModal = true;
             }
         }
+    }
+
+    protected function checkWorkingDayOpen(Counter $counter): void
+    {
+        // Check if working day is open for this counter
+        $today = now()->format('Y-m-d');
+        $workingDay = WorkingDay::where('counter_id', $counter->id)
+            ->where('work_date', $today)
+            ->where('status', 'open')
+            ->first();
+
+        if (!$workingDay) {
+            session()->flash('error', 'ยังไม่เปิดวันทำการ - กรุณาเปิดวันทำการก่อนทำรายการ');
+            $this->redirect('/inventory/open-close-day', navigate: true);
+        }
+    }
+
+    /**
+     * Only Admin/Superadmin/Branch Manager may override the configured rate.
+     * Everyone else transacts at the rate set in "ตั้งราคา".
+     */
+    #[Computed]
+    public function canEditRate(): bool
+    {
+        $user = Auth::user();
+
+        return $user && ($user->isAdmin() || $user->isBranchManager());
+    }
+
+    public function updatedCurrentRate(): void
+    {
+        // Public properties are writable from the browser, so re-assert the
+        // permission server-side rather than relying on the disabled input.
+        if (! $this->canEditRate) {
+            $this->currentRate = $this->defaultRate;
+        }
+
+        $this->recalcTotal();
     }
 
     public function updatedSelectedCurrency(string $denomId): void
     {
         if (! $denomId || ! $this->counterId) {
             $this->currentRate = 0;
+            $this->defaultRate = 0;
             $this->currentTotal = 0;
             $this->boothAmount = 0;
             return;
@@ -87,11 +148,20 @@ new class extends Component
             ->whereDate('rate_date', today())
             ->first();
 
-        if ($this->isDiscountBooth && $cr) {
-            $this->currentRate = max(0, (float)$cr->rate_sell - (float)$cr->sell_discount_rate);
-        } else {
-            $this->currentRate = $cr ? (float) $cr->rate_sell : 0;
+        // ถ้าไม่มี rate วันนี้ ให้ดึง rate ล่าสุดมาใช้
+        if (!$cr) {
+            $cr = CounterRate::where('counter_id', $this->counterId)
+                ->where('denomination_id', $denomId)
+                ->orderBy('rate_date', 'desc')
+                ->first();
         }
+
+        if ($this->isDiscountBooth && $cr) {
+            $this->defaultRate = max(0, (float)$cr->rate_sell - (float)$cr->sell_discount_rate);
+        } else {
+            $this->defaultRate = $cr ? (float) $cr->rate_sell : 0;
+        }
+        $this->currentRate = $this->defaultRate;
 
         // ดึงจำนวนเงินในบูธจาก stock
         $stock = \App\Models\CounterStock::where('counter_id', $this->counterId)
@@ -118,6 +188,13 @@ new class extends Component
     public function addRow(): void
     {
         if (! $this->selectedCurrency || $this->addAmount <= 0) return;
+
+        if (! $this->canEditRate) {
+            $this->currentRate = $this->defaultRate;
+            $this->recalcTotal();
+        }
+
+        if ($this->currentRate <= 0) return;
 
         $denom = \App\Models\CurrencyDenomination::with('currency')->find($this->selectedCurrency);
         $foreignAmount = $this->currentTotal; // จำนวนเงินต่างประเทศที่คำนวณได้
@@ -179,6 +256,7 @@ new class extends Component
         $this->addAmount = 0;
         $this->boothAmount = 0;
         $this->currentRate = 0;
+        $this->defaultRate = 0;
         $this->currentTotal = 0;
         $this->adjustedTotal = 0;
         $this->adjustedThb = 0;
@@ -418,6 +496,7 @@ new class extends Component
         $this->selectedCurrency = '';
         $this->addAmount        = 0;
         $this->currentRate      = 0;
+        $this->defaultRate      = 0;
         $this->currentTotal     = 0;
         $this->boothAmount      = 0;
         $this->savedTransactionId = null;
@@ -452,21 +531,59 @@ new class extends Component
         $this->passportImageB64 = $imageB64;
     }
 
+    public function selectCounterFromModal(int $counterId): void
+    {
+        $counter = Counter::where('id', $counterId)->where('is_active', true)->first();
+        if (!$counter) {
+            session()->flash('error', 'Counter not found');
+            return;
+        }
+
+        $this->counterId = (string) $counter->id;
+        $this->counterCode = $counter->counter_code;
+        session(['working_counter_id' => $counter->id, 'working_counter_name' => $counter->counter_name]);
+        $this->showCounterModal = false;
+        $this->checkWorkingDayOpen($counter);
+    }
+
     #[Computed]
     public function availableCounters()
     {
-        return Counter::where('is_active', true)->with('branch')->get();
+        $user = Auth::user();
+        $query = Counter::where('is_active', true);
+
+        // Filter by working branch for Staff and Branch Manager
+        if ($user->role?->name === 'staff') {
+            $workingBranchId = session('working_branch_id', $user->branch_id);
+            $query->where('branch_id', $workingBranchId);
+        } elseif ($user->role?->name === 'branch_manager') {
+            $query->where('branch_id', $user->branch_id);
+        }
+        // Admin can see all counters
+
+        return $query->with('branch')->orderBy('branch_id')->get();
     }
 
     #[Computed]
     public function availableCurrencies()
     {
         if (! $this->counterId) return collect();
+
+        // ดึง rate ล่าสุดของแต่ละ denomination
+        $latestRates = CounterRate::where('counter_rates.counter_id', $this->counterId)
+            ->whereNotNull('counter_rates.denomination_id')
+            ->where('counter_rates.rate_sell', '>', 0)
+            ->select('counter_rates.denomination_id', DB::raw('MAX(counter_rates.rate_date) as latest_date'))
+            ->groupBy('counter_rates.denomination_id');
+
         return CounterRate::with(['currency', 'denomination'])
-            ->where('counter_id', $this->counterId)
-            ->whereDate('rate_date', today())
-            ->whereNotNull('denomination_id')
-            ->where('rate_sell', '>', 0)
+            ->where('counter_rates.counter_id', $this->counterId)
+            ->whereNotNull('counter_rates.denomination_id')
+            ->where('counter_rates.rate_sell', '>', 0)
+            ->joinSub($latestRates, 'latest', function($join) {
+                $join->on('counter_rates.denomination_id', '=', 'latest.denomination_id')
+                     ->on('counter_rates.rate_date', '=', 'latest.latest_date');
+            })
             ->join('currency_denominations', 'counter_rates.denomination_id', '=', 'currency_denominations.id')
             ->orderBy('currency_denominations.seq')
             ->select('counter_rates.*')
@@ -482,32 +599,56 @@ new class extends Component
     }
 
     #[Computed]
-    public function stockInfo(): ?array
+    public function stockInfo(): array
     {
-        if (! $this->selectedCurrency || ! $this->counterId) return null;
+        if (!$this->counterId) return [];
 
-        $stock = CounterStock::where('counter_id', $this->counterId)
-            ->where('denomination_id', $this->selectedCurrency)->first();
-        $rate = CounterRate::where('counter_id', $this->counterId)
-            ->where('denomination_id', $this->selectedCurrency)
-            ->whereDate('rate_date', today())->first();
+        $cutoff = Setting::get('WORKING_CUT_OFF', '03:00:00');
+        $dateStart = date('Y-m-d') . " {$cutoff}";
+        $dateEnd = date('Y-m-d', strtotime('+1 day')) . " {$cutoff}";
 
-        $avgCost  = (float) ($stock?->avg_cost ?? 0);
-        $buyRate  = (float) ($rate?->rate_buy ?? 0);
-        $sellRate = (float) ($rate?->rate_sell ?? 0);
+        // ดึง rate เฉลี่ยจาก transactions ต่อ denomination
+        $avgRates = DB::table('transactions_detail')
+            ->join('transactions_master', 'transactions_detail.transaction_id', '=', 'transactions_master.id')
+            ->where('transactions_master.counter_id', $this->counterId)
+            ->where('transactions_master.flag_cancel', 'N')
+            ->where('transactions_master.trns_datetime', '>', $dateStart)
+            ->where('transactions_master.trns_datetime', '<=', $dateEnd)
+            ->selectRaw('
+                transactions_detail.denomination_id,
+                AVG(CASE WHEN transactions_master.trns_type = "BUYING" THEN transactions_detail.unit_price ELSE NULL END) as avg_buy,
+                AVG(CASE WHEN transactions_master.trns_type = "SELLING" THEN transactions_detail.unit_price ELSE NULL END) as avg_sell
+            ')
+            ->groupBy('transactions_detail.denomination_id')
+            ->get()
+            ->keyBy('denomination_id');
 
-        return [
-            'quantity'    => (float) ($stock?->quantity ?? 0),
-            'hold'        => (float) ($stock?->hold_amount ?? 0),
-            'available'   => (float) ($stock?->available ?? 0),
-            'avg_cost'    => $avgCost,
-            'buy_rate'    => $buyRate,
-            'sell_rate'   => $sellRate,
-            'buy_margin'  => $buyRate > 0 ? round($buyRate - $avgCost, 4) : 0,
-            'sell_margin' => $sellRate > 0 ? round($sellRate - $avgCost, 4) : 0,
-            'spread'      => ($buyRate > 0 && $sellRate > 0) ? round($sellRate - $buyRate, 4) : 0,
-            'denom_label' => $rate?->denomination?->display_name ?? '',
-        ];
+        // ดึง rate ล่าสุดจาก counter_rates (order by seq) พร้อม denomination
+        $result = CounterRate::with(['currency', 'denomination'])
+            ->where('counter_rates.counter_id', $this->counterId)
+            ->whereNotNull('counter_rates.denomination_id')
+            ->join('currency_denominations', 'counter_rates.denomination_id', '=', 'currency_denominations.id')
+            ->orderBy('currency_denominations.seq')
+            ->select('counter_rates.*')
+            ->get()
+            ->map(function ($rate) use ($avgRates) {
+                $avgRate = $avgRates->get($rate->denomination_id);
+
+                // ใช้ rate เฉลี่ยถ้ามี ไม่งั้นใช้ rate ล่าสุด
+                $buyRate = $avgRate && $avgRate->avg_buy ? (float) $avgRate->avg_buy : (float) $rate->rate_buy;
+                $sellRate = $avgRate && $avgRate->avg_sell ? (float) $avgRate->avg_sell : (float) $rate->rate_sell;
+
+                return [
+                    'currency_code' => $rate->currency_code,
+                    'currency_name' => $rate->currency?->currency_name ?? $rate->currency_code,
+                    'denomination_label' => $rate->denomination?->display_name ?? $rate->currency_code,
+                    'buy_rate' => $buyRate,
+                    'sell_rate' => $sellRate,
+                ];
+            })
+            ->toArray();
+
+        return $result;
     }
 
     public function render()

@@ -1,4 +1,36 @@
 <div class="p-4" x-data="buyForm()">
+
+{{-- Counter Selection Modal --}}
+@if($showCounterModal)
+<div style="position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.6); display:flex; align-items:center; justify-content:center;">
+    <div style="background:#fff; border-radius:16px; padding:32px; width:100%; max-width:480px; box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+        <div style="text-align:center; margin-bottom:24px;">
+            <div style="width:56px; height:56px; background:#EEF2FF; border-radius:14px; display:flex; align-items:center; justify-content:center; margin:0 auto 12px;">
+                <svg style="width:28px; height:28px; color:#0e513a;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+                </svg>
+            </div>
+            <h2 style="font-size:20px; font-weight:700; color:#0e513a;">เลือกเคาน์เตอร์ก่อนทำรายการ</h2>
+            <p style="font-size:13px; color:#888; margin-top:4px;">กรุณาเลือกเคาน์เตอร์ที่คุณจะใช้งาน</p>
+        </div>
+
+        <div style="display:flex; flex-direction:column; gap:8px; max-height:360px; overflow-y:auto; margin-bottom:20px;">
+            @foreach ($this->availableCounters as $c)
+                <button type="button"
+                        wire:click="selectCounterFromModal({{ $c->id }})"
+                        style="background:#fff; color:#333; border:2px solid #e5e7eb; border-radius:10px; padding:12px 16px; text-align:left; cursor:pointer; transition:all 0.15s;"
+                        onmouseover="this.style.borderColor='#0e513a'"
+                        onmouseout="this.style.borderColor='#e5e7eb'">
+                    <div style="font-weight:600; font-size:15px;">{{ $c->counter_name }}</div>
+                    <div style="font-size:12px; opacity:0.7;">{{ $c->branch->branch_name ?? '' }}</div>
+                </button>
+            @endforeach
+        </div>
+    </div>
+</div>
+@endif
+
 <div class="flex gap-4">
 {{-- Main Form Area --}}
 <div class="flex-1 min-w-0">
@@ -196,6 +228,7 @@
             <div style="width:200px; flex-shrink:0;">
                 <label class="block text-sm font-medium text-gray-700 mb-1">สกุลเงินที่ขาย</label>
                 <select wire:model.live="selectedCurrency"
+                        x-ref="currencySelect"
                         class="w-full border border-gray-300 rounded px-2 py-2 text-sm">
                     <option value="">-- เลือกสกุลเงิน --</option>
                     @php $prevCode = ''; @endphp
@@ -212,28 +245,28 @@
                     @if ($prevCode !== '') </optgroup> @endif
                 </select>
             </div>
+            <div style="width:130px; flex-shrink:0;">
+                <label class="block text-sm font-medium text-gray-700 mb-1">
+                    อัตราขาย
+                    @unless ($this->canEditRate)
+                        <span class="text-xs font-normal text-gray-400">(ดูอย่างเดียว)</span>
+                    @endunless
+                </label>
+                @if ($this->canEditRate)
+                    <input type="number" wire:model.blur="currentRate" min="0" step="0.0001"
+                           class="w-full border border-red-400 rounded px-2 py-2 text-sm text-right font-mono">
+                @else
+                    <input type="text" value="{{ $currentRate > 0 ? number_format($currentRate, 4) : '' }}"
+                           readonly disabled
+                           class="w-full border border-gray-300 bg-gray-100 text-gray-600 rounded px-2 py-2 text-sm text-right font-mono cursor-not-allowed">
+                @endif
+            </div>
             <div style="width:120px; flex-shrink:0;" x-data>
                 <label class="block text-sm font-medium text-gray-700 mb-1">ลูกค้าให้ (THB)</label>
-                <input type="number" wire:model.blur="addAmount" min="0" step="1"
-                       x-on:input="$el.closest('.bg-red-50').querySelector('[data-calc-result]').value = $el.value && {{ $currentRate }} > 0 ? Math.floor($el.value / {{ $currentRate }}) : 0"
-                       class="w-full border border-gray-300 rounded px-2 py-2 text-sm text-right font-mono">
-            </div>
-            <div style="width:100px; flex-shrink:0;">
-                <label class="block text-sm font-medium text-gray-700 mb-1">ในบูธ</label>
-                <input type="number" wire:model.blur="boothAmount" min="0" step="1"
-                       class="w-full border border-gray-300 rounded px-2 py-2 text-sm text-right font-mono"
-                       placeholder="มีในบูธ">
-            </div>
-            <div style="width:100px; flex-shrink:0;">
-                <label class="block text-sm font-medium text-gray-700 mb-1">อัตราขาย</label>
-                <input type="text" value="{{ number_format($currentRate, 4) }}" readonly
-                       class="w-full border border-gray-200 bg-gray-100 rounded px-2 py-2 text-sm text-right font-mono text-red-700">
-            </div>
-            <div style="width:100px; flex-shrink:0;">
-                <label class="block text-sm font-medium text-gray-700 mb-1">ลูกค้าได้</label>
-                <input type="text" value="{{ $currentTotal > 0 ? number_format($currentTotal, 0) : '' }}" readonly
-                       data-calc-result
-                       class="w-full border border-gray-200 bg-gray-100 rounded px-2 py-2 text-sm text-right font-mono font-bold text-red-700">
+                <x-number-input model="addAmount" :value="$addAmount" :decimals="0"
+                       x-ref="amountInput"
+                       @keydown.enter.prevent="commit($el); $wire.addRow().then(() => { $nextTick(() => $refs.currencySelect.focus()); })"
+                       class="w-full border border-gray-300 rounded px-2 py-2 text-sm" />
             </div>
             <div>
                 <button wire:click="addRow" type="button"
@@ -340,7 +373,8 @@
             </div>
         </div>
         <iframe id="print-iframe" src="{{ route('transaction.print', $savedTransactionId) }}?print=Y"
-                style="position:absolute; width:0; height:0; border:none; overflow:hidden;"></iframe>
+                style="position:absolute; width:0; height:0; border:none; overflow:hidden;"
+                onload="setTimeout(() => { @this.newTransaction(); }, 1500);"></iframe>
     @endif
 
     @if (count($rows) > 0 && ! $showPrintSlip)
@@ -368,67 +402,41 @@
                 </h3>
             </div>
 
-            @if ($this->stockInfo)
-                @php $si = $this->stockInfo; @endphp
-                <div class="p-4">
-                    <div class="text-center mb-3">
-                        <span class="text-lg font-bold" style="color:#0e513a;">{{ $si['denom_label'] }}</span>
-                    </div>
-
-                    <div class="space-y-2 text-sm">
-                        <div class="flex justify-between py-1 border-b border-gray-100">
-                            <span class="text-gray-500">Stock</span>
-                            <span class="font-mono font-bold">{{ number_format($si['quantity'], 2) }}</span>
-                        </div>
-                        <div class="flex justify-between py-1 border-b border-gray-100">
-                            <span class="text-gray-500">Hold</span>
-                            <span class="font-mono {{ $si['hold'] > 0 ? 'text-orange-600 font-bold' : 'text-gray-400' }}">{{ number_format($si['hold'], 2) }}</span>
-                        </div>
-                        <div class="flex justify-between py-1 border-b border-gray-100">
-                            <span class="text-gray-500">Available</span>
-                            <span class="font-mono font-bold {{ $si['available'] > 0 ? 'text-green-700' : 'text-red-600' }}">{{ number_format($si['available'], 2) }}</span>
-                        </div>
-                    </div>
-
-                    <div class="mt-3 pt-3 border-t border-gray-200 space-y-2 text-sm">
-                        <div class="flex justify-between py-1 border-b border-gray-100">
-                            <span class="text-gray-500">Avg Cost</span>
-                            <span class="font-mono text-blue-700">{{ number_format($si['avg_cost'], 4) }}</span>
-                        </div>
-                        <div class="flex justify-between py-1 border-b border-gray-100">
-                            <span class="text-gray-500">Buy Rate</span>
-                            <span class="font-mono font-bold text-green-700">{{ number_format($si['buy_rate'], 4) }}</span>
-                        </div>
-                        <div class="flex justify-between py-1 border-b border-gray-100">
-                            <span class="text-gray-500">Sell Rate</span>
-                            <span class="font-mono font-bold text-red-700">{{ number_format($si['sell_rate'], 4) }}</span>
-                        </div>
-                    </div>
-
-                    <div class="mt-3 pt-3 border-t border-gray-200 space-y-2 text-sm">
-                        <div class="flex justify-between py-1">
-                            <span class="text-gray-500">Buy Margin</span>
-                            <span class="font-mono {{ $si['buy_margin'] >= 0 ? 'text-green-600' : 'text-red-600' }}">
-                                {{ $si['buy_margin'] >= 0 ? '+' : '' }}{{ number_format($si['buy_margin'], 4) }}
-                            </span>
-                        </div>
-                        <div class="flex justify-between py-1">
-                            <span class="text-gray-500">Sell Margin</span>
-                            <span class="font-mono {{ $si['sell_margin'] >= 0 ? 'text-green-600' : 'text-red-600' }}">
-                                {{ $si['sell_margin'] >= 0 ? '+' : '' }}{{ number_format($si['sell_margin'], 4) }}
-                            </span>
-                        </div>
-                        <div class="flex justify-between py-1 border-t border-gray-200 pt-2">
-                            <span class="text-gray-500 font-medium">Spread</span>
-                            <span class="font-mono font-bold text-blue-800">{{ number_format($si['spread'], 4) }}</span>
-                        </div>
-                    </div>
+            <div class="p-3">
+                <div class="text-center mb-3 pb-2 border-b" style="border-color:#0e513a;">
+                    <div class="text-sm font-bold" style="color:#0e513a;">อัตราแลกเปลี่ยนเฉลี่ย</div>
+                    <div class="text-xs text-gray-500 mt-1">จากการทำธุรกรรมของสาขา (วันนี้)</div>
                 </div>
-            @else
-                <div class="p-6 text-center text-gray-400 text-sm">
-                    เลือกสกุลเงินเพื่อดูข้อมูล
+
+                <div class="overflow-y-auto" style="max-height: 450px;">
+                    @php $prevCurrency = ''; @endphp
+                    @foreach ($this->stockInfo as $info)
+                        @if ($prevCurrency !== $info['currency_code'])
+                            {{-- Currency Header --}}
+                            @if ($prevCurrency !== '')
+                                <div class="mt-2"></div>
+                            @endif
+                            <div class="px-2 py-1.5 text-xs font-semibold text-white border-b border-gray-300" style="background:#0e513a; position: sticky; top: 0; z-index: 10;">
+                                {{ $info['currency_code'] }} — {{ $info['currency_name'] }}
+                            </div>
+                            @php $prevCurrency = $info['currency_code']; @endphp
+                        @endif
+
+                        {{-- Rate Row --}}
+                        <div class="px-2 py-1.5 border-b border-gray-100 hover:bg-gray-50 text-xs">
+                            <div class="text-gray-600 font-semibold mb-1">{{ $info['denomination_label'] }}</div>
+                            <div class="grid grid-cols-2 gap-2">
+                                <div class="font-mono text-green-700 text-right">
+                                    {{ $info['buy_rate'] > 0 ? number_format($info['buy_rate'], 4) : '-' }}
+                                </div>
+                                <div class="font-mono text-red-700 text-right">
+                                    {{ $info['sell_rate'] > 0 ? number_format($info['sell_rate'], 4) : '-' }}
+                                </div>
+                            </div>
+                        </div>
+                    @endforeach
                 </div>
-            @endif
+            </div>
         </div>
     </div>
 </div>

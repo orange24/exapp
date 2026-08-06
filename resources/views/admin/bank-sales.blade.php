@@ -8,5 +8,5 @@
         <p class="text-sm text-gray-500">Reserve สต็อกจากหลายสาขา → ขนส่ง → ยืนยันขาย → ตัดสต็อก + GL Journal + P&L</p>
     </div>
 
-    <livewire:rate.bank-sale-manager />
+    <livewire:rate.bank-sale-manager direction="sell" />
 @endsection

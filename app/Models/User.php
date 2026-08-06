@@ -23,7 +23,9 @@ class User extends Authenticatable
         'email',
         'password',
         'branch_id',
+        'last_working_branch_id',
         'role_id',
+        'managed_branch_ids',
         'is_active',
         'tenant_code',
     ];
@@ -49,6 +51,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_active' => 'boolean',
+            'managed_branch_ids' => 'array',
         ];
     }
 
@@ -82,6 +85,57 @@ class User extends Authenticatable
         return $this->role?->name === 'superadmin';
     }
 
+    public function isBranchManager(): bool
+    {
+        return $this->role?->name === 'branch_manager';
+    }
+
+    public function isTrader(): bool
+    {
+        return $this->role?->name === 'trader';
+    }
+
+    public function canSwitchBranch(): bool
+    {
+        return $this->isAdmin(); // Only Admin/SuperAdmin can switch branches
+    }
+
+    public function getVisibleBranchIds(): array
+    {
+        if ($this->isAdmin()) {
+            return Branch::pluck('id')->toArray(); // All branches
+        }
+        return [$this->branch_id]; // Own branch only (Staff, Branch Manager, Auditor)
+    }
+
+    public function getManagedBranchIds(): array
+    {
+        if ($this->isAdmin()) {
+            return Branch::pluck('id')->toArray(); // All branches
+        }
+
+        if ($this->isTrader()) {
+            return $this->managed_branch_ids ?? []; // Assigned branches
+        }
+
+        return [$this->branch_id]; // Own branch only
+    }
+
+    public function canManageBranch(int $branchId): bool
+    {
+        return in_array($branchId, $this->getManagedBranchIds());
+    }
+
+    public function canChangeRates(): bool
+    {
+        return $this->isAdmin() || $this->isBranchManager();
+    }
+
+    public function canApproveCancellations(): bool
+    {
+        return $this->isAdmin() || $this->isBranchManager();
+    }
+
     public function branches()
     {
         return $this->belongsToMany(Branch::class, 'user_branches');
@@ -93,5 +147,52 @@ class User extends Authenticatable
             ->where('module', $module)
             ->where('action', $action)
             ->exists() ?? false;
+    }
+
+    // Counter Selection Methods
+    public function requiresCounterAtLogin(): bool
+    {
+        return $this->role?->name === 'staff';
+    }
+
+    public function requiresCounterForBuySell(): bool
+    {
+        $role = $this->role?->name;
+        return in_array($role, ['staff', 'branch_manager', 'admin', 'superadmin']);
+    }
+
+    public function canAccessBuySell(): bool
+    {
+        $role = $this->role?->name;
+        return !in_array($role, ['trader', 'auditor']);
+    }
+
+    // Menu Access Methods
+    public function getAccessibleMenus()
+    {
+        if (!$this->role_id) {
+            return collect();
+        }
+
+        return \Illuminate\Support\Facades\Cache::remember(
+            "menu_tree_role_{$this->role_id}",
+            3600,
+            function () {
+                return Menu::whereHas('roles', function ($query) {
+                    $query->where('roles.id', $this->role_id);
+                })
+                    ->where('is_active', true)
+                    ->orderBy('parent_id')
+                    ->orderBy('order')
+                    ->get();
+            }
+        );
+    }
+
+    public function hasMenuAccess(string $menuKey): bool
+    {
+        return $this->getAccessibleMenus()
+            ->where('key', $menuKey)
+            ->isNotEmpty();
     }
 }

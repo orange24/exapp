@@ -26,6 +26,7 @@ return $app
         $middleware->trustProxies(at: '*');
         $middleware->alias([
             'session.check' => \App\Http\Middleware\CheckSessionTerminated::class,
+            'admin'         => \App\Http\Middleware\EnsureUserIsAdmin::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

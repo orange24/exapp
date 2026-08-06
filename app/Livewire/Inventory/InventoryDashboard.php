@@ -26,14 +26,14 @@ class InventoryDashboard extends Component
 
     public function getCountersProperty()
     {
-        $query = Counter::with('branch')->where('is_active', true)
-            ->orderBy('branch_id')->orderBy('counter_name');
+        $visibleBranchIds = auth()->user()->getVisibleBranchIds();
 
-        if (!Auth::user()->isAdmin()) {
-            $query->where('branch_id', Auth::user()->branch_id);
-        }
-
-        return $query->get();
+        return Counter::with('branch')
+            ->where('is_active', true)
+            ->whereIn('branch_id', $visibleBranchIds)
+            ->orderBy('branch_id')
+            ->orderBy('counter_name')
+            ->get();
     }
 
     public function getCurrenciesProperty()

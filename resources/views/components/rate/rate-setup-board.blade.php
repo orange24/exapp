@@ -19,6 +19,18 @@ new class extends Component
     public string $copyFromCode = '';
     public bool $saved = false;
 
+    // ข้อความแจ้งผลของปุ่ม คัดลอกราคา / ดึงราคาตั้งต้น
+    // เดิมสองปุ่มนี้ return เงียบเมื่อไม่เจอข้อมูล คนกดเลยแยกไม่ออกว่า
+    // "ไม่มีข้อมูล" กับ "ระบบค้าง"
+    public string $notice = '';
+    public string $noticeType = 'info';   // info | warn | success
+
+    private function notify(string $message, string $type = 'info'): void
+    {
+        $this->notice = $message;
+        $this->noticeType = $type;
+    }
+
     public function mount(int $counterId): void
     {
         $counter = Counter::findOrFail($counterId);
@@ -73,10 +85,18 @@ new class extends Component
 
     public function copyRates(): void
     {
-        if (! $this->copyFromCode) return;
+        $this->notice = '';
+
+        if (! $this->copyFromCode) {
+            $this->notify('กรุณาเลือกเคาน์เตอร์ต้นทางก่อน', 'warn');
+            return;
+        }
 
         $sourceCounter = Counter::where('counter_code', $this->copyFromCode)->first();
-        if (! $sourceCounter) return;
+        if (! $sourceCounter) {
+            $this->notify("ไม่พบเคาน์เตอร์รหัส {$this->copyFromCode}", 'warn');
+            return;
+        }
 
         // ดึงราคาวันนี้ของเคาน์เตอร์ต้นทาง
         $sourceRates = CounterRate::where('counter_id', $sourceCounter->id)
@@ -95,18 +115,29 @@ new class extends Component
                 ->keyBy('denomination_id');
         }
 
+        if ($sourceRates->isEmpty()) {
+            $this->notify("เคาน์เตอร์ {$sourceCounter->counter_name} ยังไม่เคยตั้งราคาไว้เลย ไม่มีอะไรให้คัดลอก", 'warn');
+            return;
+        }
+
+        $filled = 0;
         foreach ($this->rates as $denomId => &$row) {
             if ($sourceRates->has($denomId)) {
                 $row['buy']      = (float) $sourceRates[$denomId]->rate_buy;
                 $row['sell']     = (float) $sourceRates[$denomId]->rate_sell;
                 $row['discount'] = (float) $sourceRates[$denomId]->sell_discount_rate;
+                $filled++;
             }
         }
         unset($row);
+
+        $this->notify("คัดลอกราคาจาก {$sourceCounter->counter_name} มาแล้ว {$filled} รายการ — ยังไม่บันทึก กด \"บันทึก\" เพื่อยืนยัน", 'success');
     }
 
     public function autoSetRates(): void
     {
+        $this->notice = '';
+
         // ดึงราคาล่าสุดของเคาน์เตอร์นี้ (วันก่อนหน้า)
         $prevRates = CounterRate::where('counter_id', $this->counterId)
             ->whereNotNull('denomination_id')
@@ -116,15 +147,23 @@ new class extends Component
             ->unique('denomination_id')
             ->keyBy('denomination_id');
 
-        if ($prevRates->isEmpty()) return;
+        if ($prevRates->isEmpty()) {
+            $this->notify('ไม่พบราคาของวันก่อนหน้าสำหรับเคาน์เตอร์นี้ — ยังไม่เคยตั้งราคาไว้ ลองใช้ "คัดลอกราคา" จากเคาน์เตอร์อื่นแทน', 'warn');
+            return;
+        }
 
+        $filled = 0;
         foreach ($this->rates as $denomId => &$row) {
             if ($prevRates->has($denomId)) {
                 $row['buy']  = (float) $prevRates[$denomId]->rate_buy;
                 $row['sell'] = (float) $prevRates[$denomId]->rate_sell;
+                $filled++;
             }
         }
         unset($row);
+
+        $from = Carbon::parse($prevRates->first()->rate_date)->format('d/m/Y');
+        $this->notify("ดึงราคาของวันที่ {$from} มาแล้ว {$filled} รายการ — ยังไม่บันทึก กด \"บันทึก\" เพื่อยืนยัน", 'success');
     }
 
     public function save(): void

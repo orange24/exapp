@@ -45,16 +45,25 @@ class LoginController extends Controller
         // Record session with device info
         $this->recordSession($request);
 
-        // Set default working counter from user's branch
+        // Set working branch and counter ONLY for roles that need it at login
         $user = Auth::user();
-        if ($user->branch_id) {
-            $defaultCounter = \App\Models\Counter::where('branch_id', $user->branch_id)
-                ->where('is_active', true)->first();
+
+        if ($user->requiresCounterAtLogin()) {
+            // Staff: must select counter at login
+            $workingBranchId = $user->last_working_branch_id ?? $user->branch_id;
+            $request->session()->put('working_branch_id', $workingBranchId);
+
+            // Set default counter
+            $defaultCounter = \App\Models\Counter::where('branch_id', $workingBranchId)
+                ->where('is_active', true)
+                ->first();
+
             if ($defaultCounter) {
                 $request->session()->put('working_counter_id', $defaultCounter->id);
                 $request->session()->put('working_counter_name', $defaultCounter->counter_name);
             }
         }
+        // Other roles: no counter set (can select later if needed for Buy/Sell)
 
         return redirect()->intended(route('dashboard'));
     }

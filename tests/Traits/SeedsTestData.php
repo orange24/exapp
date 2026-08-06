@@ -9,6 +9,7 @@ use App\Models\CurrencyDenomination;
 use App\Models\Role;
 use App\Models\Setting;
 use App\Models\User;
+use Database\Seeders\MenuSeeder;
 
 trait SeedsTestData
 {
@@ -22,9 +23,13 @@ trait SeedsTestData
 
     protected function seedTestData(): void
     {
-        // Roles
+        // Roles — MenuSeeder expects all of these to exist
         $adminRole = Role::create(['name' => 'admin', 'display_name' => 'Admin']);
         $staffRole = Role::create(['name' => 'staff', 'display_name' => 'Staff']);
+        Role::create(['name' => 'superadmin', 'display_name' => 'Super Admin']);
+        Role::create(['name' => 'branch_manager', 'display_name' => 'Branch Manager']);
+        Role::create(['name' => 'trader', 'display_name' => 'Trader']);
+        Role::create(['name' => 'auditor', 'display_name' => 'Auditor']);
 
         // Branches
         $this->branch = Branch::create([
@@ -87,6 +92,10 @@ trait SeedsTestData
             'branch_id' => $this->branch->id,
             'is_active' => true,
         ]);
+
+        // Sidebar is rendered from the menus table — without this the layout
+        // renders an empty nav and page tests never exercise the real menu tree.
+        $this->seed(MenuSeeder::class);
     }
 
     protected function actingAsAdmin()

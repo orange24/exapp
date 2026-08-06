@@ -1,0 +1,16 @@
+##
+## Local testing only — ไม่ได้ใช้บน GCP
+## ใช้: docker compose up --build
+##
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    environment:
+      - APP_ENV=production
+      - APP_DEBUG=false

@@ -15,6 +15,7 @@ use App\Http\Controllers\Admin\RateSettingController;
 use App\Http\Controllers\Admin\BranchController;
 use App\Http\Controllers\Api\OcrController;
 use App\Http\Controllers\Inventory\InventoryController;
+use App\Http\Controllers\Trader\TraderInventoryController;
 use App\Http\Controllers\Report\AccountingSummaryController;
 use App\Http\Controllers\Report\AvgRateSummaryController;
 use App\Http\Controllers\Report\CashierPerformanceReportController;
@@ -44,17 +45,54 @@ Route::match(['get', 'post'], '/logout', [LoginController::class, 'logout'])->na
 // ─── Authenticated ────────────────────────────────────────────────────────────
 Route::middleware(['auth', 'session.check'])->group(function () {
 
-    Route::get('/dashboard', fn() => view('dashboard'))->name('dashboard');
+    // Trader's home screen is the Inventory Dashboard, not the branch dashboard
+    Route::get('/dashboard', fn() => auth()->user()->isTrader()
+        ? redirect()->route('trader.inventory')
+        : view('dashboard'))->name('dashboard');
+
+    // Switch working branch (Staff only - stored in session + user table)
+    Route::post('/switch-branch', function (\Illuminate\Http\Request $request) {
+        $branchId = $request->input('branch_id');
+        $user = auth()->user();
+
+        // Only Staff can switch branches
+        abort_unless($user->role?->name === 'staff', 403, 'Only Staff can switch branches');
+
+        $branch = \App\Models\Branch::where('id', $branchId)->firstOrFail();
+
+        // Update session
+        session(['working_branch_id' => $branch->id]);
+
+        // Save to user for next login
+        $user->update(['last_working_branch_id' => $branch->id]);
+
+        // Auto-select first counter from new branch
+        $firstCounter = \App\Models\Counter::where('branch_id', $branch->id)
+            ->where('is_active', true)->first();
+        if ($firstCounter) {
+            session(['working_counter_id' => $firstCounter->id, 'working_counter_name' => $firstCounter->counter_name]);
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json(['success' => true, 'branch' => $branch->branch_name]);
+        }
+        return back()->with('success', 'เปลี่ยนสาขาทำงานเป็น ' . $branch->branch_name);
+    })->name('switch-branch');
 
     // Switch working counter (stored in session)
     Route::post('/switch-counter', function (\Illuminate\Http\Request $request) {
         $counterId = $request->input('counter_id');
+        $user = auth()->user();
         $query = \App\Models\Counter::where('id', $counterId)->where('is_active', true);
 
-        // Staff can only switch to counters in their own branch
-        if (!auth()->user()->isAdmin()) {
-            $query->where('branch_id', auth()->user()->branch_id);
+        // Filter by working branch for Staff
+        if ($user->role?->name === 'staff') {
+            $workingBranchId = session('working_branch_id', $user->branch_id);
+            $query->where('branch_id', $workingBranchId);
+        } elseif ($user->role?->name === 'branch_manager') {
+            $query->where('branch_id', $user->branch_id);
         }
+        // Admin can switch to any counter
 
         $counter = $query->firstOrFail();
         session(['working_counter_id' => $counter->id, 'working_counter_name' => $counter->counter_name]);
@@ -88,17 +126,30 @@ Route::middleware(['auth', 'session.check'])->group(function () {
     Route::post('/transaction/{transaction}/approve-cancel', [TransactionController::class, 'approveCancel'])->name('transaction.approve-cancel');
     Route::get('/transaction/{transaction}/detail', [TransactionController::class, 'detail'])->name('transaction.detail');
 
-    // Admin: session management
     Route::prefix('admin')->name('admin.')->group(function () {
-        Route::get('/sessions', fn() => view('admin.sessions'))->name('sessions');
 
-        // Module 1: User Management
-        Route::resource('users', UserController::class)->except(['show', 'destroy']);
-        Route::patch('/users/{user}/toggle-active', [UserController::class, 'toggleActive'])->name('users.toggle-active');
+        // ─── Settings section — Admin/Superadmin only ────────────────────
+        // These are hidden from other roles in the sidebar, but hiding a menu
+        // is not access control: without this middleware anyone could reach
+        // them by typing the URL.
+        Route::middleware('admin')->group(function () {
+            Route::get('/sessions', fn() => view('admin.sessions'))->name('sessions');
 
-        // Module 1: Permission Matrix
-        Route::get('/permissions', [PermissionController::class, 'index'])->name('permissions.index');
-        Route::put('/permissions', [PermissionController::class, 'update'])->name('permissions.update');
+            // Module 1: User Management
+            Route::resource('users', UserController::class)->except(['show', 'destroy']);
+            Route::patch('/users/{user}/toggle-active', [UserController::class, 'toggleActive'])->name('users.toggle-active');
+
+            // Module 1: Permission Matrix
+            Route::get('/permissions', [PermissionController::class, 'index'])->name('permissions.index');
+            Route::put('/permissions', [PermissionController::class, 'update'])->name('permissions.update');
+
+            // Branch & Counter Management
+            Route::resource('branches', BranchController::class)->except(['show', 'destroy']);
+            Route::patch('/branches/{branch}/toggle-active', [BranchController::class, 'toggleActive'])->name('branches.toggle-active');
+            Route::post('/branches/{branch}/counters', [BranchController::class, 'storeCounter'])->name('branches.store-counter');
+            Route::patch('/counters/{counter}/toggle', [BranchController::class, 'toggleCounter'])->name('branches.toggle-counter');
+            Route::delete('/counters/{counter}', [BranchController::class, 'destroyCounter'])->name('branches.destroy-counter');
+        });
 
         // Module 2: Currency CRUD
         Route::resource('currencies', CurrencyController::class)->except(['show', 'destroy']);
@@ -116,13 +167,6 @@ Route::middleware(['auth', 'session.check'])->group(function () {
         Route::resource('accounts', AccountController::class)->except(['show', 'destroy']);
         Route::patch('/accounts/{account}/toggle-active', [AccountController::class, 'toggleActive'])->name('accounts.toggle-active');
 
-        // Branch & Counter Management
-        Route::resource('branches', BranchController::class)->except(['show', 'destroy']);
-        Route::patch('/branches/{branch}/toggle-active', [BranchController::class, 'toggleActive'])->name('branches.toggle-active');
-        Route::post('/branches/{branch}/counters', [BranchController::class, 'storeCounter'])->name('branches.store-counter');
-        Route::patch('/counters/{counter}/toggle', [BranchController::class, 'toggleCounter'])->name('branches.toggle-counter');
-        Route::delete('/counters/{counter}', [BranchController::class, 'destroyCounter'])->name('branches.destroy-counter');
-
         // Rate Calculation Settings (Accounting Admin)
         Route::resource('rate-settings', RateSettingController::class)->except(['show'])->parameter('rate-settings', 'rateSetting');
         Route::post('/rate-settings/{rateSetting}/copy-from', [RateSettingController::class, 'copyFrom'])->name('rate-settings.copy-from');
@@ -131,12 +175,26 @@ Route::middleware(['auth', 'session.check'])->group(function () {
         // SuperRich Reference Rates
         Route::get('/superrich-rates', fn() => view('admin.superrich-rates'))->name('superrich-rates');
 
-        // Sell to Bank
-        Route::get('/bank-sales', fn() => view('admin.bank-sales'))->name('bank-sales');
+        // Sell to Bank (Trader only)
+        Route::get('/bank-sales', function() {
+            abort_unless(auth()->user()->isTrader(), 403, 'Access denied. Trader role required.');
+            return view('admin.bank-sales');
+        })->name('bank-sales');
+
+        // Buy from Bank (Trader only)
+        Route::get('/bank-purchases', function() {
+            abort_unless(auth()->user()->isTrader(), 403, 'Access denied. Trader role required.');
+            return view('admin.bank-purchases');
+        })->name('bank-purchases');
     });
 
     // Module 1: Password Change
     Route::get('/change-password', fn() => view('user.change-password'))->name('user.change-password');
+
+    // Trader routes
+    Route::prefix('trader')->name('trader.')->group(function () {
+        Route::get('/inventory', [TraderInventoryController::class, 'index'])->name('inventory');
+    });
 
     // Inventory
     Route::get('/inventory', [InventoryController::class, 'index'])->name('inventory.index');

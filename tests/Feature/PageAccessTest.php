@@ -2,6 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Models\Role;
+use App\Models\User;
+use App\Models\WorkingDay;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 use Tests\Traits\SeedsTestData;
@@ -35,16 +38,57 @@ class PageAccessTest extends TestCase
         $this->actingAsAdmin()->get('/dashboard')->assertStatus(200);
     }
 
+    // ─── Sidebar menu rendering ──────────────────────────────────────────
+
+    public function test_rate_board_menu_links_to_working_counter(): void
+    {
+        $this->actingAsAdmin()->get('/dashboard')
+            ->assertStatus(200)
+            ->assertSee('/rate/' . $this->counter->counter_code, false);
+    }
+
+    public function test_rate_board_menu_is_hidden_without_working_counter(): void
+    {
+        // rate.board needs a counter code; with none it must be skipped rather
+        // than throwing UrlGenerationException and 500-ing every page.
+        $this->actingAs($this->adminUser)->get('/dashboard')
+            ->assertStatus(200)
+            ->assertDontSee('/rate/', false);
+    }
+
     // ─── Transaction pages ───────────────────────────────────────────────
 
     public function test_buy_page_loads(): void
     {
+        $this->openWorkingDay();
         $this->actingAsAdmin()->get('/transaction/buy')->assertStatus(200);
     }
 
     public function test_sell_page_loads(): void
     {
+        $this->openWorkingDay();
         $this->actingAsAdmin()->get('/transaction/sell')->assertStatus(200);
+    }
+
+    /**
+     * Buy/Sell redirect to open-close-day unless the working day is open.
+     *
+     * Inserted via the query builder to bypass the `work_date` date cast, which
+     * would store "Y-m-d H:i:s". MySQL truncates that to a DATE so lookups still
+     * match in production, but sqlite keeps the string verbatim and never would.
+     */
+    private function openWorkingDay(): void
+    {
+        WorkingDay::insert([
+            'counter_id' => $this->counter->id,
+            'work_date' => now()->format('Y-m-d'),
+            'opening_thb_cash' => 10000,
+            'status' => 'open',
+            'opened_by' => $this->adminUser->id,
+            'opened_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
     }
 
     public function test_my_transactions_page_loads(): void
@@ -55,6 +99,69 @@ class PageAccessTest extends TestCase
     public function test_all_transactions_page_loads(): void
     {
         $this->actingAsAdmin()->get('/admin/transactions')->assertStatus(200);
+    }
+
+    // ─── Trader tools ────────────────────────────────────────────────────
+
+    /**
+     * Inventory Dashboard is trader-only. Admin must not see the link, because
+     * the route guard would 403 — menu visibility and route guard have to agree.
+     */
+    public function test_trader_inventory_is_hidden_and_blocked_for_admin(): void
+    {
+        $this->actingAsAdmin()->get('/dashboard')
+            ->assertStatus(200)
+            ->assertDontSee('/trader/inventory', false);
+
+        $this->actingAsAdmin()->get('/trader/inventory')->assertStatus(403);
+    }
+
+    public function test_bank_sales_is_hidden_and_blocked_for_admin(): void
+    {
+        $this->actingAsAdmin()->get('/dashboard')
+            ->assertStatus(200)
+            ->assertDontSee('/admin/bank-sales', false);
+
+        $this->actingAsAdmin()->get('/admin/bank-sales')->assertStatus(403);
+    }
+
+    /** A trader's home screen is the Inventory Dashboard, not the branch dashboard. */
+    public function test_dashboard_redirects_trader_to_inventory_dashboard(): void
+    {
+        $this->actingAs($this->traderUser())->get('/dashboard')->assertRedirect('/trader/inventory');
+    }
+
+    public function test_trader_tools_load_for_trader(): void
+    {
+        $trader = $this->traderUser();
+
+        $this->actingAs($trader)->get('/trader/inventory')->assertStatus(200);
+        $this->actingAs($trader)->get('/admin/bank-sales')->assertStatus(200);
+    }
+
+    private function traderUser(): User
+    {
+        return User::firstOrCreate(
+            ['email' => 'trader@test.local'],
+            [
+                'name' => 'Trader',
+                'password' => bcrypt('password'),
+                'role_id' => Role::where('name', 'trader')->value('id'),
+                'branch_id' => $this->branch->id,
+                'is_active' => true,
+            ]
+        );
+    }
+
+    // ─── Settings routes are Admin-only ──────────────────────────────────
+    //
+    // Hiding the menu is not access control — these must 403 on a direct URL.
+
+    public function test_settings_routes_are_blocked_for_non_admin(): void
+    {
+        foreach (['/admin/users', '/admin/branches', '/admin/permissions', '/admin/sessions'] as $url) {
+            $this->actingAsStaff()->get($url)->assertStatus(403);
+        }
     }
 
     // ─── Rate pages ──────────────────────────────────────────────────────

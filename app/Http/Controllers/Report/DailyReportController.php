@@ -25,10 +25,16 @@ class DailyReportController extends Controller
 
         [$dateStart, $dateEnd] = $this->getDateRange($date);
 
+        // Get visible counters based on user role
+        $visibleBranchIds = auth()->user()->getVisibleBranchIds();
+        $visibleCounterIds = Counter::whereIn('branch_id', $visibleBranchIds)
+            ->pluck('id')
+            ->toArray();
+
         $counter = $counterId ? Counter::find($counterId) : null;
 
-        $buying = $this->getSummary('BUYING', $counterId, $dateStart, $dateEnd);
-        $selling = $this->getSummary('SELLING', $counterId, $dateStart, $dateEnd);
+        $buying = $this->getSummary('BUYING', $visibleCounterIds, $dateStart, $dateEnd);
+        $selling = $this->getSummary('SELLING', $visibleCounterIds, $dateStart, $dateEnd);
 
         return view('reports.daily', compact('date', 'counterId', 'counter', 'buying', 'selling'));
     }
@@ -43,11 +49,17 @@ class DailyReportController extends Controller
 
         [$dateStart, $dateEnd] = $this->getDateRange($date);
 
+        // Get visible counters based on user role
+        $visibleBranchIds = auth()->user()->getVisibleBranchIds();
+        $visibleCounterIds = Counter::whereIn('branch_id', $visibleBranchIds)
+            ->pluck('id')
+            ->toArray();
+
         $counter = $counterId ? Counter::find($counterId) : null;
         $counterName = $counter?->counter_name ?? '-';
 
-        $buying = $this->getSummary('BUYING', $counterId, $dateStart, $dateEnd);
-        $selling = $this->getSummary('SELLING', $counterId, $dateStart, $dateEnd);
+        $buying = $this->getSummary('BUYING', $visibleCounterIds, $dateStart, $dateEnd);
+        $selling = $this->getSummary('SELLING', $visibleCounterIds, $dateStart, $dateEnd);
 
         // Build spreadsheet
         $spreadsheet = new Spreadsheet();
@@ -194,7 +206,7 @@ class DailyReportController extends Controller
     /**
      * Get transaction summary grouped by currency and rate.
      */
-    private function getSummary(string $trnsType, ?int $counterId, string $dateStart, string $dateEnd)
+    private function getSummary(string $trnsType, array $counterIds, string $dateStart, string $dateEnd)
     {
         $query = TransactionDetail::join('transactions_master', 'transactions_detail.transaction_id', '=', 'transactions_master.id')
             ->where('transactions_master.trns_type', $trnsType)
@@ -205,8 +217,8 @@ class DailyReportController extends Controller
             ->groupBy('transactions_detail.currency_name', 'transactions_detail.unit_price')
             ->orderBy('transactions_detail.currency_name');
 
-        if ($counterId) {
-            $query->where('transactions_master.counter_id', $counterId);
+        if (!empty($counterIds)) {
+            $query->whereIn('transactions_master.counter_id', $counterIds);
         }
 
         return $query->get();

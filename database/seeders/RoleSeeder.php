@@ -15,6 +15,8 @@ class RoleSeeder extends Seeder
         $roles = [
             ['name' => 'superadmin', 'display_name' => 'Super Admin'],
             ['name' => 'admin',      'display_name' => 'ผู้ดูแลระบบ'],
+            ['name' => 'branch_manager', 'display_name' => 'ผู้จัดการสาขา'],
+            ['name' => 'trader',     'display_name' => 'Trader'],
             ['name' => 'staff',      'display_name' => 'พนักงาน'],
             ['name' => 'auditor',    'display_name' => 'ผู้ตรวจสอบ'],
         ];

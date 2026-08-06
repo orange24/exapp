@@ -22,6 +22,7 @@ class DatabaseSeeder extends Seeder
             CounterSeeder::class,
             SettingSeeder::class,
             PermissionSeeder::class,
+            MenuSeeder::class,
             AccountSeeder::class,
             CurrencyDenominationSeeder::class,
         ]);
@@ -55,5 +56,36 @@ class DatabaseSeeder extends Seeder
                 ]
             );
         });
+
+        // Branch Manager user (BKK-HQ)
+        $branchManagerRole = \App\Models\Role::where('name', 'branch_manager')->first();
+        User::firstOrCreate(
+            ['email' => 'manager.bkk@fx.local'],
+            [
+                'name'      => 'Manager ' . ($defaultBranch?->branch_name ?? 'BKK-HQ'),
+                'password'  => \Illuminate\Support\Facades\Hash::make('Manager@1234'),
+                'role_id'   => $branchManagerRole?->id,
+                'branch_id' => $defaultBranch?->id,
+                'is_active' => true,
+            ]
+        );
+
+        // Trader user (manages BKK-HQ, HKT-HQ, BKK-01)
+        $traderRole = \App\Models\Role::where('name', 'trader')->first();
+        $tradedBranches = \App\Models\Branch::whereIn('branch_code', ['BKK-HQ', 'HKT-HQ', 'BKK-01'])
+            ->pluck('id')
+            ->toArray();
+
+        User::firstOrCreate(
+            ['email' => 'trader.test@fx.local'],
+            [
+                'name'      => 'Trader Test',
+                'password'  => \Illuminate\Support\Facades\Hash::make('Trader@1234'),
+                'role_id'   => $traderRole?->id,
+                'branch_id' => $defaultBranch?->id, // Primary branch: BKK-HQ
+                'managed_branch_ids' => $tradedBranches,
+                'is_active' => true,
+            ]
+        );
     }
 }

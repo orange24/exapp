@@ -36,6 +36,7 @@ class OpenCloseDayTest extends TestCase
             ->test(\App\Livewire\Inventory\OpenCloseDay::class)
             ->set('counterId', $this->counter->id)
             ->set('date', now()->format('Y-m-d'))
+            ->set('openingThbCash', 10000)
             ->call('openDay')
             ->assertHasNoErrors();
 

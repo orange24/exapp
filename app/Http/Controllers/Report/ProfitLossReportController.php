@@ -22,8 +22,16 @@ class ProfitLossReportController extends Controller
         $dateTo = $request->input('date_to', now()->format('Y-m-d'));
         $counterId = $request->input('counter_id', '');
 
-        $counters = Counter::with('branch')->where('is_active', true)->orderBy('branch_id')->get();
-        $data = $this->getData($dateFrom, $dateTo, $counterId);
+        // Get visible counters based on user role
+        $visibleBranchIds = auth()->user()->getVisibleBranchIds();
+        $counters = Counter::with('branch')
+            ->where('is_active', true)
+            ->whereIn('branch_id', $visibleBranchIds)
+            ->orderBy('branch_id')
+            ->get();
+
+        $visibleCounterIds = $counters->pluck('id')->toArray();
+        $data = $this->getData($dateFrom, $dateTo, $visibleCounterIds);
 
         return view('reports.profit-loss', compact('dateFrom', 'dateTo', 'counterId', 'counters', 'data'));
     }
@@ -33,7 +41,14 @@ class ProfitLossReportController extends Controller
         $dateFrom = $request->input('date_from', now()->format('Y-m-d'));
         $dateTo = $request->input('date_to', now()->format('Y-m-d'));
         $counterId = $request->input('counter_id', '');
-        $data = $this->getData($dateFrom, $dateTo, $counterId);
+
+        // Get visible counters based on user role
+        $visibleBranchIds = auth()->user()->getVisibleBranchIds();
+        $visibleCounterIds = Counter::whereIn('branch_id', $visibleBranchIds)
+            ->pluck('id')
+            ->toArray();
+
+        $data = $this->getData($dateFrom, $dateTo, $visibleCounterIds);
 
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
@@ -83,7 +98,7 @@ class ProfitLossReportController extends Controller
         ]);
     }
 
-    private function getData(string $dateFrom, string $dateTo, string $counterId)
+    private function getData(string $dateFrom, string $dateTo, array $counterIds)
     {
         $cutoff = Setting::get('WORKING_CUT_OFF', '03:00:00');
         $start = "{$dateFrom} {$cutoff}";
@@ -94,7 +109,7 @@ class ProfitLossReportController extends Controller
             ->where('transactions_master.flag_cancel', 'N')
             ->where('transactions_master.trns_datetime', '>', $start)
             ->where('transactions_master.trns_datetime', '<=', $end)
-            ->when($counterId, fn($q) => $q->where('transactions_master.counter_id', $counterId))
+            ->when(!empty($counterIds), fn($q) => $q->whereIn('transactions_master.counter_id', $counterIds))
             ->selectRaw('
                 transactions_detail.currency_code,
                 SUM(CASE WHEN trns_type="BUYING" THEN transactions_detail.amount ELSE 0 END) as buy_amount,

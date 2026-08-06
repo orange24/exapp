@@ -24,6 +24,10 @@ class BankSaleService
      */
     public function create(array $data, array $sources, int $userId): BankSale
     {
+        if (($data['direction'] ?? BankSale::DIRECTION_SELL) === BankSale::DIRECTION_BUY) {
+            return $this->createPurchase($data, $sources, $userId);
+        }
+
         return DB::transaction(function () use ($data, $sources, $userId) {
             $totalAmount = (float) $data['total_amount'];
             $bankRate = (float) $data['bank_rate'];
@@ -72,7 +76,8 @@ class BankSaleService
             $profitLoss = round($totalThb - $totalCost, 2);
 
             $sale = BankSale::create([
-                'sale_no' => BankSale::generateSaleNo(),
+                'sale_no' => BankSale::generateSaleNo(BankSale::DIRECTION_SELL),
+                'direction' => BankSale::DIRECTION_SELL,
                 'bank_name' => $data['bank_name'],
                 'bank_account' => $data['bank_account'] ?? null,
                 'currency_code' => $data['currency_code'],
@@ -104,10 +109,132 @@ class BankSaleService
     }
 
     /**
+     * Create a bank PURCHASE — เราจ่าย THB ให้ธนาคาร แล้วรับเงินตราเข้าเคาน์เตอร์ปลายทาง
+     *
+     * ต่างจากฝั่งขายตรงที่ไม่มีอะไรให้ reserve: สต็อกยังไม่มี จะเข้าตอน complete()
+     * เท่านั้น จึงไม่แตะ hold_amount และไม่มีขั้น in_transit/delivered
+     *
+     * @param array $sources [['counter_id' => int, 'amount' => float], ...] = ปลายทางที่จะรับเข้า
+     */
+    public function createPurchase(array $data, array $sources, int $userId): BankSale
+    {
+        return DB::transaction(function () use ($data, $sources, $userId) {
+            $totalAmount = (float) $data['total_amount'];
+            $bankRate = (float) $data['bank_rate'];
+            $totalThb = round($totalAmount * $bankRate, 2);
+
+            $destinationRecords = [];
+            foreach ($sources as $src) {
+                $amount = (float) $src['amount'];
+                if ($amount <= 0) continue;
+
+                $counterId = (int) $src['counter_id'];
+                if (! Counter::find($counterId)) {
+                    throw new \RuntimeException("ไม่พบเคาน์เตอร์ปลายทาง #{$counterId}");
+                }
+
+                $destinationRecords[] = ['counter_id' => $counterId, 'amount' => $amount];
+            }
+
+            if (empty($destinationRecords)) {
+                throw new \RuntimeException('กรุณาระบุเคาน์เตอร์ปลายทางอย่างน้อย 1 แห่ง');
+            }
+
+            $purchase = BankSale::create([
+                'sale_no' => BankSale::generateSaleNo(BankSale::DIRECTION_BUY),
+                'direction' => BankSale::DIRECTION_BUY,
+                'bank_name' => $data['bank_name'],
+                'bank_account' => $data['bank_account'] ?? null,
+                'currency_code' => $data['currency_code'],
+                'denomination_id' => $data['denomination_id'] ?? null,
+                'total_amount' => $totalAmount,
+                'bank_rate' => $bankRate,
+                'total_thb' => $totalThb,
+                // ซื้อเข้าไม่มีกำไร/ขาดทุน — เงินที่จ่ายคือต้นทุนของของที่ได้มา
+                'avg_cost_at_sale' => $bankRate,
+                'total_cost' => $totalThb,
+                'profit_loss' => 0,
+                'settlement_method' => $data['settlement_method'] ?? 'bank_transfer',
+                'status' => BankSale::STATUS_ORDERED,
+                'notes' => $data['notes'] ?? null,
+                'created_by' => $userId,
+            ]);
+
+            foreach ($destinationRecords as $dest) {
+                BankSaleSource::create([
+                    'bank_sale_id' => $purchase->id,
+                    'counter_id' => $dest['counter_id'],
+                    'amount' => $dest['amount'],
+                    'avg_cost' => $bankRate,
+                    'status' => BankSale::STATUS_ORDERED,
+                ]);
+            }
+
+            return $purchase;
+        });
+    }
+
+    /**
+     * ยืนยันรับของจากธนาคาร — เพิ่มสต็อกเข้าเคาน์เตอร์ปลายทาง + GL
+     */
+    public function completePurchase(BankSale $purchase, int $userId): void
+    {
+        if ($purchase->status !== BankSale::STATUS_ORDERED) {
+            throw new \RuntimeException('สถานะไม่ถูกต้องสำหรับการยืนยันรับของ');
+        }
+
+        $this->assertSettlementSpecified($purchase);
+
+        DB::transaction(function () use ($purchase, $userId) {
+            $purchase->load('sources.counter');
+
+            foreach ($purchase->sources as $dest) {
+                // สูตร weighted avg cost อยู่ที่เดียวใน InventoryService
+                app(InventoryService::class)->applyReceipt(
+                    counterId: $dest->counter_id,
+                    currencyCode: $purchase->currency_code,
+                    denominationId: (int) $purchase->denomination_id,
+                    amount: (float) $dest->amount,
+                    unitCost: (float) $purchase->bank_rate,
+                    referenceType: 'bank_purchase',
+                    referenceId: $purchase->id,
+                    userId: $userId,
+                    note: "ซื้อจากธนาคาร {$purchase->sale_no} ← {$purchase->bank_name}",
+                );
+
+                $dest->update(['status' => 'delivered', 'delivered_at' => now()]);
+            }
+
+            $entry = app(AutoJournalService::class)->createFromBankPurchase($purchase);
+
+            $purchase->update([
+                'status' => BankSale::STATUS_COMPLETED,
+                'journal_entry_id' => $entry?->id,
+                'approved_by' => $userId,
+                'approved_at' => now(),
+                'completed_at' => now(),
+            ]);
+        });
+    }
+
+    /**
+     * วิธีรับ/จ่ายเงินต้องระบุก่อนปิดรายการ — 'ระบุภายหลัง' ค้างไว้ไม่ได้
+     * บังคับที่ service ไม่ใช่แค่ปุ่มใน UI
+     */
+    private function assertSettlementSpecified(BankSale $sale): void
+    {
+        if ($sale->settlement_method === BankSale::SETTLEMENT_PENDING) {
+            throw new \RuntimeException('กรุณาระบุวิธีรับ/จ่ายเงินก่อนยืนยันรายการ (ตอนนี้เป็น "ระบุภายหลัง")');
+        }
+    }
+
+    /**
      * Mark source(s) as in-transit.
      */
     public function markInTransit(BankSale $sale, ?array $sourceIds = null): void
     {
+        $this->assertSellOnly($sale, 'ขนส่ง');
+
         $query = $sale->sources()->where('status', 'reserved');
         if ($sourceIds) {
             $query->whereIn('id', $sourceIds);
@@ -125,6 +252,8 @@ class BankSaleService
      */
     public function markDelivered(BankSale $sale, ?array $sourceIds = null): void
     {
+        $this->assertSellOnly($sale, 'ส่งถึง');
+
         $query = $sale->sources()->whereIn('status', ['reserved', 'in_transit']);
         if ($sourceIds) {
             $query->whereIn('id', $sourceIds);
@@ -141,12 +270,19 @@ class BankSaleService
      */
     public function complete(BankSale $sale, int $userId): void
     {
+        if ($sale->isBuy()) {
+            $this->completePurchase($sale, $userId);
+            return;
+        }
+
         if (! in_array($sale->status, [BankSale::STATUS_RESERVED, BankSale::STATUS_IN_TRANSIT, BankSale::STATUS_DELIVERED])) {
             throw new \RuntimeException('สถานะไม่ถูกต้องสำหรับการยืนยันขาย');
         }
 
+        $this->assertSettlementSpecified($sale);
+
         DB::transaction(function () use ($sale, $userId) {
-            $sale->load('sources');
+            $sale->load('sources.counter');
 
             foreach ($sale->sources as $source) {
                 $stock = CounterStock::lockForUpdate()
@@ -227,11 +363,14 @@ class BankSaleService
         DB::transaction(function () use ($sale, $userId, $reason) {
             $sale->load('sources');
 
-            foreach ($sale->sources()->whereIn('status', ['reserved', 'in_transit', 'delivered'])->get() as $source) {
-                // Release hold_amount
-                CounterStock::where('counter_id', $source->counter_id)
-                    ->where('denomination_id', $sale->denomination_id)
-                    ->decrement('hold_amount', $source->amount);
+            foreach ($sale->sources()->whereIn('status', ['reserved', 'in_transit', 'delivered', BankSale::STATUS_ORDERED])->get() as $source) {
+                // ฝั่งซื้อไม่เคยจอง hold ไว้ — ถ้าเผลอ decrement จะทำให้ hold_amount
+                // ติดลบถาวร แล้ว available เฟ้อเกินจริงตลอดไป
+                if (! $sale->isBuy()) {
+                    CounterStock::where('counter_id', $source->counter_id)
+                        ->where('denomination_id', $sale->denomination_id)
+                        ->decrement('hold_amount', $source->amount);
+                }
 
                 $source->update(['status' => 'released']);
             }
@@ -241,5 +380,13 @@ class BankSaleService
                 'notes' => $reason ? (($sale->notes ?? '') . "\nยกเลิก: {$reason}") : $sale->notes,
             ]);
         });
+    }
+
+    /** ขั้นขนส่ง/ส่งถึง มีเฉพาะฝั่งขาย — ฝั่งซื้อไปจาก ordered → completed ตรงๆ */
+    private function assertSellOnly(BankSale $sale, string $action): void
+    {
+        if ($sale->isBuy()) {
+            throw new \RuntimeException("รายการซื้อจากธนาคารไม่มีขั้นตอน \"{$action}\"");
+        }
     }
 }

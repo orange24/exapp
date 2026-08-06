@@ -70,25 +70,25 @@ function counterSelector() {
                 this.syncSession(parseInt(cookie), this.getCookie('working_counter_name') || '');
                 return;
             }
-            // No cookie — check role
-            @if (!auth()->user()->isAdmin())
-                // Staff: if only 1 counter in their branch, auto-select without modal
+
+            // No cookie — check if this role requires counter at login
+            @if (auth()->user()->requiresCounterAtLogin())
+                // Staff: show modal or auto-select if only 1 counter
                 @php
-                    $staffCounters = \App\Models\Counter::where('is_active', true)->where('branch_id', auth()->user()->branch_id)->get();
+                    $counters = \App\Models\Counter::where('is_active', true)
+                        ->where('branch_id', auth()->user()->branch_id)->get();
                 @endphp
-                @if ($staffCounters->count() === 1)
+                @if ($counters->count() === 1)
                     // Auto-select the only counter
-                    this.selectedId = {{ $staffCounters->first()->id }};
-                    this.selectedName = '{{ addslashes($staffCounters->first()->counter_name) }}';
+                    this.selectedId = {{ $counters->first()->id }};
+                    this.selectedName = '{{ addslashes($counters->first()->counter_name) }}';
                     this.confirm();
                 @else
                     this.showModal = true;
                 @endif
             @else
-                // Admin: show modal to choose
-                @if (!session('working_counter_id'))
-                    this.showModal = true;
-                @endif
+                // Other roles: don't show modal (will select when entering Buy/Sell)
+                this.showModal = false;
             @endif
         },
 

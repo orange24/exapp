@@ -38,6 +38,14 @@ class TransactionAccountMappingSeeder extends Seeder
                 'pl_loss_account_id' => $accounts['5200'], // FX Loss
             ],
             [
+                'trns_type'          => 'BUYING_BANK',
+                'description'        => 'ซื้อเงินตราจากธนาคาร — Dr FX Inventory, Cr Bank Deposits (ไม่มี P&L เพราะเป็นต้นทุน)',
+                'debit_account_id'   => $accounts['1400'], // FX Inventory
+                'credit_account_id'  => $accounts['1200'], // Bank Deposits
+                'pl_gain_account_id' => null,
+                'pl_loss_account_id' => null,
+            ],
+            [
                 'trns_type'          => 'TRANSFER',
                 'description'        => 'โอนระหว่างสาขา — Dr FX Inventory (ปลายทาง), Cr FX Inventory (ต้นทาง)',
                 'debit_account_id'   => $accounts['1400'], // FX Inventory (dest)

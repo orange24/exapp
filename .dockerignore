@@ -1,0 +1,45 @@
+# Git
+.git
+.gitignore
+
+# Dependencies (installed fresh in Docker)
+vendor
+node_modules
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# Testing
+tests
+phpunit.xml
+.phpunit.result.cache
+
+# Docker
+docker-compose*.yml
+Dockerfile
+
+# Docs & Reference
+docs
+reference
+README.md
+CLAUDE.md
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Storage (will be created at runtime)
+storage/logs/*
+storage/framework/cache/data/*
+storage/framework/sessions/*
+storage/framework/views/*
+!storage/logs/.gitignore
+!storage/framework/.gitignore

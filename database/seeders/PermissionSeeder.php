@@ -72,5 +72,66 @@ class PermissionSeeder extends Seeder
                 ]);
             }
         }
+
+        // Branch Manager: read + write + print for all modules, export for reports (module6)
+        $branchManagerRole = Role::where('name', 'branch_manager')->first();
+        if ($branchManagerRole) {
+            // Base permissions: read, write, print for all modules
+            $basePerms = Permission::whereIn('action', ['read', 'write', 'print'])->get();
+            foreach ($basePerms as $perm) {
+                RolePermission::firstOrCreate([
+                    'role_id'       => $branchManagerRole->id,
+                    'permission_id' => $perm->id,
+                ]);
+            }
+
+            // Additional: export for reports module
+            $exportReports = Permission::where('module', 'module6')
+                ->where('action', 'export')
+                ->first();
+            if ($exportReports) {
+                RolePermission::firstOrCreate([
+                    'role_id'       => $branchManagerRole->id,
+                    'permission_id' => $exportReports->id,
+                ]);
+            }
+        }
+
+        // Trader: transactions (read, write, print), inventory (read), reports (read, print, export)
+        $traderRole = Role::where('name', 'trader')->first();
+        if ($traderRole) {
+            // Transactions: read, write, print
+            $transactionPerms = Permission::where('module', 'module3')
+                ->whereIn('action', ['read', 'write', 'print'])
+                ->get();
+            foreach ($transactionPerms as $perm) {
+                RolePermission::firstOrCreate([
+                    'role_id'       => $traderRole->id,
+                    'permission_id' => $perm->id,
+                ]);
+            }
+
+            // Inventory: read
+            $inventoryRead = Permission::where('module', 'module5')
+                ->where('action', 'read')
+                ->first();
+            if ($inventoryRead) {
+                RolePermission::firstOrCreate([
+                    'role_id'       => $traderRole->id,
+                    'permission_id' => $inventoryRead->id,
+                ]);
+            }
+
+            // Reports: read, print, export
+            $reportPerms = Permission::where('module', 'module6')
+                ->whereIn('action', ['read', 'print', 'export'])
+                ->get();
+            foreach ($reportPerms as $perm) {
+                RolePermission::firstOrCreate([
+                    'role_id'       => $traderRole->id,
+                    'permission_id' => $perm->id,
+                ]);
+            }
+        }
     }
 }

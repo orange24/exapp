@@ -13,8 +13,16 @@ class BankSale extends Model
     const STATUS_COMPLETED = 'completed';
     const STATUS_CANCELLED = 'cancelled';
 
+    /** ฝั่งซื้อไม่มีการ reserve สต็อก จึงข้าม reserved/in_transit/delivered ไปเลย */
+    const STATUS_ORDERED = 'ordered';
+
+    const DIRECTION_SELL = 'sell';
+    const DIRECTION_BUY = 'buy';
+
+    const SETTLEMENT_PENDING = 'pending';
+
     protected $fillable = [
-        'sale_no', 'bank_name', 'bank_account', 'currency_code', 'denomination_id',
+        'sale_no', 'direction', 'bank_name', 'bank_account', 'currency_code', 'denomination_id',
         'total_amount', 'bank_rate', 'total_thb', 'avg_cost_at_sale', 'total_cost',
         'profit_loss', 'settlement_method', 'status', 'notes',
         'journal_entry_id', 'created_by', 'approved_by', 'approved_at', 'completed_at',
@@ -59,12 +67,34 @@ class BankSale extends Model
         return $this->belongsTo(User::class, 'approved_by');
     }
 
-    public static function generateSaleNo(): string
+    public function scopeDirection($query, string $direction)
     {
+        return $query->where('direction', $direction);
+    }
+
+    public function isBuy(): bool
+    {
+        return $this->direction === self::DIRECTION_BUY;
+    }
+
+    /** ชื่อเอกสารตามทิศทาง — คอลัมน์ยังชื่อ sale_no ทั้งคู่ */
+    public function docNo(): string
+    {
+        return $this->sale_no;
+    }
+
+    public function label(): string
+    {
+        return $this->isBuy() ? 'ซื้อจากธนาคาร' : 'ขายให้ธนาคาร';
+    }
+
+    public static function generateSaleNo(string $direction = self::DIRECTION_SELL): string
+    {
+        $prefix = $direction === self::DIRECTION_BUY ? 'BP' : 'BS';
         $today = now()->format('Ymd');
-        $last = static::where('sale_no', 'like', 'BS' . $today . '%')
+        $last = static::where('sale_no', 'like', $prefix . $today . '%')
             ->orderByDesc('sale_no')->first();
         $seq = $last ? (int) substr($last->sale_no, -4) + 1 : 1;
-        return 'BS' . $today . str_pad($seq, 4, '0', STR_PAD_LEFT);
+        return $prefix . $today . str_pad($seq, 4, '0', STR_PAD_LEFT);
     }
 }

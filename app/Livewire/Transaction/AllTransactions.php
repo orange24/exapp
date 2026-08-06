@@ -45,6 +45,12 @@ class AllTransactions extends Component
 
     public function approveCancel(int $id): void
     {
+        // Check authorization
+        if (!auth()->user()->canApproveCancellations()) {
+            session()->flash('error', 'คุณไม่มีสิทธิ์อนุมัติยกเลิก');
+            return;
+        }
+
         $transaction = TransactionMaster::findOrFail($id);
 
         if ($transaction->flag_cancel !== 'R') {
@@ -73,7 +79,12 @@ class AllTransactions extends Component
 
     public function render()
     {
+        $visibleBranchIds = auth()->user()->getVisibleBranchIds();
+
         $query = TransactionMaster::query()
+            ->whereHas('counter', function ($q) use ($visibleBranchIds) {
+                $q->whereIn('branch_id', $visibleBranchIds);
+            })
             ->with(['details', 'createdBy'])
             ->orderBy('trns_datetime', 'desc');
 
@@ -96,7 +107,11 @@ class AllTransactions extends Component
             $query->where('flag_cancel', $this->cancelStatus);
         }
 
-        $counters = Counter::where('is_active', true)->orderBy('counter_name')->get();
+        // Filter counters dropdown by visible branches
+        $counters = Counter::where('is_active', true)
+            ->whereIn('branch_id', $visibleBranchIds)
+            ->orderBy('counter_name')
+            ->get();
 
         return view('livewire.transaction.all-transactions', [
             'transactions' => $query->paginate(20),

@@ -293,6 +293,55 @@ class AutoJournalService
     }
 
     /**
+     * Create auto journal for a bank PURCHASE (ซื้อเงินตราจากธนาคาร).
+     *
+     * ซื้อเข้าไม่มีกำไร/ขาดทุน — เงินที่จ่ายคือต้นทุนของสต็อกที่รับเข้ามา
+     * จึงมีแค่ Dr FX Inventory / Cr Bank Deposits เท่านั้น
+     */
+    public function createFromBankPurchase(BankSale $purchase): ?JournalEntry
+    {
+        $mapping = TransactionAccountMapping::where('trns_type', 'BUYING_BANK')
+            ->where('is_active', true)->first();
+
+        if (! $mapping) return null;
+
+        return DB::transaction(function () use ($purchase, $mapping) {
+            $entry = JournalEntry::create([
+                'entry_no'    => $this->generateEntryNo('AJ'),
+                'entry_date'  => today(),
+                'description' => "Auto: Bank Purchase {$purchase->sale_no} ← {$purchase->bank_name}",
+                'type'        => 'auto',
+                'source_type' => 'bank_purchase',
+                'source_id'   => $purchase->id,
+                'branch_id'   => $purchase->sources->first()?->counter?->branch_id,
+                'is_posted'   => false,
+            ]);
+
+            // Dr FX Inventory (สต็อกที่รับเข้า ตีราคาด้วยเรทที่ซื้อ)
+            JournalLine::create([
+                'journal_entry_id' => $entry->id,
+                'account_id'       => $mapping->debit_account_id,  // 1400 FX Inventory
+                'debit'            => $purchase->total_thb,
+                'credit'           => 0,
+                'description'      => "รับ {$purchase->currency_code} เข้าสต็อก {$purchase->sale_no}",
+                'currency_code'    => $purchase->currency_code,
+            ]);
+
+            // Cr Bank Deposits (เงินที่จ่ายออก)
+            JournalLine::create([
+                'journal_entry_id' => $entry->id,
+                'account_id'       => $mapping->credit_account_id, // 1200 Bank Deposits
+                'debit'            => 0,
+                'credit'           => $purchase->total_thb,
+                'description'      => "จ่ายเงินให้ธนาคาร {$purchase->bank_name}",
+                'currency_code'    => $purchase->currency_code,
+            ]);
+
+            return $entry;
+        });
+    }
+
+    /**
      * Create reversal journal entry (for void/cancel).
      */
     public function createReversal(JournalEntry $originalEntry): ?JournalEntry
