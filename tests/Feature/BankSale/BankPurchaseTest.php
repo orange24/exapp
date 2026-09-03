@@ -6,6 +6,8 @@ use App\Livewire\Rate\BankSaleManager;
 use App\Models\BankSale;
 use App\Models\CounterRate;
 use App\Models\CounterStock;
+use App\Models\Customer;
+use App\Models\CurrencyDenomination;
 use App\Models\JournalLine;
 use App\Models\Role;
 use App\Models\StockMovement;
@@ -56,12 +58,20 @@ class BankPurchaseTest extends TestCase
         return array_merge([
             'direction' => BankSale::DIRECTION_BUY,
             'bank_name' => 'กสิกรไทย',
-            'currency_code' => 'USD',
-            'denomination_id' => $this->denomination->id,
-            'total_amount' => 1000,
-            'bank_rate' => 32,
+            'destination_counter_id' => $this->counter->id,
             'settlement_method' => 'bank_transfer',
         ], $overrides);
+    }
+
+    /** แถวธนบัตรหนึ่งแถว — ธนาคารส่งมาครั้งเดียวได้หลายแถว */
+    private function item(float $amount = 1000, float $rate = 32, ?int $denominationId = null): array
+    {
+        return [
+            'currency_code' => 'USD',
+            'denomination_id' => $denominationId ?? $this->denomination->id,
+            'amount' => $amount,
+            'bank_rate' => $rate,
+        ];
     }
 
     public function test_completing_a_purchase_adds_stock_and_reweights_avg_cost(): void
@@ -78,7 +88,7 @@ class BankPurchaseTest extends TestCase
 
         $purchase = $this->service()->create(
             $this->purchaseData(),
-            [['counter_id' => $this->counter->id, 'amount' => 1000]],
+            [$this->item(1000, 32)],
             $this->trader->id
         );
 
@@ -120,8 +130,8 @@ class BankPurchaseTest extends TestCase
         $this->assertEquals(0, CounterStock::count());
 
         $purchase = $this->service()->create(
-            $this->purchaseData(['bank_rate' => 35]),
-            [['counter_id' => $this->counter2->id, 'amount' => 500]],
+            $this->purchaseData(['destination_counter_id' => $this->counter2->id]),
+            [$this->item(500, 35)],
             $this->trader->id
         );
         $this->service()->complete($purchase->fresh(), $this->trader->id);
@@ -146,7 +156,7 @@ class BankPurchaseTest extends TestCase
 
         $purchase = $this->service()->create(
             $this->purchaseData(),
-            [['counter_id' => $this->counter->id, 'amount' => 1000]],
+            [$this->item(1000, 32)],
             $this->trader->id
         );
 
@@ -162,7 +172,7 @@ class BankPurchaseTest extends TestCase
     {
         $purchase = $this->service()->create(
             $this->purchaseData(),
-            [['counter_id' => $this->counter->id, 'amount' => 1000]],
+            [$this->item(1000, 32)],
             $this->trader->id
         );
 
@@ -174,7 +184,7 @@ class BankPurchaseTest extends TestCase
     {
         $purchase = $this->service()->create(
             $this->purchaseData(['settlement_method' => BankSale::SETTLEMENT_PENDING]),
-            [['counter_id' => $this->counter->id, 'amount' => 1000]],
+            [$this->item(1000, 32)],
             $this->trader->id
         );
 
@@ -195,7 +205,7 @@ class BankPurchaseTest extends TestCase
     {
         $purchase = $this->service()->create(
             $this->purchaseData(),
-            [['counter_id' => $this->counter->id, 'amount' => 1000]],
+            [$this->item(1000, 32)],
             $this->trader->id
         );
 
@@ -219,7 +229,7 @@ class BankPurchaseTest extends TestCase
     {
         $purchase = $this->service()->create(
             $this->purchaseData(['settlement_method' => BankSale::SETTLEMENT_PENDING]),
-            [['counter_id' => $this->counter->id, 'amount' => 1000]],
+            [$this->item(1000, 32)],
             $this->trader->id
         );
 
@@ -284,21 +294,222 @@ class BankPurchaseTest extends TestCase
         $component = Livewire::actingAs($this->trader)
             ->test(BankSaleManager::class, ['direction' => 'buy'])
             ->set('showForm', true)
-            ->set('bankName', 'กสิกรไทย')
-            ->set('currencyCode', 'USD')
-            ->set('denominationId', (string) $this->denomination->id)
-            ->set('totalAmount', '1000')
-            ->set('bankRate', '32')
+            ->set('custName', 'กสิกรไทย')
+            ->set('rowDenominationId', (string) $this->denomination->id)
+            ->set('rowAmount', '1000')
+            ->set('rowRate', '32')
+            ->call('addRow')
             ->call('save');
 
         $component->assertHasNoErrors();
 
         $purchase = BankSale::direction('buy')->firstOrFail();
-        $this->assertCount(1, $purchase->sources, 'ซื้อเข้ากองกลางที่เดียว');
 
         // กองกลาง = เคาน์เตอร์แรกของสาขาที่ trader สังกัด
-        $this->assertSame($this->counter->id, $purchase->sources->first()->counter_id);
-        $this->assertEquals(1000, $purchase->sources->first()->amount);
+        $this->assertSame($this->counter->id, $purchase->destination_counter_id);
+        $this->assertCount(1, $purchase->items);
+        $this->assertEquals(1000, $purchase->items->first()->amount);
+        $this->assertEquals(32000, $purchase->total_thb);
+    }
+
+    public function test_one_purchase_can_hold_several_denominations_at_different_rates(): void
+    {
+        $usd20 = CurrencyDenomination::create([
+            'currency_code' => 'USD',
+            'denom_label' => '20-10',
+            'display_name' => 'USD 20-10',
+            'seq' => 2,
+        ]);
+
+        $purchase = $this->service()->create(
+            $this->purchaseData(),
+            [
+                $this->item(1000, 32),
+                $this->item(500, 31, $usd20->id),
+            ],
+            $this->trader->id
+        );
+
+        $this->assertCount(2, $purchase->items);
+        // 1000×32 + 500×31 = 47,500
+        $this->assertEquals(47500, $purchase->total_thb);
+        $this->assertEquals(47500, $purchase->total_cost);
+        $this->assertEquals(0, $purchase->profit_loss);
+
+        $this->service()->complete($purchase->fresh(), $this->trader->id);
+
+        // avg cost ต้องคิดแยกต่อ denom ไม่ใช่เฉลี่ยรวมทั้งใบ
+        $stock100 = CounterStock::where('counter_id', $this->counter->id)
+            ->where('denomination_id', $this->denomination->id)->firstOrFail();
+        $stock20 = CounterStock::where('counter_id', $this->counter->id)
+            ->where('denomination_id', $usd20->id)->firstOrFail();
+
+        $this->assertEquals(1000, $stock100->quantity);
+        $this->assertEquals(32, round((float) $stock100->avg_cost, 6));
+        $this->assertEquals(500, $stock20->quantity);
+        $this->assertEquals(31, round((float) $stock20->avg_cost, 6));
+
+        $this->assertEquals(2, StockMovement::where('reference_type', 'bank_purchase')->count());
+
+        $purchase->refresh();
+        $lines = JournalLine::where('journal_entry_id', $purchase->journal_entry_id)->get();
+        $this->assertEquals($lines->sum('debit'), $lines->sum('credit'), 'journal must balance');
+        $this->assertEquals(47500, $lines->sum('debit'), 'GL ต้องเป็นยอดรวมทั้งใบ');
+    }
+
+    public function test_the_same_denomination_added_twice_merges_into_one_row(): void
+    {
+        $component = Livewire::actingAs($this->trader)
+            ->test(BankSaleManager::class, ['direction' => 'buy'])
+            ->set('showForm', true)
+            ->set('custName', 'กสิกรไทย')
+            ->set('rowDenominationId', (string) $this->denomination->id)
+            ->set('rowAmount', '1000')
+            ->set('rowRate', '32')
+            ->call('addRow')
+            ->set('rowDenominationId', (string) $this->denomination->id)
+            ->set('rowAmount', '500')
+            ->set('rowRate', '32')
+            ->call('addRow');
+
+        $rows = $component->get('rows');
+        $this->assertCount(1, $rows, 'ธนบัตรเดิมเรทเดิมต้องรวมเข้าแถวเดียว');
+        $this->assertEquals(1500, $rows[0]['amount']);
+        $this->assertEquals(48000, $rows[0]['total_thb']);
+    }
+
+    public function test_saving_a_purchase_with_no_rows_shows_an_error_instead_of_saving(): void
+    {
+        $component = Livewire::actingAs($this->trader)
+            ->test(BankSaleManager::class, ['direction' => 'buy'])
+            ->set('showForm', true)
+            ->set('custName', 'กสิกรไทย')
+            ->call('save');
+
+        $component->assertHasErrors('rows');
+        $component->assertSee('กรุณาเพิ่มรายการธนบัตรอย่างน้อย 1 แถว');
+        $this->assertEquals(0, BankSale::count());
+    }
+
+    public function test_the_counterparty_field_autocompletes_from_the_customer_registry(): void
+    {
+        Customer::create([
+            'id_type' => 'passport',
+            'id_number' => 'AA1234567',
+            'name_en' => 'JOHN SMITH',
+            'first_name' => 'JOHN',
+            'last_name' => 'SMITH',
+            'nationality' => 'GBR',
+            'passport_expiry' => '2030-01-31',
+            'kyc_status' => 'approved',
+        ]);
+
+        $component = Livewire::actingAs($this->trader)
+            ->test(BankSaleManager::class, ['direction' => 'buy'])
+            ->set('showForm', true)
+            ->call('searchCustomers', 'JOHN');
+
+        $suggestions = $component->get('customerSuggestions');
+        $this->assertCount(1, $suggestions);
+        $this->assertSame('AA1234567', $suggestions[0]['id_number']);
+
+        $component->call('selectCustomer', $suggestions[0]['id']);
+
+        $this->assertSame('JOHN SMITH', $component->get('custName'));
+        $this->assertSame('AA1234567', $component->get('custPassportNo'));
+        $this->assertSame('GBR', $component->get('custNationality'));
+        $this->assertSame('2030-01-31', $component->get('custExpiry'));
+    }
+
+    public function test_a_purchase_records_the_counterparty_and_registers_a_new_customer(): void
+    {
+        $this->assertEquals(0, Customer::count());
+
+        Livewire::actingAs($this->trader)
+            ->test(BankSaleManager::class, ['direction' => 'buy'])
+            ->set('showForm', true)
+            ->set('custName', 'JANE DOE')
+            ->set('custPassportNo', 'BB7654321')
+            ->set('custNationality', 'USA')
+            ->set('custExpiry', '2031-06-30')
+            ->set('rowDenominationId', (string) $this->denomination->id)
+            ->set('rowAmount', '1000')
+            ->set('rowRate', '32')
+            ->call('addRow')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $purchase = BankSale::direction('buy')->firstOrFail();
+        $this->assertSame('JANE DOE', $purchase->bank_name);
+        $this->assertSame('BB7654321', $purchase->customer_passport_no);
+        $this->assertSame('USA', $purchase->customer_nationality);
+
+        // กรอกพาสปอร์ตแล้วต้องเข้าทะเบียนลูกค้า เพื่อให้ครั้งหน้า autocomplete เจอ
+        $customer = Customer::where('id_number', 'BB7654321')->first();
+        $this->assertNotNull($customer);
+        $this->assertSame($customer->id, $purchase->customer_id);
+        $this->assertSame('JANE DOE', $customer->name_en);
+    }
+
+    public function test_a_purchase_without_a_passport_still_saves_the_counterparty_name(): void
+    {
+        Livewire::actingAs($this->trader)
+            ->test(BankSaleManager::class, ['direction' => 'buy'])
+            ->set('showForm', true)
+            ->set('custName', 'กสิกรไทย')
+            ->set('rowDenominationId', (string) $this->denomination->id)
+            ->set('rowAmount', '1000')
+            ->set('rowRate', '32')
+            ->call('addRow')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $purchase = BankSale::direction('buy')->firstOrFail();
+        $this->assertSame('กสิกรไทย', $purchase->bank_name);
+        $this->assertNull($purchase->customer_id);
+        $this->assertEquals(0, Customer::count(), 'ไม่มีพาสปอร์ตก็ไม่ต้องสร้างลูกค้าเปล่าๆ');
+    }
+
+    public function test_saving_a_purchase_without_a_counterparty_name_shows_an_error(): void
+    {
+        $component = Livewire::actingAs($this->trader)
+            ->test(BankSaleManager::class, ['direction' => 'buy'])
+            ->set('showForm', true)
+            ->set('rowDenominationId', (string) $this->denomination->id)
+            ->set('rowAmount', '1000')
+            ->set('rowRate', '32')
+            ->call('addRow')
+            ->call('save');
+
+        $component->assertHasErrors('custName');
+        $this->assertEquals(0, BankSale::count());
+    }
+
+    public function test_selecting_a_denomination_prefills_the_average_buy_rate(): void
+    {
+        CounterRate::create([
+            'counter_id' => $this->counter->id,
+            'currency_code' => 'USD',
+            'denomination_id' => $this->denomination->id,
+            'rate_buy' => 32.00,
+            'rate_sell' => 34.00,
+        ]);
+        CounterRate::create([
+            'counter_id' => $this->counter2->id,
+            'currency_code' => 'USD',
+            'denomination_id' => $this->denomination->id,
+            'rate_buy' => 33.00,
+            'rate_sell' => 35.00,
+        ]);
+
+        Cache::flush();
+
+        $component = Livewire::actingAs($this->trader)
+            ->test(BankSaleManager::class, ['direction' => 'buy'])
+            ->set('showForm', true)
+            ->set('rowDenominationId', (string) $this->denomination->id);
+
+        $this->assertEquals(32.5, (float) $component->get('rowRate'), 'เรทตั้งต้น = ค่าเฉลี่ยทุกสาขาที่ดูแล');
     }
 
     public function test_stock_info_is_empty_when_the_trader_manages_no_branches(): void

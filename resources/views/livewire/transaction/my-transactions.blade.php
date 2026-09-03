@@ -74,7 +74,8 @@
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">ประเภท</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">เคาน์เตอร์</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">ลูกค้า</th>
-                        <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">รวม THB</th>
+                        <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">สกุลเงิน</th>
+                        <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">จำนวน</th>
                         <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">สถานะ</th>
                         <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">จัดการ</th>
                     </tr>
@@ -101,6 +102,9 @@
                             <td class="px-4 py-3 text-sm {{ $trns->isCancelled() ? 'line-through text-gray-400' : 'text-gray-700' }}">
                                 {{ $trns->cust_name ?? '-' }}
                             </td>
+                            <td class="px-4 py-3 text-sm text-center font-mono {{ $trns->isCancelled() ? 'line-through text-gray-400' : 'text-gray-700' }}">
+                                {{ $trns->total_currency }}
+                            </td>
                             <td class="px-4 py-3 text-sm text-right font-mono {{ $trns->isCancelled() ? 'line-through text-gray-400' : 'text-gray-900' }}">
                                 {{ number_format($trns->total_thb, 2) }}
                             </td>
@@ -122,11 +126,12 @@
                                     </button>
 
                                     @if ($trns->flag_cancel === 'N')
-                                        {{-- Print --}}
-                                        <a href="{{ route('transaction.print', $trns) }}" target="_blank"
-                                           class="text-xs bg-gray-50 text-gray-700 px-2 py-1 rounded hover:bg-gray-100 transition-colors">
+                                        {{-- Print — ยิงเข้า iframe ที่ซ่อนไว้ สลิปจะ window.print() เอง (?print=Y) --}}
+                                        <button type="button"
+                                                onclick="document.getElementById('print-iframe').src = '{{ route('transaction.print', $trns) }}?print=Y&t=' + Date.now();"
+                                                class="text-xs bg-gray-50 text-gray-700 px-2 py-1 rounded hover:bg-gray-100 transition-colors">
                                             พิมพ์
-                                        </a>
+                                        </button>
                                         {{-- Request cancel --}}
                                         <button wire:click="requestCancel({{ $trns->id }})"
                                                 class="text-xs bg-red-50 text-red-700 px-2 py-1 rounded hover:bg-red-100 transition-colors">
@@ -144,7 +149,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500">
+                            <td colspan="9" class="px-4 py-8 text-center text-sm text-gray-500">
                                 ไม่พบรายการ (No transactions found)
                             </td>
                         </tr>
@@ -331,4 +336,8 @@
             </div>
         </div>
     </div>
+
+    {{-- เป้าหมายการพิมพ์ — wire:ignore กัน Livewire morph ทับ src ตอน re-render --}}
+    <iframe id="print-iframe" wire:ignore title="print"
+            style="position:absolute; width:0; height:0; border:none; overflow:hidden;"></iframe>
 </div>

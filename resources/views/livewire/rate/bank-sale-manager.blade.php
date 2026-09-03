@@ -18,225 +18,7 @@
     {{-- Create Form + Stock Info side panel --}}
     @if ($showForm)
     <div class="flex gap-4 mb-6">
-    <div class="flex-1 min-w-0 bg-white rounded-lg shadow p-6">
-        <h3 class="text-lg font-bold mb-4" style="color:#0e513a;">
-            {{ $isBuy ? 'ซื้อเงินตราจากธนาคาร (Buy from Bank)' : 'ขายเงินตราให้ธนาคาร (Sell to Bank)' }}
-        </h3>
-        <form wire:submit="save">
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">{{ $isBuy ? 'ธนาคารต้นทาง' : 'ธนาคารปลายทาง' }}</label>
-                    <select wire:model.live="bankName" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
-                        <option value="">-- เลือกธนาคาร --</option>
-                        <option value="กสิกรไทย">กสิกรไทย (KBANK)</option>
-                        <option value="กรุงเทพ">กรุงเทพ (BBL)</option>
-                        <option value="ไทยพาณิชย์">ไทยพาณิชย์ (SCB)</option>
-                        <option value="กรุงไทย">กรุงไทย (KTB)</option>
-                        <option value="กรุงศรี">กรุงศรี (BAY)</option>
-                        <option value="ทหารไทยธนชาต">ทหารไทยธนชาต (TTB)</option>
-                        <option value="ซีไอเอ็มบี">ซีไอเอ็มบี (CIMB)</option>
-                        <option value="ธนาคารอื่น">ธนาคารอื่น</option>
-                    </select>
-                    @error('bankName') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">สกุลเงิน</label>
-                    <select wire:model.live="currencyCode" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
-                        <option value="">-- เลือกสกุลเงิน --</option>
-                        @foreach ($this->currencies as $cur)
-                            <option value="{{ $cur->currency_code }}">{{ $cur->currency_code }} - {{ $cur->currency_name }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">ธนบัตร</label>
-                    <select wire:model.live="denominationId" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
-                        <option value="">-- เลือกธนบัตร --</option>
-                        @foreach ($this->denominations as $d)
-                            <option value="{{ $d->id }}">{{ $d->display_name }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">จำนวนรวม</label>
-                    <x-number-input model="totalAmount" :value="$totalAmount" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="80,000" />
-                    @error('totalAmount') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">{{ $isBuy ? 'เรทซื้อจากธนาคาร' : 'เรทขายธนาคาร' }}</label>
-                    <input type="number" step="0.0001" wire:model.blur="bankRate" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="32.6500">
-                    @error('bankRate') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">{{ $isBuy ? 'วิธีจ่ายเงิน' : 'วิธีรับเงิน' }}</label>
-                    <select wire:model="settlementMethod" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
-                        <option value="bank_transfer">โอนเข้าบัญชี</option>
-                        <option value="cash">เงินสด</option>
-                        <option value="cheque">เช็ค</option>
-                        <option value="pending">ระบุภายหลัง</option>
-                    </select>
-                    <p class="text-xs text-gray-400 mt-1">เลือก "ระบุภายหลัง" ได้ แต่ต้องมาระบุก่อนกดยืนยัน</p>
-                </div>
-            </div>
-
-            {{-- ซื้อเข้ากองกลางที่เดียว — ไม่มีตารางปลายทางให้เลือก
-                 กระจายออกสาขาทีหลังผ่านเมนู ยืม/คืน/โอน --}}
-            @if ($isBuy)
-            @php $central = $this->centralCounter; $cStock = $this->centralStock; @endphp
-            <div class="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg">
-                <h4 class="text-sm font-bold text-green-800 mb-3">รับเข้ากองกลาง</h4>
-
-                @if (! $central)
-                    <div class="text-sm text-red-700">
-                        ไม่พบเคาน์เตอร์กองกลาง — บัญชีนี้ยังไม่ได้ผูกกับสำนักงานใหญ่ กรุณาติดต่อผู้ดูแลระบบ
-                    </div>
-                @else
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                        <div>
-                            <span class="text-gray-500">ปลายทาง</span>
-                            <div class="font-semibold">{{ $central->counter_name }}</div>
-                            <div class="text-xs text-gray-500">{{ $central->branch->branch_name ?? '' }}</div>
-                        </div>
-                        <div>
-                            <span class="text-gray-500">Stock ปัจจุบัน</span>
-                            <div class="font-mono font-bold">{{ number_format($cStock->quantity ?? 0, 2) }}</div>
-                        </div>
-                        <div>
-                            <span class="text-gray-500">Avg Cost เดิม</span>
-                            <div class="font-mono">{{ ($cStock->avg_cost ?? 0) > 0 ? number_format($cStock->avg_cost, 4) : '—' }}</div>
-                        </div>
-                        <div>
-                            <span class="text-gray-500">Avg Cost ใหม่</span>
-                            <div class="font-mono font-bold text-green-700">
-                                {{ (float) $totalAmount > 0 && (float) $bankRate > 0
-                                    ? number_format($this->projectedAvgCost((float) ($cStock->quantity ?? 0), (float) ($cStock->avg_cost ?? 0), (float) $totalAmount), 4)
-                                    : '—' }}
-                            </div>
-                        </div>
-                    </div>
-
-                    @php $pv = $this->profitPreview; @endphp
-                    @if ($pv['revenue'] > 0)
-                    <div class="mt-4 p-3 bg-white rounded-lg border border-green-200">
-                        <h4 class="text-sm font-bold text-gray-700 mb-2">สรุปต้นทุน</h4>
-                        <div class="grid grid-cols-2 gap-3 text-sm">
-                            <div>
-                                <span class="text-gray-500">THB ที่ต้องจ่าย</span>
-                                <div class="font-mono font-bold">{{ number_format($pv['revenue'], 2) }}</div>
-                            </div>
-                            <div>
-                                <span class="text-gray-500">ต้นทุนต่อหน่วย</span>
-                                <div class="font-mono font-bold">{{ number_format((float) $bankRate, 4) }}</div>
-                            </div>
-                        </div>
-                        <p class="text-xs text-gray-400 mt-2">ซื้อเข้าไม่มีกำไร/ขาดทุน — เงินที่จ่ายคือต้นทุนของสต็อกที่รับเข้ามา</p>
-                    </div>
-                    @endif
-                @endif
-            </div>
-            @endif
-
-            {{-- ไม่มีอะไรให้จัดสรร: ต้องบอกให้ชัด ไม่งั้นกดปุ่มแล้วเงียบ
-                 เพราะ error ของ sourceAmounts เคยซ่อนอยู่ในบล็อกที่ไม่ถูก render --}}
-            @if (! $isBuy && $denominationId && $this->counterStocks->isEmpty())
-            <div class="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
-                <strong>ไม่มีสต็อกให้ขาย</strong> — ยังไม่มีเคาน์เตอร์ไหนในสาขาที่คุณดูแลถือธนบัตรนี้อยู่
-                <div class="text-xs mt-1 text-amber-700">
-                    เติมสต็อกก่อนได้จากเมนู <strong>ซื้อจากธนาคาร</strong> หรือรับซื้อจากลูกค้าที่หน้าเคาน์เตอร์
-                </div>
-            </div>
-            @elseif (! $isBuy && ! $denominationId)
-            <div class="mb-4 p-4 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-600">
-                เลือกสกุลเงินและธนบัตรก่อน เพื่อดูว่ามีสต็อกที่สาขาไหนบ้าง
-            </div>
-            @endif
-
-            {{-- error ของการจัดสรรต้องอยู่นอกบล็อกตาราง ไม่งั้นหายไปพร้อมตาราง --}}
-            @error('sourceAmounts')
-                <div class="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm font-medium">{{ $message }}</div>
-            @enderror
-
-            {{-- Source Counters --}}
-            @if (! $isBuy && $this->counterStocks->isNotEmpty())
-            <div class="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                <h4 class="text-sm font-bold text-blue-800 mb-3">แหล่งสต็อก (Source Branches) — ระบุจำนวนจากแต่ละเคาน์เตอร์</h4>
-                <div class="overflow-x-auto">
-                    <table class="min-w-full text-sm">
-                        <thead>
-                            <tr class="border-b border-blue-200">
-                                <th class="px-3 py-2 text-left font-semibold text-blue-900">เคาน์เตอร์</th>
-                                <th class="px-3 py-2 text-left font-semibold text-blue-900">สาขา</th>
-                                <th class="px-3 py-2 text-right font-semibold text-blue-900">Stock</th>
-                                <th class="px-3 py-2 text-right font-semibold text-blue-900">Hold</th>
-                                <th class="px-3 py-2 text-right font-semibold text-blue-900">Available</th>
-                                <th class="px-3 py-2 text-right font-semibold text-blue-900">Avg Cost</th>
-                                <th class="px-3 py-2 text-center font-semibold text-blue-900">จำนวนที่จัดสรร</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach ($this->counterStocks as $stock)
-                            <tr class="border-b border-blue-100">
-                                <td class="px-3 py-2 font-medium">{{ $stock->counter->counter_name }}</td>
-                                <td class="px-3 py-2 text-xs text-gray-500">{{ $stock->counter->branch->branch_name ?? '' }}</td>
-                                <td class="px-3 py-2 text-right font-mono">{{ number_format($stock->quantity, 2) }}</td>
-                                <td class="px-3 py-2 text-right font-mono {{ $stock->hold_amount > 0 ? 'text-orange-600' : 'text-gray-400' }}">{{ number_format($stock->hold_amount, 2) }}</td>
-                                <td class="px-3 py-2 text-right font-mono font-bold {{ $stock->available > 0 ? 'text-green-700' : 'text-red-600' }}">{{ number_format($stock->available, 2) }}</td>
-                                <td class="px-3 py-2 text-right font-mono text-blue-700">{{ number_format($stock->avg_cost, 4) }}</td>
-                                <td class="px-3 py-2 text-center">
-                                    <x-number-input model="sourceAmounts.{{ $stock->counter_id }}" :value="$sourceAmounts[$stock->counter_id] ?? null"
-                                           class="w-28 border border-blue-300 rounded px-2 py-1 text-sm"
-                                           placeholder="0" />
-                                </td>
-                            </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
-                </div>
-
-                {{-- P&L Preview --}}
-                @php $pv = $this->profitPreview; @endphp
-                @if ($pv['revenue'] > 0)
-                <div class="mt-4 p-3 bg-white rounded-lg border border-blue-200">
-                    <h4 class="text-sm font-bold text-gray-700 mb-2">P&L Preview</h4>
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                        <div>
-                            <span class="text-gray-500">จัดสรร</span>
-                            <div class="font-mono font-bold {{ abs($pv['allocated'] - (float)$totalAmount) < 0.01 ? 'text-green-700' : 'text-red-600' }}">
-                                {{ number_format($pv['allocated'], 2) }} / {{ number_format((float)$totalAmount, 2) }}
-                                {{ abs($pv['allocated'] - (float)$totalAmount) < 0.01 ? '✓' : '✗' }}
-                            </div>
-                        </div>
-                        <div>
-                            <span class="text-gray-500">Revenue (THB)</span>
-                            <div class="font-mono font-bold">{{ number_format($pv['revenue'], 2) }}</div>
-                        </div>
-                        <div>
-                            <span class="text-gray-500">Cost (THB)</span>
-                            <div class="font-mono font-bold">{{ number_format($pv['cost'], 2) }}</div>
-                        </div>
-                        <div>
-                            <span class="text-gray-500">Profit/Loss</span>
-                            <div class="font-mono font-bold {{ $pv['pl'] >= 0 ? 'text-green-700' : 'text-red-700' }}">
-                                {{ $pv['pl'] >= 0 ? '+' : '' }}{{ number_format($pv['pl'], 2) }}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                @endif
-            </div>
-            @endif
-
-            <div class="flex items-center gap-3">
-                <input type="text" wire:model.blur="notes" class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="หมายเหตุ (ถ้ามี)">
-                <button type="button" wire:click="$toggle('showForm')" class="px-4 py-2 text-sm text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200">ยกเลิก</button>
-                <button type="submit"
-                        wire:confirm="{{ $isBuy ? 'สร้างรายการซื้อจากธนาคาร? สต็อกจะเข้าเมื่อกดยืนยันรับของ' : 'สร้างรายการขายธนาคาร? สต็อกจะถูก Reserve ทันที' }}"
-                        class="px-6 py-2 text-sm font-semibold text-white rounded-lg" style="background:#0e513a;">
-                    {{ $isBuy ? 'สร้างรายการ (รอรับของ)' : 'สร้างรายการ (Reserve Stock)' }}
-                </button>
-            </div>
-        </form>
-    </div>
+    @include($isBuy ? "livewire.rate._bank-form-buy" : "livewire.rate._bank-form-sell")
 
     {{-- Side Panel: Stock Info — รวมทุกสาขาที่ trader รับผิดชอบ --}}
     <div class="w-72 flex-shrink-0 hidden lg:block">
@@ -332,7 +114,7 @@
                 <thead>
                     <tr style="background:#0e513a;" class="text-white">
                         <th class="px-3 py-2.5 text-left font-semibold">เลขที่</th>
-                        <th class="px-3 py-2.5 text-left font-semibold">ธนาคาร</th>
+                        <th class="px-3 py-2.5 text-left font-semibold">{{ $isBuy ? 'ลูกค้า/คู่ค้า' : 'ธนาคาร' }}</th>
                         <th class="px-3 py-2.5 text-left font-semibold">สกุลเงิน</th>
                         <th class="px-3 py-2.5 text-right font-semibold">จำนวน</th>
                         <th class="px-3 py-2.5 text-right font-semibold">เรท</th>
@@ -369,17 +151,51 @@
                                 'cancelled' => 'Cancelled',
                                 default => $sale->status,
                             };
-                            $sourceList = $sale->sources->map(fn($s) => $s->counter->counter_name . ' (' . number_format($s->amount, 0) . ')')->implode(', ');
+                            // ฝั่งซื้อเข้ากองกลางที่เดียว จำนวนอยู่ที่ items แล้ว จึงไม่ต้องแจกแจงต่อเคาน์เตอร์
+                            $sourceList = $isBuy
+                                ? ($sale->destinationCounter?->counter_name
+                                    ?? $sale->sources->map(fn($s) => $s->counter->counter_name)->implode(', '))
+                                : $sale->sources->map(fn($s) => $s->counter->counter_name . ' (' . number_format($s->amount, 0) . ')')->implode(', ');
                             $isClosed = in_array($sale->status, ['completed', 'cancelled'], true);
                             // ปิดรายการไม่ได้ถ้ายังไม่ระบุวิธีรับ/จ่ายเงิน — service ก็ throw ซ้ำอีกชั้น
                             $needsSettlement = $sale->settlement_method === 'pending';
                         @endphp
                         <tr class="{{ $idx % 2 === 0 ? 'bg-white' : 'bg-gray-50' }} hover:bg-blue-50">
                             <td class="px-3 py-2 font-mono text-xs">{{ $sale->sale_no }}</td>
-                            <td class="px-3 py-2 text-xs">{{ $sale->bank_name }}</td>
-                            <td class="px-3 py-2 font-medium">{{ $sale->currency_code }}</td>
-                            <td class="px-3 py-2 text-right font-mono">{{ number_format($sale->total_amount, 2) }}</td>
-                            <td class="px-3 py-2 text-right font-mono">{{ number_format($sale->bank_rate, 4) }}</td>
+                            <td class="px-3 py-2 text-xs">
+                                {{ $sale->bank_name }}
+                                @if ($isBuy && $sale->customer_passport_no)
+                                    <div class="text-gray-400">{{ $sale->customer_passport_no }}</div>
+                                @endif
+                            </td>
+                            @if ($isBuy)
+                                {{-- ใบเดียวมีได้หลายธนบัตร — แจกแจงเป็นบรรทัดในเซลล์ ไม่ต้องกดขยาย --}}
+                                <td class="px-3 py-2">
+                                    @forelse ($sale->items as $item)
+                                        <div class="whitespace-nowrap">{{ $item->denomination?->display_name ?? $item->currency_code }}</div>
+                                    @empty
+                                        <span class="font-medium">{{ $sale->currency_code }}</span>
+                                    @endforelse
+                                </td>
+                                <td class="px-3 py-2 text-right font-mono">
+                                    @forelse ($sale->items as $item)
+                                        <div>{{ number_format($item->amount, 2) }}</div>
+                                    @empty
+                                        {{ number_format($sale->total_amount, 2) }}
+                                    @endforelse
+                                </td>
+                                <td class="px-3 py-2 text-right font-mono">
+                                    @forelse ($sale->items as $item)
+                                        <div>{{ number_format($item->bank_rate, 4) }}</div>
+                                    @empty
+                                        {{ number_format($sale->bank_rate, 4) }}
+                                    @endforelse
+                                </td>
+                            @else
+                                <td class="px-3 py-2 font-medium">{{ $sale->currency_code }}</td>
+                                <td class="px-3 py-2 text-right font-mono">{{ number_format($sale->total_amount, 2) }}</td>
+                                <td class="px-3 py-2 text-right font-mono">{{ number_format($sale->bank_rate, 4) }}</td>
+                            @endif
                             <td class="px-3 py-2 text-right font-mono font-bold">{{ number_format($sale->total_thb, 2) }}</td>
                             @unless ($isBuy)
                             <td class="px-3 py-2 text-right font-mono {{ $sale->profit_loss >= 0 ? 'text-green-700' : 'text-red-700' }}">

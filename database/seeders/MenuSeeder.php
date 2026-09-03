@@ -92,13 +92,17 @@ class MenuSeeder extends Seeder
     {
         $roles = Role::whereIn('name', ['admin', 'staff', 'trader', 'auditor', 'branch_manager', 'superadmin'])->get()->keyBy('name');
 
-        // Staff: Dashboard, Buy, Sell, My Transactions, Inventory
+        // Staff: Dashboard, Buy, Sell, My Transactions, Inventory, Rate Board
+        // (view only — "ตั้งราคา" / "ตั้งค่าคำนวณ" / "SuperRich Rates" ยังคงเป็นของ
+        // canChangeRates() เท่านั้น คือ admin/branch_manager)
         $roles['staff']->menus()->attach([
             $menuIdMap['dashboard'],
             $menuIdMap['transactions'],
             $menuIdMap['transaction.buy'],
             $menuIdMap['transaction.sell'],
             $menuIdMap['transaction.my'],
+            $menuIdMap['rates'],
+            $menuIdMap['rate.board'],
             $menuIdMap['inventory'],
             $menuIdMap['inventory.dashboard'],
             $menuIdMap['inventory.booking'],

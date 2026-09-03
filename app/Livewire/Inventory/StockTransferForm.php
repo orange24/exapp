@@ -43,11 +43,42 @@ class StockTransferForm extends Component
         $this->filterDateTo = now()->format('Y-m-d');
         $this->filterType = $type;
 
-        // Default counters based on type
+        $this->applyDefaultCountersFor($type);
+    }
+
+    /**
+     * "ประเภท" is both the list filter and, implicitly, the create-form type —
+     * they're the same concept from the user's perspective. Without this, the
+     * "+" button keeps reading "+ ยืมสินค้า" and opens a borrow form no matter
+     * which type is picked here, which reads as broken.
+     */
+    public function updatedFilterType(): void
+    {
+        if (!in_array($this->filterType, ['borrow', 'return', 'disbursement', 'intraday_return'], true)) {
+            return; // "ทั้งหมด" has no create-form equivalent — keep the current one
+        }
+
+        $this->transferType = $this->filterType;
+        $this->applyDefaultCountersFor($this->transferType);
+
+        // Field meanings flip with type (e.g. "ต้นทาง" goes from "ให้ยืม" to
+        // "คืนจาก") — clear the rest so a half-filled borrow can't be
+        // resubmitted as a return under the wrong currency/denomination.
+        $this->currencyCode = '';
+        $this->denominationId = '';
+        $this->amount = '';
+        $this->availableStock = 0;
+    }
+
+    private function applyDefaultCountersFor(string $type): void
+    {
         $workingCounter = (string) (session('working_counter_id') ?? '');
-        if (in_array($type, ['borrow'])) {
+        $this->fromCounterId = '';
+        $this->toCounterId = '';
+
+        if ($type === 'borrow') {
             $this->toCounterId = $workingCounter; // borrowing TO my counter
-        } elseif (in_array($type, ['return', 'intraday_return'])) {
+        } elseif (in_array($type, ['return', 'intraday_return'], true)) {
             $this->fromCounterId = $workingCounter; // returning FROM my counter
         } elseif ($type === 'disbursement') {
             $this->fromCounterId = $workingCounter; // disbursing FROM my counter (HQ)
@@ -189,9 +220,13 @@ class StockTransferForm extends Component
             $query->whereDate('transferred_at', '<=', $this->filterDateTo);
         }
 
-        // Staff sees only their counter transfers
+        // Staff sees only their own counter's transfers — scoped to the branch
+        // they're CURRENTLY working (getVisibleBranchIds() follows session
+        // working_branch_id for staff), not the branch on their user record.
+        // A staff member hired at HQ but working today's shift at another
+        // branch must still see the borrow/return they just made there.
         if (!Auth::user()->isAdmin()) {
-            $branchCounterIds = Counter::where('branch_id', Auth::user()->branch_id)->pluck('id');
+            $branchCounterIds = Counter::whereIn('branch_id', Auth::user()->getVisibleBranchIds())->pluck('id');
             $query->where(function ($q) use ($branchCounterIds) {
                 $q->whereIn('from_counter_id', $branchCounterIds)
                   ->orWhereIn('to_counter_id', $branchCounterIds);

@@ -250,19 +250,33 @@ function counterSelector() {
         </div>
     </a>
 
-    <a href="{{ route('admin.rate.index') }}"
-       class="bg-white rounded-xl shadow border border-gray-200 p-6 flex items-center gap-4 hover:shadow-md transition-shadow group">
-        <div class="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center group-hover:bg-blue-200 transition-colors">
-            <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                      d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
-            </svg>
-        </div>
-        <div>
-            <p class="text-2xl font-bold text-blue-700">อัตราแลกเปลี่ยน</p>
-            <p class="text-sm text-gray-500">Exchange Rates</p>
-        </div>
-    </a>
+    @php
+        // ตั้งราคาได้เฉพาะ admin/branch_manager (User::canChangeRates()) — role อื่น
+        // (staff, trader, auditor) กดการ์ดนี้แล้วต้องไปหน้าจอแสดงราคาอย่างเดียว
+        // เหมือนลิงก์ "ดูเรทสาขา" ใน sidebar ไม่ใช่หน้าจัดการที่ตั้งราคาได้
+        $canChangeRates = auth()->user()->canChangeRates();
+        $workingCounterCode = \App\Models\Counter::where('id', session('working_counter_id'))->value('counter_code');
+        $rateCardUrl = $canChangeRates
+            ? route('admin.rate.index')
+            : ($workingCounterCode ? route('rate.board', $workingCounterCode) : null);
+    @endphp
+    @if ($rateCardUrl)
+        <a href="{{ $rateCardUrl }}" @unless($canChangeRates) target="_blank" @endunless
+           class="bg-white rounded-xl shadow border border-gray-200 p-6 flex items-center gap-4 hover:shadow-md transition-shadow group">
+            <div class="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center group-hover:bg-blue-200 transition-colors">
+                <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                </svg>
+            </div>
+            <div>
+                <p class="text-2xl font-bold text-blue-700">อัตราแลกเปลี่ยน</p>
+                <p class="text-sm text-gray-500">
+                    {{ $canChangeRates ? 'Exchange Rates' : 'Exchange Rates (View only)' }}
+                </p>
+            </div>
+        </a>
+    @endif
 </div>
 
 {{-- Metrics Cards --}}

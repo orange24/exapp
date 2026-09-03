@@ -105,7 +105,17 @@ class User extends Authenticatable
         if ($this->isAdmin()) {
             return Branch::pluck('id')->toArray(); // All branches
         }
-        return [$this->branch_id]; // Own branch only (Staff, Branch Manager, Auditor)
+
+        // Staff can switch which branch they're currently working at
+        // (POST /switch-branch, sidebar "สาขาทำงาน" selector) — visibility must
+        // follow that, not the branch they were hired into. Otherwise every
+        // page built on this (Inventory Dashboard, reports, ...) keeps showing
+        // their home branch while they're clocked in somewhere else.
+        if ($this->role?->name === 'staff') {
+            return [session('working_branch_id', $this->branch_id)];
+        }
+
+        return [$this->branch_id]; // Own branch only (Branch Manager, Auditor)
     }
 
     public function getManagedBranchIds(): array

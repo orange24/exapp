@@ -221,6 +221,13 @@
         </div>
     </template>
 
+    {{-- Stock guard — เพิ่มแถวไม่ได้ / บันทึกไม่ผ่านเพราะเงินในบูธไม่พอ --}}
+    @error('stock')
+        <div class="mb-4 p-3 bg-red-100 border border-red-400 text-red-800 rounded text-sm font-medium">
+            {{ $message }}
+        </div>
+    @enderror
+
     {{-- Add currency row — Sell: ลูกค้าให้ THB → แลกเงินต่างประเทศ --}}
     @if (! $showPrintSlip)
     <div class="mb-4 p-3 bg-red-50 border border-red-200 rounded">

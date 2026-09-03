@@ -21,8 +21,13 @@ class BankSale extends Model
 
     const SETTLEMENT_PENDING = 'pending';
 
+    /** header.currency_code ของใบซื้อที่มีหลายสกุลปนกัน */
+    const CURRENCY_MIXED = 'MIXED';
+
     protected $fillable = [
         'sale_no', 'direction', 'bank_name', 'bank_account', 'currency_code', 'denomination_id',
+        'destination_counter_id',
+        'customer_id', 'customer_passport_no', 'customer_nationality', 'customer_passport_expiry',
         'total_amount', 'bank_rate', 'total_thb', 'avg_cost_at_sale', 'total_cost',
         'profit_loss', 'settlement_method', 'status', 'notes',
         'journal_entry_id', 'created_by', 'approved_by', 'approved_at', 'completed_at',
@@ -45,6 +50,23 @@ class BankSale extends Model
     public function sources()
     {
         return $this->hasMany(BankSaleSource::class);
+    }
+
+    /** แถวธนบัตร — ใช้ฝั่งซื้อเท่านั้น ฝั่งขายยังเก็บธนบัตรเดียวที่ header */
+    public function items()
+    {
+        return $this->hasMany(BankSaleItem::class);
+    }
+
+    public function customer()
+    {
+        return $this->belongsTo(Customer::class, 'customer_id');
+    }
+
+    /** เคาน์เตอร์กองกลางที่รับของเข้า (ฝั่งซื้อ) */
+    public function destinationCounter()
+    {
+        return $this->belongsTo(Counter::class, 'destination_counter_id');
     }
 
     public function denomination()

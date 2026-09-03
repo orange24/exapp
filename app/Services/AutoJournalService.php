@@ -306,6 +306,8 @@ class AutoJournalService
         if (! $mapping) return null;
 
         return DB::transaction(function () use ($purchase, $mapping) {
+            $purchase->loadMissing('destinationCounter');
+
             $entry = JournalEntry::create([
                 'entry_no'    => $this->generateEntryNo('AJ'),
                 'entry_date'  => today(),
@@ -313,9 +315,16 @@ class AutoJournalService
                 'type'        => 'auto',
                 'source_type' => 'bank_purchase',
                 'source_id'   => $purchase->id,
-                'branch_id'   => $purchase->sources->first()?->counter?->branch_id,
+                // ของเข้ากองกลางที่เดียว — สาขาของ entry คือสาขาของกองกลางนั้น
+                'branch_id'   => $purchase->destinationCounter?->branch_id
+                    ?? $purchase->sources->first()?->counter?->branch_id,
                 'is_posted'   => false,
             ]);
+
+            // ใบที่มีหลายสกุลปนกันไม่มี currency_code เดียวที่ถูกต้อง — ปล่อยว่างดีกว่าใส่ MIXED
+            $isMixed = $purchase->currency_code === BankSale::CURRENCY_MIXED;
+            $lineCurrency = $isMixed ? null : $purchase->currency_code;
+            $received = $isMixed ? 'เงินตราหลายสกุล' : $purchase->currency_code;
 
             // Dr FX Inventory (สต็อกที่รับเข้า ตีราคาด้วยเรทที่ซื้อ)
             JournalLine::create([
@@ -323,8 +332,8 @@ class AutoJournalService
                 'account_id'       => $mapping->debit_account_id,  // 1400 FX Inventory
                 'debit'            => $purchase->total_thb,
                 'credit'           => 0,
-                'description'      => "รับ {$purchase->currency_code} เข้าสต็อก {$purchase->sale_no}",
-                'currency_code'    => $purchase->currency_code,
+                'description'      => "รับ {$received} เข้าสต็อก {$purchase->sale_no}",
+                'currency_code'    => $lineCurrency,
             ]);
 
             // Cr Bank Deposits (เงินที่จ่ายออก)
@@ -334,7 +343,7 @@ class AutoJournalService
                 'debit'            => 0,
                 'credit'           => $purchase->total_thb,
                 'description'      => "จ่ายเงินให้ธนาคาร {$purchase->bank_name}",
-                'currency_code'    => $purchase->currency_code,
+                'currency_code'    => $lineCurrency,
             ]);
 
             return $entry;

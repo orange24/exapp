@@ -42,7 +42,7 @@ class OpenCloseDay extends Component
             ->orderBy('branch_id')->orderBy('counter_name');
 
         if (!Auth::user()->isAdmin()) {
-            $query->where('branch_id', Auth::user()->branch_id);
+            $query->whereIn('branch_id', Auth::user()->getVisibleBranchIds());
         }
 
         return $query->get();

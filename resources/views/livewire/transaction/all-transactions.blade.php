@@ -155,11 +155,12 @@
                                     </button>
 
                                     @if ($trns->flag_cancel === 'N')
-                                        {{-- Print --}}
-                                        <a href="{{ route('transaction.print', $trns) }}" target="_blank"
-                                           class="text-xs bg-gray-50 text-gray-700 px-2 py-1 rounded hover:bg-gray-100 transition-colors">
+                                        {{-- Print — ยิงเข้า iframe ที่ซ่อนไว้ สลิปจะ window.print() เอง (?print=Y) --}}
+                                        <button type="button"
+                                                onclick="document.getElementById('print-iframe').src = '{{ route('transaction.print', $trns) }}?print=Y&t=' + Date.now();"
+                                                class="text-xs bg-gray-50 text-gray-700 px-2 py-1 rounded hover:bg-gray-100 transition-colors">
                                             พิมพ์
-                                        </a>
+                                        </button>
                                     @elseif ($trns->flag_cancel === 'R')
                                         {{-- Approve cancel --}}
                                         <button wire:click="approveCancel({{ $trns->id }})"
@@ -274,4 +275,8 @@
             </div>
         </div>
     </div>
+
+    {{-- เป้าหมายการพิมพ์ — wire:ignore กัน Livewire morph ทับ src ตอน re-render --}}
+    <iframe id="print-iframe" wire:ignore title="print"
+            style="position:absolute; width:0; height:0; border:none; overflow:hidden;"></iframe>
 </div>

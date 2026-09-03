@@ -199,19 +199,20 @@ new class extends Component
         $denom = \App\Models\CurrencyDenomination::with('currency')->find($this->selectedCurrency);
         $foreignAmount = $this->currentTotal; // จำนวนเงินต่างประเทศที่คำนวณได้
 
-        // ถ้ามี boothAmount → ตรวจว่าเงินในบูธพอไหม
-        if ($this->boothAmount > 0 && $foreignAmount > $this->boothAmount) {
-            // เงินไม่พอ → เปิด modal ให้ adjust
+        // boothAmount มาจาก stock เสมอ (quantity - hold_amount) — ค่า 0 แปลว่า
+        // "ไม่มีของในบูธ" ไม่ใช่ "ไม่ได้ตรวจ" ถ้าปล่อยผ่านตรงนี้ แถวจะถูกเพิ่มได้
+        // แล้วไปพังเป็น 500 ตอน InventoryService::recordSell() แทน
+        if ($this->boothAmount <= 0) {
+            $this->addError('stock', 'สต็อกไม่พอ — ' . ($denom?->display_name ?? 'สกุลนี้') . ' คงเหลือ 0 ที่เคาน์เตอร์นี้ ขายไม่ได้');
+            return;
+        }
+
+        // เงินในบูธไม่พอ → เปิด modal ให้ adjust
+        if ($foreignAmount > $this->boothAmount) {
             $this->adjustedTotal = $this->boothAmount;
             $this->adjustedThb = ceil($this->boothAmount * $this->currentRate);
             $this->showAdjustModal = true;
             return;
-        }
-
-        // ถ้า boothAmount > 0 แต่ <= foreignAmount → ใช้ boothAmount
-        // ถ้า boothAmount = 0 → ไม่ check (ไม่ได้กรอก)
-        if ($this->boothAmount > 0 && $this->boothAmount < $foreignAmount) {
-            $foreignAmount = $this->boothAmount;
         }
 
         $this->rows[] = [
@@ -280,62 +281,69 @@ new class extends Component
         $counter = Counter::find($this->counterId);
         $docNo   = $this->generateDocNo('S');
 
-        DB::transaction(function () use ($counter, $docNo) {
-            $master = TransactionMaster::create([
-                'trns_no'              => $docNo,
-                'trns_type'            => 'SELLING',
-                'counter_id'           => $this->counterId,
-                'counter_name'         => $counter->counter_name,
-                'customer_id'          => $this->customerId,
-                'cust_name'            => $this->custName,
-                'convert_currency_to'  => 'THB',
-                'is_discount_booth'    => $this->isDiscountBooth,
-                'discount_booth_code'  => $this->discountBoothCode ?: null,
-                'trns_datetime'        => now(),
-                'created_by'           => Auth::id(),
-                'updated_by'           => Auth::id(),
-            ]);
-
-            $inventoryService = app(\App\Services\InventoryService::class);
-
-            foreach ($this->rows as $row) {
-                TransactionDetail::create([
-                    'transaction_id'     => $master->id,
-                    'currency_code'      => $row['currency_code'],
-                    'denomination_id'    => $row['denomination_id'] ?? null,
-                    'currency_name'      => $row['currency_name'],
-                    'unit_price'         => $row['rate'],
-                    'amount'             => $row['amount'],
-                    'total'              => $row['total'],
-                    'discount_rate_sell' => $row['discount_rate_sell'] ?? 0,
-                    'created_by'         => Auth::id(),
+        try {
+            DB::transaction(function () use ($counter, $docNo) {
+                $master = TransactionMaster::create([
+                    'trns_no'              => $docNo,
+                    'trns_type'            => 'SELLING',
+                    'counter_id'           => $this->counterId,
+                    'counter_name'         => $counter->counter_name,
+                    'customer_id'          => $this->customerId,
+                    'cust_name'            => $this->custName,
+                    'convert_currency_to'  => 'THB',
+                    'is_discount_booth'    => $this->isDiscountBooth,
+                    'discount_booth_code'  => $this->discountBoothCode ?: null,
+                    'trns_datetime'        => now(),
+                    'created_by'           => Auth::id(),
+                    'updated_by'           => Auth::id(),
                 ]);
 
-                // Update inventory: SELL = stock decreases by foreign currency amount (total)
-                if (!empty($row['denomination_id'])) {
-                    $inventoryService->recordSell(
-                        (int) $this->counterId,
-                        $row['currency_code'],
-                        $row['denomination_id'],
-                        $row['total'],       // foreign currency amount given to customer
-                        $row['rate'],
-                        $master->id,
-                        Auth::id()
-                    );
+                $inventoryService = app(\App\Services\InventoryService::class);
+
+                foreach ($this->rows as $row) {
+                    TransactionDetail::create([
+                        'transaction_id'     => $master->id,
+                        'currency_code'      => $row['currency_code'],
+                        'denomination_id'    => $row['denomination_id'] ?? null,
+                        'currency_name'      => $row['currency_name'],
+                        'unit_price'         => $row['rate'],
+                        'amount'             => $row['amount'],
+                        'total'              => $row['total'],
+                        'discount_rate_sell' => $row['discount_rate_sell'] ?? 0,
+                        'created_by'         => Auth::id(),
+                    ]);
+
+                    // Update inventory: SELL = stock decreases by foreign currency amount (total)
+                    if (!empty($row['denomination_id'])) {
+                        $inventoryService->recordSell(
+                            (int) $this->counterId,
+                            $row['currency_code'],
+                            $row['denomination_id'],
+                            $row['total'],       // foreign currency amount given to customer
+                            $row['rate'],
+                            $master->id,
+                            Auth::id()
+                        );
+                    }
                 }
-            }
 
-            // Save customer data if we have passport no (from OCR or manual input)
-            if ($this->ocrPassportNo) {
-                $this->savePassportCustomer($master);
-            }
+                // Save customer data if we have passport no (from OCR or manual input)
+                if ($this->ocrPassportNo) {
+                    $this->savePassportCustomer($master);
+                }
 
-            // Auto GL Journal
-            $master->load('details');
-            app(\App\Services\AutoJournalService::class)->createFromTransaction($master);
+                // Auto GL Journal
+                $master->load('details');
+                app(\App\Services\AutoJournalService::class)->createFromTransaction($master);
 
-            $this->savedTransactionId = $master->id;
-        });
+                $this->savedTransactionId = $master->id;
+            });
+        } catch (\RuntimeException $e) {
+            // สต็อกอาจถูกตัดโดยเครื่องอื่นระหว่างกด "เพิ่ม" กับ "บันทึก & พิมพ์"
+            // ทั้ง transaction ถูก rollback แล้ว — แจ้งพนักงานแทนที่จะโยน 500
+            $this->addError('stock', $e->getMessage());
+            return;
+        }
 
         $this->savedRows = $this->rows;
         $this->rows = [];

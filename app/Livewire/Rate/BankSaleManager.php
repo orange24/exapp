@@ -7,7 +7,9 @@ use App\Models\Counter;
 use App\Models\CounterStock;
 use App\Models\Currency;
 use App\Models\CurrencyDenomination;
+use App\Models\Customer;
 use App\Services\BankSaleService;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -33,6 +35,18 @@ class BankSaleManager extends Component
     public bool $showForm = false;
     public string $bankName = '';
     public string $bankAccount = '';
+
+    /**
+     * คู่ค้าฝั่งซื้อ — ซื้อเข้าไม่ได้มาจากธนาคารเสมอไป จึงพิมพ์ชื่อเองพร้อม
+     * autocomplete จากทะเบียนลูกค้า ชื่อยังลงคอลัมน์ bank_name เหมือนฝั่งขาย
+     */
+    public string $custName = '';
+    public ?int $customerId = null;
+    public string $custPassportNo = '';
+    public string $custNationality = '';
+    public string $custExpiry = '';
+    public array $customerSuggestions = [];
+    public bool $showSuggestions = false;
     public string $currencyCode = '';
     public string $denominationId = '';
     public string $totalAmount = '';
@@ -40,8 +54,19 @@ class BankSaleManager extends Component
     public string $settlementMethod = 'bank_transfer';
     public string $notes = '';
 
-    // Source counters: [counter_id => amount]
+    // Source counters: [counter_id => amount] — ฝั่งขายเท่านั้น
     public array $sourceAmounts = [];
+
+    /**
+     * แถวธนบัตรของใบซื้อ — ธนาคารส่งมาครั้งเดียวได้หลาย denom หลายสกุล
+     * [{currency_code, denomination_id, denomination_label, amount, bank_rate, total_thb}]
+     */
+    public array $rows = [];
+
+    // แถวที่กำลังกรอกอยู่ (ฝั่งซื้อ)
+    public string $rowDenominationId = '';
+    public string $rowAmount = '';
+    public string $rowRate = '';
 
     // Filter
     public string $filterStatus = '';
@@ -112,20 +137,160 @@ class BankSaleManager extends Component
             ->first();
     }
 
-    /** สต็อกปัจจุบันของกองกลาง สำหรับธนบัตรที่เลือก */
-    public function getCentralStockProperty(): ?CounterStock
+/** ธนบัตรทั้งหมดที่เลือกได้ในฟอร์มซื้อ — group ตามสกุลเงินในหน้า blade */
+    public function getDenominationOptionsProperty()
+    {
+        return CurrencyDenomination::with('currency')
+            ->where('currency_denominations.is_active', true)
+            ->join('currencies', 'currency_denominations.currency_code', '=', 'currencies.currency_code')
+            ->orderBy('currencies.seq')
+            ->orderBy('currency_denominations.seq')
+            ->select('currency_denominations.*')
+            ->get();
+    }
+
+    /** [denomination_id => เรทซื้อเฉลี่ยของทุกสาขาที่ trader ดูแล] */
+    public function getAvgBuyRatesProperty(): array
+    {
+        return collect($this->stockInfo)
+            ->pluck('buy_rate', 'denomination_id')
+            ->all();
+    }
+
+    /** สต็อกกองกลางของธนบัตรที่อยู่ในแถว — ดึงทีเดียวกันคิวรีต่อแถว */
+    public function getCentralStocksProperty()
     {
         $counter = $this->centralCounter;
-        if (! $counter || ! $this->denominationId) return null;
+        $denomIds = array_column($this->rows, 'denomination_id');
+
+        if (! $counter || empty($denomIds)) return collect();
 
         return CounterStock::where('counter_id', $counter->id)
-            ->where('denomination_id', $this->denominationId)
-            ->first();
+            ->whereIn('denomination_id', $denomIds)
+            ->get()
+            ->keyBy('denomination_id');
+    }
+
+    public function getRowsTotalThbProperty(): float
+    {
+        return round(array_sum(array_column($this->rows, 'total_thb')), 2);
+    }
+
+    /** เลือกธนบัตรแล้วเติมเรทเฉลี่ยให้เป็นค่าตั้งต้น — trader พิมพ์ทับด้วยเรทจริงได้ */
+    public function updatedRowDenominationId(): void
+    {
+        $rate = $this->avgBuyRates[$this->rowDenominationId] ?? 0;
+        $this->rowRate = $rate > 0 ? (string) round($rate, 4) : '';
+    }
+
+    public function addRow(): void
+    {
+        $amount = (float) $this->rowAmount;
+        $rate = (float) $this->rowRate;
+
+        if (! $this->rowDenominationId || $amount <= 0 || $rate <= 0) {
+            $this->addError('rows', 'กรุณาเลือกธนบัตร ใส่จำนวน และเรทให้ครบ');
+            return;
+        }
+
+        $denom = CurrencyDenomination::find($this->rowDenominationId);
+        if (! $denom) {
+            $this->addError('rows', 'ไม่พบธนบัตรที่เลือก');
+            return;
+        }
+
+        // ธนบัตรเดิมซ้ำในใบเดียวกันทำให้ยอดรวมกับ avg cost คำนวณซ้อนกัน — รวมเข้าแถวเดิมแทน
+        foreach ($this->rows as $i => $row) {
+            if ((int) $row['denomination_id'] === (int) $denom->id && (float) $row['bank_rate'] === $rate) {
+                $this->rows[$i]['amount'] += $amount;
+                $this->rows[$i]['total_thb'] = round($this->rows[$i]['amount'] * $rate, 2);
+                $this->resetRowInput();
+                return;
+            }
+        }
+
+        $this->rows[] = [
+            'currency_code' => $denom->currency_code,
+            'denomination_id' => (int) $denom->id,
+            'denomination_label' => $denom->display_name ?? $denom->currency_code,
+            'amount' => $amount,
+            'bank_rate' => $rate,
+            'total_thb' => round($amount * $rate, 2),
+        ];
+
+        $this->resetRowInput();
+    }
+
+    public function removeRow(int $index): void
+    {
+        unset($this->rows[$index]);
+        $this->rows = array_values($this->rows);
+    }
+
+    private function resetRowInput(): void
+    {
+        $this->resetErrorBag('rows');
+        $this->rowDenominationId = '';
+        $this->rowAmount = '';
+        $this->rowRate = '';
+    }
+
+    /** ค้นจากเลขพาสปอร์ตหรือชื่อ — เหมือนหน้ารับซื้อของ staff */
+    public function searchCustomers(string $term): void
+    {
+        if (mb_strlen($term) < 2) {
+            $this->customerSuggestions = [];
+            $this->showSuggestions = false;
+            return;
+        }
+
+        $this->customerSuggestions = Customer::where(function ($q) use ($term) {
+                $q->where('id_number', 'like', "%{$term}%")
+                  ->orWhere('name_en', 'like', "%{$term}%")
+                  ->orWhere('first_name', 'like', "%{$term}%")
+                  ->orWhere('last_name', 'like', "%{$term}%")
+                  ->orWhere('name_th', 'like', "%{$term}%");
+            })
+            ->orderByDesc('updated_at')
+            ->limit(8)
+            ->get()
+            ->map(fn ($c) => [
+                'id' => $c->id,
+                'id_number' => $c->id_number ?? '',
+                'name' => $c->name_en ?: trim(($c->first_name ?? '') . ' ' . ($c->last_name ?? '')),
+                'nationality' => $c->nationality ?? '',
+            ])
+            ->toArray();
+
+        $this->showSuggestions = count($this->customerSuggestions) > 0;
+    }
+
+    public function selectCustomer(int $id): void
+    {
+        $customer = Customer::find($id);
+        if (! $customer) return;
+
+        $this->customerId = $customer->id;
+        $this->custName = $customer->name_en ?: trim(($customer->first_name ?? '') . ' ' . ($customer->last_name ?? ''));
+        $this->custPassportNo = $customer->id_number ?? '';
+        $this->custNationality = $customer->nationality ?? '';
+        $this->custExpiry = $customer->passport_expiry
+            ? Carbon::parse($customer->passport_expiry)->format('Y-m-d')
+            : '';
+        $this->showSuggestions = false;
+    }
+
+    public function hideSuggestions(): void
+    {
+        $this->showSuggestions = false;
     }
 
     public function getSalesProperty()
     {
-        $query = BankSale::with(['sources.counter.branch', 'createdByUser', 'approvedByUser', 'denomination'])
+        $query = BankSale::with([
+                'sources.counter.branch', 'createdByUser', 'approvedByUser', 'denomination',
+                'items.denomination', 'destinationCounter.branch',
+            ])
             ->direction($this->direction)
             ->orderByDesc('created_at');
 
@@ -151,7 +316,8 @@ class BankSaleManager extends Component
         $counterIds = $this->managedCounterIds();
         if (empty($counterIds)) return [];
 
-        $key = 'bank_stock_info_' . md5(implode(',', $counterIds));
+        // v2 = เพิ่ม denomination_id เข้าไปในรูปร่างข้อมูล ค่าที่ cache ไว้แบบเก่าใช้ไม่ได้
+        $key = 'bank_stock_info_v2_' . md5(implode(',', $counterIds));
 
         return Cache::remember($key, 60, function () use ($counterIds) {
             $rates = DB::table('counter_rates')
@@ -180,6 +346,7 @@ class BankSaleManager extends Component
                     $stock = $stocks->get($denom->id);
 
                     return [
+                        'denomination_id' => (int) $denom->id,
                         'currency_code' => $denom->currency_code,
                         'currency_name' => $denom->currency?->currency_name ?? $denom->currency_code,
                         'denomination_label' => $denom->display_name ?? $denom->currency_code,
@@ -191,6 +358,7 @@ class BankSaleManager extends Component
         });
     }
 
+    /** ฝั่งขายเท่านั้น — ซื้อเข้าไม่มีกำไร/ขาดทุน เงินที่จ่ายทั้งก้อนคือต้นทุน */
     public function getProfitPreviewProperty(): array
     {
         $totalAmount = (float) $this->totalAmount;
@@ -199,12 +367,6 @@ class BankSaleManager extends Component
 
         $revenue = round($totalAmount * $bankRate, 2);
         $totalAllocated = 0;
-
-        // ซื้อเข้าไม่มีกำไร/ขาดทุน — เงินที่จ่ายทั้งก้อนคือต้นทุน
-        // และเข้ากองกลางที่เดียว จึงจัดสรรเต็มจำนวนเสมอ
-        if ($this->isBuy()) {
-            return ['revenue' => $revenue, 'cost' => $revenue, 'pl' => 0, 'allocated' => $totalAmount];
-        }
 
         // Calculate weighted cost from selected sources
         $totalCost = 0;
@@ -221,12 +383,12 @@ class BankSaleManager extends Component
     }
 
     /** avg_cost ของปลายทางหลังรับของเข้า — ให้เห็นผลกระทบก่อนกดสร้าง */
-    public function projectedAvgCost(float $currentQty, float $currentAvg, float $incoming): float
+    public function projectedAvgCost(float $currentQty, float $currentAvg, float $incoming, float $unitCost): float
     {
         $newQty = $currentQty + $incoming;
         if ($newQty <= 0) return 0.0;
 
-        return ($currentQty * $currentAvg + $incoming * (float) $this->bankRate) / $newQty;
+        return ($currentQty * $currentAvg + $incoming * $unitCost) / $newQty;
     }
 
     public function updatedCurrencyCode(): void
@@ -242,6 +404,11 @@ class BankSaleManager extends Component
 
     public function save(): void
     {
+        if ($this->isBuy()) {
+            $this->savePurchase();
+            return;
+        }
+
         $this->validate([
             'bankName' => 'required|min:2',
             'currencyCode' => 'required',
@@ -254,40 +421,29 @@ class BankSaleManager extends Component
             'bankRate.required' => 'กรุณาระบุเรทขาย',
         ]);
 
-        if ($this->isBuy()) {
-            // ซื้อเข้ากองกลางที่เดียว — ไม่มีการจัดสรรให้กรอก
-            $central = $this->centralCounter;
-            if (! $central) {
-                $this->addError('sourceAmounts', 'ไม่พบเคาน์เตอร์กองกลางของสำนักงานใหญ่ที่คุณสังกัด');
-                return;
-            }
-            $sources = [['counter_id' => $central->id, 'amount' => (float) $this->totalAmount]];
-        } else {
-            // Build sources
-            $sources = [];
-            $totalAllocated = 0;
-            foreach ($this->sourceAmounts as $counterId => $amount) {
-                $amt = (float) $amount;
-                if ($amt > 0) {
-                    $sources[] = ['counter_id' => (int) $counterId, 'amount' => $amt];
-                    $totalAllocated += $amt;
-                }
-            }
-
-            if (empty($sources)) {
-                $this->addError('sourceAmounts', 'กรุณาระบุจำนวนจากเคาน์เตอร์อย่างน้อย 1 แห่ง');
-                return;
-            }
-
-            if (abs($totalAllocated - (float) $this->totalAmount) > 0.01) {
-                $this->addError('sourceAmounts', "จำนวนที่จัดสรร ({$totalAllocated}) ไม่ตรงกับจำนวนรวม ({$this->totalAmount})");
-                return;
+        // Build sources
+        $sources = [];
+        $totalAllocated = 0;
+        foreach ($this->sourceAmounts as $counterId => $amount) {
+            $amt = (float) $amount;
+            if ($amt > 0) {
+                $sources[] = ['counter_id' => (int) $counterId, 'amount' => $amt];
+                $totalAllocated += $amt;
             }
         }
 
+        if (empty($sources)) {
+            $this->addError('sourceAmounts', 'กรุณาระบุจำนวนจากเคาน์เตอร์อย่างน้อย 1 แห่ง');
+            return;
+        }
+
+        if (abs($totalAllocated - (float) $this->totalAmount) > 0.01) {
+            $this->addError('sourceAmounts', "จำนวนที่จัดสรร ({$totalAllocated}) ไม่ตรงกับจำนวนรวม ({$this->totalAmount})");
+            return;
+        }
+
         try {
-            $service = app(BankSaleService::class);
-            $sale = $service->create([
+            $sale = app(BankSaleService::class)->create([
                 'direction' => $this->direction,
                 'bank_name' => $this->bankName,
                 'bank_account' => $this->bankAccount ?: null,
@@ -300,10 +456,50 @@ class BankSaleManager extends Component
             ], $sources, Auth::id());
 
             $this->resetForm();
-            $msg = $this->isBuy()
-                ? "สร้างรายการซื้อจากธนาคาร {$sale->sale_no} สำเร็จ — รอยืนยันรับของ"
-                : "สร้างรายการขายธนาคาร {$sale->sale_no} สำเร็จ — สต็อกถูก Reserve แล้ว";
-            session()->flash('success', $msg);
+            session()->flash('success', "สร้างรายการขายธนาคาร {$sale->sale_no} สำเร็จ — สต็อกถูก Reserve แล้ว");
+        } catch (\Throwable $e) {
+            session()->flash('error', $e->getMessage());
+        }
+    }
+
+    /** ฝั่งซื้อ: จำนวนเงินอยู่ที่แถวธนบัตร ปลายทางคือกองกลางที่เดียว */
+    private function savePurchase(): void
+    {
+        $this->validate([
+            'custName' => 'required|min:2',
+        ], [
+            'custName.required' => 'กรุณาระบุชื่อลูกค้า/คู่ค้า',
+            'custName.min' => 'กรุณาระบุชื่อลูกค้า/คู่ค้า',
+        ]);
+
+        if (empty($this->rows)) {
+            $this->addError('rows', 'กรุณาเพิ่มรายการธนบัตรอย่างน้อย 1 แถว');
+            return;
+        }
+
+        $central = $this->centralCounter;
+        if (! $central) {
+            $this->addError('rows', 'ไม่พบเคาน์เตอร์กองกลางของสำนักงานใหญ่ที่คุณสังกัด');
+            return;
+        }
+
+        try {
+            $purchase = app(BankSaleService::class)->create([
+                'direction' => $this->direction,
+                // ชื่อคู่ค้าใช้คอลัมน์เดียวกับฝั่งขาย
+                'bank_name' => $this->custName,
+                'bank_account' => $this->bankAccount ?: null,
+                'customer_id' => $this->customerId,
+                'customer_passport_no' => $this->custPassportNo ?: null,
+                'customer_nationality' => $this->custNationality ?: null,
+                'customer_passport_expiry' => $this->custExpiry ?: null,
+                'destination_counter_id' => $central->id,
+                'settlement_method' => $this->settlementMethod,
+                'notes' => $this->notes ?: null,
+            ], $this->rows, Auth::id());
+
+            $this->resetForm();
+            session()->flash('success', "สร้างรายการซื้อจากธนาคาร {$purchase->sale_no} สำเร็จ — รอยืนยันรับของ");
         } catch (\Throwable $e) {
             session()->flash('error', $e->getMessage());
         }
@@ -405,6 +601,15 @@ class BankSaleManager extends Component
         $this->settlementMethod = 'bank_transfer';
         $this->notes = '';
         $this->sourceAmounts = [];
+        $this->rows = [];
+        $this->custName = '';
+        $this->customerId = null;
+        $this->custPassportNo = '';
+        $this->custNationality = '';
+        $this->custExpiry = '';
+        $this->customerSuggestions = [];
+        $this->showSuggestions = false;
+        $this->resetRowInput();
     }
 
     public function render()

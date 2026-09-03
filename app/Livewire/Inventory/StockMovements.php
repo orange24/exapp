@@ -40,7 +40,7 @@ class StockMovements extends Component
             ->orderBy('branch_id')->orderBy('counter_name');
 
         if (!Auth::user()->isAdmin()) {
-            $query->where('branch_id', Auth::user()->branch_id);
+            $query->whereIn('branch_id', Auth::user()->getVisibleBranchIds());
         }
 
         return $query->get();
@@ -60,7 +60,7 @@ class StockMovements extends Component
         if ($this->counterId) {
             $query->where('counter_id', $this->counterId);
         } elseif (!Auth::user()->isAdmin()) {
-            $counterIds = Counter::where('branch_id', Auth::user()->branch_id)->pluck('id');
+            $counterIds = Counter::whereIn('branch_id', Auth::user()->getVisibleBranchIds())->pluck('id');
             $query->whereIn('counter_id', $counterIds);
         }
 

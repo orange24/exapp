@@ -87,4 +87,22 @@ class TransactionMaster extends Model
     {
         return $this->details->sum('total');
     }
+
+    /**
+     * Currency that the total_thb figure is expressed in.
+     *
+     * BUYING stores the THB value in details.total, so the total is THB.
+     * SELLING stores the foreign currency amount handed to the customer in
+     * details.total, so the total is expressed in that foreign currency.
+     */
+    public function getTotalCurrencyAttribute(): string
+    {
+        if ($this->trns_type !== 'SELLING') {
+            return 'THB';
+        }
+
+        $codes = $this->details->pluck('currency_code')->filter()->unique()->values();
+
+        return $codes->isEmpty() ? 'THB' : $codes->implode(', ');
+    }
 }

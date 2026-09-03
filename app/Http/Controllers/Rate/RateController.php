@@ -15,6 +15,10 @@ class RateController extends Controller
      */
     public function index(): \Illuminate\View\View
     {
+        // "จัดการอัตราแลกเปลี่ยน" มีปุ่มตั้งราคาในตัว — role ที่ตั้งราคาไม่ได้ (staff,
+        // trader, auditor) ต้องไปหน้าจอแสดงราคา (rate.board) แทน ไม่ใช่หน้านี้
+        abort_unless(auth()->user()->canChangeRates(), 403, 'คุณไม่มีสิทธิ์ตั้งราคา — ดูอัตราแลกเปลี่ยนได้ที่จอแสดงราคา');
+
         $visibleBranchIds = auth()->user()->getVisibleBranchIds();
 
         $counters = Counter::with(['branch', 'rates' => function ($q) {
@@ -33,6 +37,8 @@ class RateController extends Controller
      */
     public function setup(Counter $counter): \Illuminate\View\View
     {
+        abort_unless(auth()->user()->canChangeRates(), 403, 'คุณไม่มีสิทธิ์ตั้งราคา — ดูอัตราแลกเปลี่ยนได้ที่จอแสดงราคา');
+
         // Check if user has access to this counter's branch
         $visibleBranchIds = auth()->user()->getVisibleBranchIds();
 

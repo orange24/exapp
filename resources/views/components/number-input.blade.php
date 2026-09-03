@@ -64,7 +64,17 @@
                 {!! $onCommit !!}
             @endif
         },
+        // ช่องนี้ไม่มี wire:model — morph ของ Livewire จึงไม่ push ค่าใหม่ลง .value
+        // ของ input ที่ผู้ใช้เคยพิมพ์ ตัวเลขเดิมจะค้างบนจอหลังเซิร์ฟเวอร์ล้างค่า
+        // แล้วถูก commit ซ้ำตอน blur ครั้งถัดไป = ได้แถวเกิน ยอดรวมเพี้ยน
+        syncFromServer(v) {
+            if (document.activeElement === this.$el) return;  // กำลังพิมพ์อยู่ อย่าทับ
+            const empty = v === null || v === undefined || v === '' || Number(v) === 0;
+            const next = empty ? '' : this.format(this.clean(String(v)));
+            if (this.$el.value !== next) this.$el.value = next;
+        },
     }"
+    x-effect="syncFromServer($wire.get('{{ $model }}'))"
     x-on:input="onInput($el)"
     x-on:blur="commit($el)"
     {{ $attributes->merge(['class' => 'text-right font-mono']) }}

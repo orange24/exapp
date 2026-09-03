@@ -3,9 +3,11 @@
 namespace App\Services;
 
 use App\Models\BankSale;
+use App\Models\BankSaleItem;
 use App\Models\BankSaleSource;
 use App\Models\Counter;
 use App\Models\CounterStock;
+use App\Models\Customer;
 use App\Models\RateChangeLog;
 use App\Models\StockMovement;
 use App\Models\TransactionAccountMapping;
@@ -25,6 +27,7 @@ class BankSaleService
     public function create(array $data, array $sources, int $userId): BankSale
     {
         if (($data['direction'] ?? BankSale::DIRECTION_SELL) === BankSale::DIRECTION_BUY) {
+            // ฝั่งซื้อรับ $sources เป็นแถวธนบัตร ไม่ใช่เคาน์เตอร์ต้นทาง
             return $this->createPurchase($data, $sources, $userId);
         }
 
@@ -109,50 +112,75 @@ class BankSaleService
     }
 
     /**
-     * Create a bank PURCHASE — เราจ่าย THB ให้ธนาคาร แล้วรับเงินตราเข้าเคาน์เตอร์ปลายทาง
+     * Create a bank PURCHASE — เราจ่าย THB ให้ธนาคาร แล้วรับเงินตราเข้ากองกลาง
      *
      * ต่างจากฝั่งขายตรงที่ไม่มีอะไรให้ reserve: สต็อกยังไม่มี จะเข้าตอน complete()
      * เท่านั้น จึงไม่แตะ hold_amount และไม่มีขั้น in_transit/delivered
      *
-     * @param array $sources [['counter_id' => int, 'amount' => float], ...] = ปลายทางที่จะรับเข้า
+     * ธนาคารส่งของมาครั้งเดียวได้หลายธนบัตร จำนวนเงินจึงอยู่ที่ items ไม่ใช่ header
+     * ส่วนปลายทางมีที่เดียว (กองกลาง) เก็บไว้ที่ header — ไม่สร้างแถว bank_sale_sources
+     *
+     * @param array $data  ['bank_name', 'bank_account', 'destination_counter_id', 'settlement_method', 'notes']
+     * @param array $items [['currency_code' => string, 'denomination_id' => int, 'amount' => float, 'bank_rate' => float], ...]
      */
-    public function createPurchase(array $data, array $sources, int $userId): BankSale
+    public function createPurchase(array $data, array $items, int $userId): BankSale
     {
-        return DB::transaction(function () use ($data, $sources, $userId) {
-            $totalAmount = (float) $data['total_amount'];
-            $bankRate = (float) $data['bank_rate'];
-            $totalThb = round($totalAmount * $bankRate, 2);
-
-            $destinationRecords = [];
-            foreach ($sources as $src) {
-                $amount = (float) $src['amount'];
-                if ($amount <= 0) continue;
-
-                $counterId = (int) $src['counter_id'];
-                if (! Counter::find($counterId)) {
-                    throw new \RuntimeException("ไม่พบเคาน์เตอร์ปลายทาง #{$counterId}");
-                }
-
-                $destinationRecords[] = ['counter_id' => $counterId, 'amount' => $amount];
+        return DB::transaction(function () use ($data, $items, $userId) {
+            $counterId = (int) ($data['destination_counter_id'] ?? 0);
+            if (! $counterId || ! Counter::find($counterId)) {
+                throw new \RuntimeException('ไม่พบเคาน์เตอร์กองกลางที่จะรับของเข้า');
             }
 
-            if (empty($destinationRecords)) {
-                throw new \RuntimeException('กรุณาระบุเคาน์เตอร์ปลายทางอย่างน้อย 1 แห่ง');
+            $itemRecords = [];
+            $totalThb = 0.0;
+
+            foreach ($items as $item) {
+                $amount = (float) ($item['amount'] ?? 0);
+                $rate = (float) ($item['bank_rate'] ?? 0);
+                $denominationId = (int) ($item['denomination_id'] ?? 0);
+
+                if ($amount <= 0 || $rate <= 0 || ! $denominationId) continue;
+
+                $lineThb = round($amount * $rate, 2);
+                $totalThb += $lineThb;
+
+                $itemRecords[] = [
+                    'currency_code' => $item['currency_code'],
+                    'denomination_id' => $denominationId,
+                    'amount' => $amount,
+                    'bank_rate' => $rate,
+                    'total_thb' => $lineThb,
+                ];
             }
+
+            if (empty($itemRecords)) {
+                throw new \RuntimeException('กรุณาเพิ่มรายการธนบัตรอย่างน้อย 1 แถว');
+            }
+
+            $currencies = array_unique(array_column($itemRecords, 'currency_code'));
+            $singleCurrency = count($currencies) === 1 ? reset($currencies) : null;
+
+            $customerId = $this->resolveCustomer($data);
 
             $purchase = BankSale::create([
                 'sale_no' => BankSale::generateSaleNo(BankSale::DIRECTION_BUY),
                 'direction' => BankSale::DIRECTION_BUY,
                 'bank_name' => $data['bank_name'],
                 'bank_account' => $data['bank_account'] ?? null,
-                'currency_code' => $data['currency_code'],
-                'denomination_id' => $data['denomination_id'] ?? null,
-                'total_amount' => $totalAmount,
-                'bank_rate' => $bankRate,
-                'total_thb' => $totalThb,
+                'customer_id' => $customerId,
+                'customer_passport_no' => $data['customer_passport_no'] ?? null,
+                'customer_nationality' => $data['customer_nationality'] ?? null,
+                'customer_passport_expiry' => $data['customer_passport_expiry'] ?? null,
+                // หลายสกุลในใบเดียวสรุปเป็นตัวเลขเดียวไม่ได้ — ยอดจริงอ่านจาก items
+                'currency_code' => $singleCurrency ?? BankSale::CURRENCY_MIXED,
+                'denomination_id' => count($itemRecords) === 1 ? $itemRecords[0]['denomination_id'] : null,
+                'destination_counter_id' => $counterId,
+                'total_amount' => $singleCurrency ? array_sum(array_column($itemRecords, 'amount')) : 0,
+                'bank_rate' => count($itemRecords) === 1 ? $itemRecords[0]['bank_rate'] : 0,
+                'total_thb' => round($totalThb, 2),
                 // ซื้อเข้าไม่มีกำไร/ขาดทุน — เงินที่จ่ายคือต้นทุนของของที่ได้มา
-                'avg_cost_at_sale' => $bankRate,
-                'total_cost' => $totalThb,
+                'avg_cost_at_sale' => count($itemRecords) === 1 ? $itemRecords[0]['bank_rate'] : 0,
+                'total_cost' => round($totalThb, 2),
                 'profit_loss' => 0,
                 'settlement_method' => $data['settlement_method'] ?? 'bank_transfer',
                 'status' => BankSale::STATUS_ORDERED,
@@ -160,18 +188,42 @@ class BankSaleService
                 'created_by' => $userId,
             ]);
 
-            foreach ($destinationRecords as $dest) {
-                BankSaleSource::create([
-                    'bank_sale_id' => $purchase->id,
-                    'counter_id' => $dest['counter_id'],
-                    'amount' => $dest['amount'],
-                    'avg_cost' => $bankRate,
-                    'status' => BankSale::STATUS_ORDERED,
-                ]);
+            foreach ($itemRecords as $item) {
+                BankSaleItem::create($item + ['bank_sale_id' => $purchase->id]);
             }
 
             return $purchase;
         });
+    }
+
+    /**
+     * ผูกรายการเข้ากับทะเบียนลูกค้า — มีเลขพาสปอร์ตก็บันทึกให้เลย เหมือนหน้ารับซื้อของ staff
+     * เพื่อให้ autocomplete ครั้งหน้าเจอคู่ค้ารายนี้
+     */
+    private function resolveCustomer(array $data): ?int
+    {
+        $passportNo = trim((string) ($data['customer_passport_no'] ?? ''));
+
+        if ($passportNo === '') {
+            return $data['customer_id'] ?? null;
+        }
+
+        $name = trim((string) ($data['bank_name'] ?? ''));
+        $parts = preg_split('/\s+/', $name, 2);
+
+        $customer = Customer::updateOrCreate(
+            ['id_type' => 'passport', 'id_number' => $passportNo],
+            [
+                'name_en' => $name,
+                'first_name' => $parts[0] ?? '',
+                'last_name' => $parts[1] ?? '',
+                'nationality' => $data['customer_nationality'] ?? null,
+                'passport_expiry' => $data['customer_passport_expiry'] ?: null,
+                'kyc_status' => 'approved',
+            ]
+        );
+
+        return $customer->id;
     }
 
     /**
@@ -186,23 +238,30 @@ class BankSaleService
         $this->assertSettlementSpecified($purchase);
 
         DB::transaction(function () use ($purchase, $userId) {
-            $purchase->load('sources.counter');
+            $purchase->load('items');
 
-            foreach ($purchase->sources as $dest) {
-                // สูตร weighted avg cost อยู่ที่เดียวใน InventoryService
+            $counterId = (int) $purchase->destination_counter_id;
+            if (! $counterId) {
+                throw new \RuntimeException("รายการ {$purchase->sale_no} ไม่มีเคาน์เตอร์ปลายทาง");
+            }
+
+            if ($purchase->items->isEmpty()) {
+                throw new \RuntimeException("รายการ {$purchase->sale_no} ไม่มีธนบัตรให้รับเข้า");
+            }
+
+            foreach ($purchase->items as $item) {
+                // สูตร weighted avg cost อยู่ที่เดียวใน InventoryService และคิดแยกต่อ denom
                 app(InventoryService::class)->applyReceipt(
-                    counterId: $dest->counter_id,
-                    currencyCode: $purchase->currency_code,
-                    denominationId: (int) $purchase->denomination_id,
-                    amount: (float) $dest->amount,
-                    unitCost: (float) $purchase->bank_rate,
+                    counterId: $counterId,
+                    currencyCode: $item->currency_code,
+                    denominationId: (int) $item->denomination_id,
+                    amount: (float) $item->amount,
+                    unitCost: (float) $item->bank_rate,
                     referenceType: 'bank_purchase',
                     referenceId: $purchase->id,
                     userId: $userId,
                     note: "ซื้อจากธนาคาร {$purchase->sale_no} ← {$purchase->bank_name}",
                 );
-
-                $dest->update(['status' => 'delivered', 'delivered_at' => now()]);
             }
 
             $entry = app(AutoJournalService::class)->createFromBankPurchase($purchase);
