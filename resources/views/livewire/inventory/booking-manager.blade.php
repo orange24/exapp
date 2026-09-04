@@ -112,7 +112,7 @@
                         <th class="px-4 py-3 text-center font-semibold">สถานะ</th>
                         <th class="px-4 py-3 text-left font-semibold">หมดอายุ</th>
                         <th class="px-4 py-3 text-left font-semibold">ลูกค้า</th>
-                        <th class="px-4 py-3 text-left font-semibold">ผู้สร้าง</th>
+                        <th class="px-4 py-3 text-left font-semibold">สาขา</th>
                         <th class="px-4 py-3 text-center font-semibold">จัดการ</th>
                     </tr>
                 </thead>
@@ -152,7 +152,7 @@
                                 {{ $bk->expires_at?->format('d/m H:i') ?? '—' }}
                             </td>
                             <td class="px-4 py-2 text-xs text-gray-600">{{ $bk->customer?->name ?? '—' }}</td>
-                            <td class="px-4 py-2 text-xs text-gray-600">{{ $bk->createdBy?->name ?? '—' }}</td>
+                            <td class="px-4 py-2 text-xs text-gray-600">{{ $bk->counter?->branch?->branch_name ?? '—' }}</td>
                             <td class="px-4 py-2 text-center">
                                 @if ($bk->status === 'pending' && !$isExpired)
                                     <div class="flex gap-1 justify-center">

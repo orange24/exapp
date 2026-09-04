@@ -141,4 +141,44 @@ class BookingTest extends TestCase
             ->where('currency_code', 'USD')->first();
         $this->assertEquals(0, (float) $stock->hold_amount);
     }
+
+    /**
+     * The "ผู้สร้าง" column used to show User::name, which is a fixed
+     * account label (often literally naming the staff's home office, e.g.
+     * "Staff สำนักงานใหญ่ กรุงเทพฯ") — misleading once a staff member works a
+     * shift at a different branch, since it never reflected where the
+     * booking actually reserves stock. It must show the booking's own
+     * counter's branch instead, which is what the reservation actually sits
+     * against regardless of who created it or where they're normally based.
+     */
+    public function test_booking_list_shows_the_bookings_own_branch_not_the_creators_account_name(): void
+    {
+        $otherBranch = \App\Models\Branch::create([
+            'branch_code' => 'HKT-01', 'branch_name' => 'Oldtown',
+            'type' => 'branch', 'city' => 'Phuket', 'is_active' => true,
+        ]);
+        $otherCounter = \App\Models\Counter::create([
+            'counter_code' => 'HKT-C1', 'counter_name' => 'Oldtown Booth',
+            'branch_id' => $otherBranch->id, 'is_active' => true,
+        ]);
+
+        Booking::create([
+            'counter_id' => $otherCounter->id,
+            'currency_code' => 'USD',
+            'amount' => 100,
+            'rate' => 32.95,
+            'type' => 'buy',
+            'status' => 'pending',
+            'hold_amount' => 0,
+            'expires_at' => now()->addHour(),
+            'created_by' => $this->staffUser->id,
+        ]);
+
+        session(['working_counter_id' => $otherCounter->id]);
+
+        Livewire::actingAs($this->adminUser)
+            ->test(\App\Livewire\Inventory\BookingManager::class)
+            ->assertSee('Oldtown')
+            ->assertDontSee($this->staffUser->name);
+    }
 }
