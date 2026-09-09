@@ -44,11 +44,21 @@
         .line .k { font-size: 11pt; white-space: nowrap; }
         .line .v { font-size: 12pt; font-weight: bold; text-align: right; word-break: break-all; }
 
-        .cur-code { font-size: 16pt; font-weight: bold; }
-        .cur-name { font-size: 10pt; }
-
-        .item { margin: 2mm 0; }
-        .item .line .v { font-family: 'Courier New', monospace; font-size: 13pt; }
+        table.items { width: 100%; border-collapse: collapse; table-layout: fixed; margin: 1mm 0; }
+        table.items th {
+            font-size: 9pt; font-weight: bold; text-align: right; padding: 0 0 0.8mm 0;
+            border-bottom: 1pt solid #000;
+        }
+        table.items th.cur { text-align: left; }
+        table.items td {
+            font-family: 'Courier New', monospace; font-size: 8.5pt; text-align: right;
+            padding: 0.4mm 1mm; white-space: nowrap;
+        }
+        table.items td.cur { font-family: inherit; font-weight: bold; font-size: 10pt; text-align: left; padding-left: 0; }
+        table.items col.cur  { width: 11%; }
+        table.items col.amt  { width: 28%; }
+        table.items col.rate { width: 24%; }
+        table.items col.thb  { width: 37%; }
 
         .total-label { font-size: 12pt; font-weight: bold; }
         .total-value {
@@ -97,25 +107,33 @@
     <div class="rule"></div>
 
     {{-- ── รายการ ────────────────────────────────────────── --}}
-    @foreach ($transaction->details as $detail)
-        <div class="item">
-            <div class="cur-code">{{ $detail->currency_code }}</div>
-            @if ($detail->currency_name)
-                <div class="cur-name">{{ $detail->currency_name }}</div>
-            @endif
-
-            @if ($isBuy)
-                <div class="line"><span class="k">รับ {{ $detail->currency_code }}</span><span class="v">{{ number_format($detail->amount, 2) }}</span></div>
-                <div class="line"><span class="k">อัตรารับซื้อ</span><span class="v">{{ number_format($detail->unit_price, 4) }}</span></div>
-                <div class="line"><span class="k">จ่าย THB</span><span class="v">{{ number_format($detail->total, 2) }}</span></div>
-            @else
-                <div class="line"><span class="k">จ่าย {{ $detail->currency_code }}</span><span class="v">{{ number_format($detail->total, 2) }}</span></div>
-                <div class="line"><span class="k">อัตราขาย</span><span class="v">{{ number_format($detail->unit_price, 4) }}</span></div>
-                <div class="line"><span class="k">รับ THB</span><span class="v">{{ number_format($detail->amount, 2) }}</span></div>
-            @endif
-        </div>
-        @if (! $loop->last)<div class="rule-dash"></div>@endif
-    @endforeach
+    <table class="items">
+        <colgroup>
+            <col class="cur"><col class="amt"><col class="rate"><col class="thb">
+        </colgroup>
+        <thead>
+            <tr>
+                <th class="cur">CUR</th>
+                <th>AMOUNT</th>
+                <th>RATE</th>
+                <th>BAHT</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach ($transaction->details as $detail)
+                @php
+                    $fcAmount = $isBuy ? $detail->amount : $detail->total;
+                    $thbAmount = $isBuy ? $detail->total : $detail->amount;
+                @endphp
+                <tr>
+                    <td class="cur">{{ $detail->currency_code }}</td>
+                    <td>{{ number_format($fcAmount, 2) }}</td>
+                    <td>{{ number_format($detail->unit_price, 4) }}</td>
+                    <td>{{ number_format($thbAmount, 2) }}</td>
+                </tr>
+            @endforeach
+        </tbody>
+    </table>
 
     <div class="rule-thick"></div>
 

@@ -60,6 +60,7 @@ class SuperrichRateManager extends Component
             $unmapped = $rates->whereNull('denomination_id')->count();
             session()->flash('success', "ดึงราคา SuperRich สำเร็จ — {$mapped} รายการจับคู่ได้, {$unmapped} รายการจับคู่ไม่ได้");
         } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('SuperRich rate fetch failed: ' . $e->getMessage(), ['exception' => $e]);
             session()->flash('error', 'ดึงราคาไม่สำเร็จ: ' . $e->getMessage());
         }
     }

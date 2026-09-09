@@ -19,35 +19,38 @@ class SuperrichRateService
      */
     public function fetchRates(int $userId): Collection
     {
-        $response = Http::withHeaders([
-            'Authorization' => config('superrich.auth'),
-            'Accept' => 'application/json',
-        ])->timeout(config('superrich.timeout', 15))
-          ->get(config('superrich.url'));
+        $response = Http::acceptJson()
+            ->timeout(config('superrich.timeout', 15))
+            ->get(config('superrich.url'), [
+                'branchId' => config('superrich.branch_id'),
+                'type' => 'exchange',
+                'date' => now()->format('Y-m-d'),
+            ]);
 
         if (! $response->successful()) {
             throw new \RuntimeException('SuperRich API returned ' . $response->status());
         }
 
-        $data = $response->json('data.exchangeRate', []);
+        $exchange = $response->json('data.exchange', []);
+        $apiDate = $response->json('data.time.date');
+        $apiTime = $response->json('data.time.time.0');
+        $apiDatetime = ($apiDate && $apiTime) ? \Carbon\Carbon::parse("$apiDate $apiTime") : null;
+
         $fetchedAt = now();
         $rates = collect();
 
-        foreach ($data as $currency) {
-            $currencyCode = $currency['cUnit'] ?? '';
-            if (! $currencyCode) continue;
-
-            foreach ($currency['rate'] ?? [] as $rateData) {
-                $srDenom = $rateData['denom'] ?? '';
+        foreach ($exchange as $currencyCode => $rows) {
+            foreach ($rows as $rateData) {
+                $srDenom = $rateData['denomRem'] ?? '';
                 $denomId = $this->mapDenomination($currencyCode, $srDenom);
 
                 $rate = SuperrichRate::create([
                     'currency_code' => $currencyCode,
                     'superrich_denom' => $srDenom,
                     'denomination_id' => $denomId,
-                    'rate_buy' => (float) ($rateData['cBuying'] ?? 0),
-                    'rate_sell' => (float) ($rateData['cSelling'] ?? 0),
-                    'api_datetime' => isset($rateData['dateTime']) ? \Carbon\Carbon::parse($rateData['dateTime']) : null,
+                    'rate_buy' => (float) ($rateData['buyText'] ?? 0),
+                    'rate_sell' => (float) ($rateData['sellText'] ?? 0),
+                    'api_datetime' => $apiDatetime,
                     'fetched_at' => $fetchedAt,
                     'fetched_by' => $userId,
                 ]);

@@ -2,9 +2,9 @@
 
 return [
 
-    'url' => env('SUPERRICH_API_URL', 'https://www.superrichthailand.com/api/v1/rates'),
+    'url' => env('SUPERRICH_API_URL', 'https://api.superrichthailand.com/api/v1/exchange-client/list'),
 
-    'auth' => env('SUPERRICH_API_AUTH', 'Basic c3VwZXJyaWNoVGg6aFRoY2lycmVwdXM='),
+    'branch_id' => env('SUPERRICH_BRANCH_ID', 10), // 10 = Headquarter Rajdamri 1 (SuperRich's reference branch)
 
     'timeout' => 15,
 
