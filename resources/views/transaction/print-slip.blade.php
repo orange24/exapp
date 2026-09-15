@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <title>ใบเสร็จ {{ $transaction->trns_no }}</title>
     @php
+        $branch = $transaction->counter->branch;
         $isBuy = $transaction->trns_type === 'BUYING';
         // BUYING: details.amount = เงินต่างประเทศที่รับมา, details.total = THB ที่จ่ายลูกค้า
         // SELLING: details.amount = THB ที่รับจากลูกค้า,   details.total = เงินต่างประเทศที่จ่ายลูกค้า
@@ -34,8 +35,9 @@
         .rule-dash  { border-top: 1pt dashed #000; margin: 2mm 0; }
 
         .center { text-align: center; }
-        .shop   { font-size: 20pt; font-weight: bold; letter-spacing: .3pt; }
-        .shop-sub { font-size: 11pt; }
+        .shop   { font-size: 18pt; font-weight: bold; letter-spacing: .3pt; }
+        .shop-sub { font-size: 10.5pt; }
+        .shop-reg { font-size: 9pt; }
 
         .kind { font-size: 15pt; font-weight: bold; text-align: center; margin: 1.5mm 0; }
 
@@ -44,20 +46,20 @@
         .line .k { font-size: 11pt; white-space: nowrap; }
         .line .v { font-size: 12pt; font-weight: bold; text-align: right; word-break: break-all; }
 
-        table.items { width: 100%; border-collapse: collapse; table-layout: fixed; margin: 1mm 0; }
+        table.items { width: 100%; border-collapse: collapse; table-layout: auto; margin: 1mm 0; }
         table.items th {
-            font-size: 9pt; font-weight: bold; text-align: right; padding: 0 0 0.8mm 0;
+            font-size: 9.5pt; font-weight: bold; text-align: right; padding: 0 0 0.8mm 0;
             border-bottom: 1pt solid #000;
         }
         table.items th.cur { text-align: left; }
         table.items td {
-            font-family: 'Courier New', monospace; font-size: 8.5pt; text-align: right;
-            padding: 0.4mm 1mm; white-space: nowrap;
+            font-family: 'Courier New', monospace; font-size: 10.5pt; font-weight: 700; text-align: right;
+            padding: 0.4mm 0.6mm; word-break: break-all;
         }
-        table.items td.cur { font-family: inherit; font-weight: bold; font-size: 10pt; text-align: left; padding-left: 0; }
-        table.items col.cur  { width: 11%; }
-        table.items col.amt  { width: 28%; }
-        table.items col.rate { width: 24%; }
+        table.items td.cur { font-family: inherit; font-weight: bold; font-size: 11.5pt; text-align: left; padding-left: 0; white-space: nowrap; }
+        table.items col.cur  { width: 9%; }
+        table.items col.amt  { width: 29%; }
+        table.items col.rate { width: 25%; }
         table.items col.thb  { width: 37%; }
 
         .total-label { font-size: 12pt; font-weight: bold; }
@@ -84,10 +86,26 @@
 
     {{-- ── ร้าน ───────────────────────────────────────────── --}}
     <div class="center">
-        <div class="shop">{{ config('app.company_name', 'FX Exchange') }}</div>
-        <div class="shop-sub">สาขา {{ $transaction->counter->branch->branch_name ?? '—' }}</div>
-        <div class="shop-sub">{{ $transaction->counter_name }}</div>
+        <div class="shop">{{ $branch->company_name ?: ($branch->branch_name ?? 'FX Exchange') }}</div>
+        @if ($branch->address)
+            <div class="shop-sub">{{ $branch->address }}</div>
+        @endif
+        @if ($branch->phone)
+            <div class="shop-sub">โทร {{ $branch->phone }}</div>
+        @endif
     </div>
+
+    @if ($branch->tax_id || $branch->license_no)
+        <div class="rule"></div>
+        <div class="center">
+            @if ($branch->tax_id)
+                <div class="shop-reg">เลขทะเบียนนิติบุคคล: {{ $branch->tax_id }}</div>
+            @endif
+            @if ($branch->license_no)
+                <div class="shop-reg">เลขที่ใบอนุญาต: {{ $branch->license_no }}</div>
+            @endif
+        </div>
+    @endif
 
     <div class="rule-thick"></div>
     <div class="kind">{{ $isBuy ? 'ใบรับซื้อเงินตรา (BUY)' : 'ใบขายเงินตรา (SELL)' }}</div>
@@ -96,6 +114,7 @@
     {{-- ── หัวเอกสาร ─────────────────────────────────────── --}}
     <div class="line"><span class="k">เลขที่</span><span class="v">{{ $transaction->trns_no }}</span></div>
     <div class="line"><span class="k">วันที่</span><span class="v">{{ $transaction->trns_datetime->format('d/m/Y H:i') }}</span></div>
+    <div class="line"><span class="k">สาขา/เคาน์เตอร์</span><span class="v">{{ $branch->branch_name ?? '—' }} / {{ $transaction->counter_name }}</span></div>
     <div class="line"><span class="k">ลูกค้า</span><span class="v">{{ $transaction->cust_name ?: '—' }}</span></div>
     @if ($transaction->customer?->id_number)
         <div class="line"><span class="k">Passport</span><span class="v">{{ $transaction->customer->id_number }}</span></div>
@@ -127,9 +146,9 @@
                 @endphp
                 <tr>
                     <td class="cur">{{ $detail->currency_code }}</td>
-                    <td>{{ number_format($fcAmount, 2) }}</td>
-                    <td>{{ number_format($detail->unit_price, 4) }}</td>
-                    <td>{{ number_format($thbAmount, 2) }}</td>
+                    <td>{{ format_money($fcAmount) }}</td>
+                    <td>{{ format_rate($detail->unit_price) }}</td>
+                    <td>{{ format_money($thbAmount) }}</td>
                 </tr>
             @endforeach
         </tbody>
@@ -139,7 +158,7 @@
 
     {{-- ── ยอดรวม (เป็น THB เสมอ) ────────────────────────── --}}
     <div class="total-label">{{ $isBuy ? 'รวมจ่ายลูกค้า (THB)' : 'รวมรับจากลูกค้า (THB)' }}</div>
-    <div class="total-value">{{ number_format($grandThb, 2) }}</div>
+    <div class="total-value">{{ format_money($grandThb) }}</div>
     <div class="rule-thick"></div>
 
     {{-- ── ลายเซ็น ───────────────────────────────────────── --}}

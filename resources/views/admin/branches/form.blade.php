@@ -69,6 +69,33 @@
             </div>
         </div>
 
+        <div class="pt-2 border-t border-gray-200">
+            <h3 class="text-sm font-semibold text-gray-700 mt-4 mb-3">ข้อมูลบริษัท (สำหรับใบเสร็จ)</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div class="md:col-span-2">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">ชื่อบริษัท (แสดงบนใบเสร็จ)</label>
+                    <input type="text" name="company_name" value="{{ old('company_name', $branch->company_name) }}"
+                           placeholder="บริษัท เยส เซาเทิร์น เอ็กซ์เชนจ์ จำกัด"
+                           class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-500">
+                    @error('company_name') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">เลขทะเบียนนิติบุคคล</label>
+                    <input type="text" name="tax_id" value="{{ old('tax_id', $branch->tax_id) }}"
+                           placeholder="0835559011285"
+                           class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-green-500">
+                    @error('tax_id') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">เลขที่ใบอนุญาต</label>
+                    <input type="text" name="license_no" value="{{ old('license_no', $branch->license_no) }}"
+                           placeholder="MC225590091"
+                           class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-green-500">
+                    @error('license_no') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+                </div>
+            </div>
+        </div>
+
         <div class="flex items-center gap-3 pt-2">
             <button type="submit" class="bg-[#0e513a] text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-[#0a3d2d]">
                 {{ $isEdit ? 'บันทึก' : 'สร้างสาขา' }}

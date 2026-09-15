@@ -269,10 +269,10 @@
                     @endunless
                 </label>
                 @if ($this->canEditRate)
-                    <input type="number" wire:model.blur="currentRate" min="0" step="0.0001"
+                    <input type="number" wire:model.blur="currentRate" min="0" step="0.000001"
                            class="w-full border border-blue-400 rounded px-2 py-2 text-sm text-right font-mono">
                 @else
-                    <input type="text" value="{{ $currentRate > 0 ? number_format($currentRate, 4) : '' }}"
+                    <input type="text" value="{{ $currentRate > 0 ? format_rate($currentRate) : '' }}"
                            readonly disabled
                            class="w-full border border-gray-300 bg-gray-100 text-gray-600 rounded px-2 py-2 text-sm text-right font-mono cursor-not-allowed">
                 @endif
@@ -320,7 +320,7 @@
                                 <span class="text-gray-500 font-normal text-xs">{{ $row['currency_name'] }}</span>
                             </td>
                             <td class="px-3 py-2 text-right font-mono">{{ number_format($row['amount'], 2) }}</td>
-                            <td class="px-3 py-2 text-right font-mono text-green-700">{{ number_format($row['rate'], 4) }}</td>
+                            <td class="px-3 py-2 text-right font-mono text-green-700">{{ format_rate($row['rate']) }}</td>
                             <td class="px-3 py-2 text-right font-mono font-bold">{{ number_format($row['total'], 2) }}</td>
                             @if (! $showPrintSlip)
                             <td class="px-3 py-2 text-center">
@@ -416,10 +416,10 @@
                             <div class="text-gray-600 font-semibold mb-1">{{ $info['denomination_label'] }}</div>
                             <div class="grid grid-cols-2 gap-2">
                                 <div class="font-mono text-green-700 text-right">
-                                    {{ $info['buy_rate'] > 0 ? number_format($info['buy_rate'], 4) : '-' }}
+                                    {{ $info['buy_rate'] > 0 ? format_rate($info['buy_rate']) : '-' }}
                                 </div>
                                 <div class="font-mono text-red-700 text-right">
-                                    {{ $info['sell_rate'] > 0 ? number_format($info['sell_rate'], 4) : '-' }}
+                                    {{ $info['sell_rate'] > 0 ? format_rate($info['sell_rate']) : '-' }}
                                 </div>
                             </div>
                         </div>

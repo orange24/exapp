@@ -66,10 +66,10 @@
                                 <div class="text-gray-600 font-semibold mb-1">{{ $info['denomination_label'] }}</div>
                                 <div class="grid grid-cols-3 gap-2">
                                     <div class="font-mono text-green-700 text-right">
-                                        {{ $info['buy_rate'] > 0 ? number_format($info['buy_rate'], 4) : '-' }}
+                                        {{ $info['buy_rate'] > 0 ? format_rate($info['buy_rate']) : '-' }}
                                     </div>
                                     <div class="font-mono text-red-700 text-right">
-                                        {{ $info['sell_rate'] > 0 ? number_format($info['sell_rate'], 4) : '-' }}
+                                        {{ $info['sell_rate'] > 0 ? format_rate($info['sell_rate']) : '-' }}
                                     </div>
                                     <div class="font-mono text-right font-bold {{ $info['available'] > 0 ? 'text-gray-800' : 'text-gray-300' }}">
                                         {{ number_format($info['available'], 0) }}
@@ -186,15 +186,15 @@
                                 </td>
                                 <td class="px-3 py-2 text-right font-mono">
                                     @forelse ($sale->items as $item)
-                                        <div>{{ number_format($item->bank_rate, 4) }}</div>
+                                        <div>{{ format_rate($item->bank_rate) }}</div>
                                     @empty
-                                        {{ number_format($sale->bank_rate, 4) }}
+                                        {{ format_rate($sale->bank_rate) }}
                                     @endforelse
                                 </td>
                             @else
                                 <td class="px-3 py-2 font-medium">{{ $sale->currency_code }}</td>
                                 <td class="px-3 py-2 text-right font-mono">{{ number_format($sale->total_amount, 2) }}</td>
-                                <td class="px-3 py-2 text-right font-mono">{{ number_format($sale->bank_rate, 4) }}</td>
+                                <td class="px-3 py-2 text-right font-mono">{{ format_rate($sale->bank_rate) }}</td>
                             @endif
                             <td class="px-3 py-2 text-right font-mono font-bold">{{ number_format($sale->total_thb, 2) }}</td>
                             @unless ($isBuy)

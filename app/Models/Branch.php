@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class Branch extends Model
 {
-    protected $fillable = ['branch_code', 'branch_name', 'type', 'city', 'phone', 'address', 'tenant_code', 'is_active'];
+    protected $fillable = ['branch_code', 'branch_name', 'company_name', 'type', 'city', 'phone', 'address', 'tax_id', 'license_no', 'tenant_code', 'is_active'];
 
     protected function casts(): array
     {

@@ -130,7 +130,7 @@
                             </td>
                             <td class="px-4 py-2 font-medium">{{ $bk->currency_code }}</td>
                             <td class="px-4 py-2 text-right">{{ number_format($bk->amount, 2) }}</td>
-                            <td class="px-4 py-2 text-right">{{ number_format($bk->rate, 4) }}</td>
+                            <td class="px-4 py-2 text-right">{{ format_rate($bk->rate) }}</td>
                             <td class="px-4 py-2 text-right">{{ number_format($bk->amount * $bk->rate, 2) }}</td>
                             <td class="px-4 py-2 text-center">
                                 @if ($isExpired)

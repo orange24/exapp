@@ -101,7 +101,7 @@
                                 {{ number_format($mv->amount, 2) }}
                             </td>
                             <td class="px-4 py-2 text-right">
-                                {{ $mv->unit_price > 0 ? number_format($mv->unit_price, 4) : '—' }}
+                                {{ $mv->unit_price > 0 ? format_rate($mv->unit_price) : '—' }}
                             </td>
                             <td class="px-4 py-2">
                                 @if ($mv->reference_type === 'transaction' && $mv->reference_id)

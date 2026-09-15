@@ -5,8 +5,13 @@
 #
 # Prerequisites:
 #   1. gcloud CLI installed: https://cloud.google.com/sdk/docs/install
-#   2. Login: gcloud auth login
-#   3. Set project: gcloud config set project YOUR_PROJECT_ID
+#   2. Login: gcloud auth login watcharaster@gmail.com
+#   3. One-time named-config setup (keeps this project isolated from any
+#      other gcloud project/account you use on this machine):
+#      gcloud config configurations create exapp
+#      gcloud config configurations activate exapp
+#      gcloud config set account watcharaster@gmail.com
+#      gcloud config set project exchange-app-496416
 #   4. Enable APIs:
 #      gcloud services enable run.googleapis.com artifactregistry.googleapis.com cloudbuild.googleapis.com
 #   5. Create Artifact Registry repo (ครั้งแรกเท่านั้น):
@@ -19,6 +24,18 @@
 # ============================================
 
 set -e
+
+# Always deploy under the dedicated "exapp" gcloud configuration — isolates
+# this project's account/project from any other gcloud project on this
+# machine, so you never need to manually gcloud config set anything.
+gcloud config configurations activate exapp >/dev/null 2>&1 || {
+  echo "ERROR: gcloud configuration 'exapp' not found. Run:"
+  echo "  gcloud config configurations create exapp"
+  echo "  gcloud config configurations activate exapp"
+  echo "  gcloud config set account watcharaster@gmail.com"
+  echo "  gcloud config set project exchange-app-496416"
+  exit 1
+}
 
 # --- Configuration ---
 PROJECT_ID=$(gcloud config get-value project 2>/dev/null)

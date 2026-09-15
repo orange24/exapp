@@ -25,11 +25,6 @@ class OpenCloseDay extends Component
     public array $closingItems = [];
     public string $closingNotes = '';
 
-    public function getCanSaveClosingProperty(): bool
-    {
-        return collect($this->closingItems)->contains(fn($item) => ($item['actual'] ?? 0) > 0);
-    }
-
     public function mount(): void
     {
         $this->counterId = (string) (session('working_counter_id') ?? '');
@@ -169,16 +164,6 @@ class OpenCloseDay extends Component
     {
         if (!$this->counterId) {
             session()->flash('error', 'กรุณาเลือกเคาน์เตอร์');
-            return;
-        }
-
-        // Validate at least one item has actual amount > 0
-        $hasAnyActual = collect($this->closingItems)->contains(function ($item) {
-            return ($item['actual'] ?? 0) > 0;
-        });
-
-        if (!$hasAnyActual) {
-            session()->flash('error', 'กรุณากรอกยอดเงินจริงอย่างน้อย 1 รายการ');
             return;
         }
 

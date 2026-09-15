@@ -118,19 +118,19 @@
                             </td>
                             <td class="px-3 py-1.5 font-medium">{{ $sr->currency_code }}</td>
                             <td class="px-3 py-1.5 text-gray-500 text-xs">{{ $sr->superrich_denom }} → {{ $sr->denomination?->denom_label ?? '?' }}</td>
-                            <td class="px-3 py-1.5 text-right font-mono">{{ number_format($sr->rate_buy, 4) }}</td>
-                            <td class="px-3 py-1.5 text-right font-mono">{{ number_format($sr->rate_sell, 4) }}</td>
+                            <td class="px-3 py-1.5 text-right font-mono">{{ format_rate($sr->rate_buy) }}</td>
+                            <td class="px-3 py-1.5 text-right font-mono">{{ format_rate($sr->rate_sell) }}</td>
                             <td class="px-3 py-1.5 text-right font-mono text-xs {{ $sr->adj_buy != 0 ? ($sr->adj_buy > 0 ? 'text-green-600' : 'text-red-600') : 'text-gray-400' }}">
-                                {{ $sr->adj_buy >= 0 ? '+' : '' }}{{ number_format($sr->adj_buy, 4) }}
+                                {{ $sr->adj_buy >= 0 ? '+' : '' }}{{ format_rate($sr->adj_buy) }}
                             </td>
                             <td class="px-3 py-1.5 text-right font-mono text-xs {{ $sr->adj_sell != 0 ? ($sr->adj_sell > 0 ? 'text-green-600' : 'text-red-600') : 'text-gray-400' }}">
-                                {{ $sr->adj_sell >= 0 ? '+' : '' }}{{ number_format($sr->adj_sell, 4) }}
+                                {{ $sr->adj_sell >= 0 ? '+' : '' }}{{ format_rate($sr->adj_sell) }}
                             </td>
                             <td class="px-3 py-1.5 text-right font-mono font-bold text-green-800" style="background:#ecfdf5;">
-                                {{ number_format($sr->final_buy, 4) }}
+                                {{ format_rate($sr->final_buy) }}
                             </td>
                             <td class="px-3 py-1.5 text-right font-mono font-bold text-red-800" style="background:#fef2f2;">
-                                {{ number_format($sr->final_sell, 4) }}
+                                {{ format_rate($sr->final_sell) }}
                             </td>
                         </tr>
                     @endforeach

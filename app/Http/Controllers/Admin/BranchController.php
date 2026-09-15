@@ -23,13 +23,16 @@ class BranchController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'branch_code' => 'required|string|max:20|unique:branches,branch_code',
-            'branch_name' => 'required|string|max:100',
-            'type'        => 'required|in:hq,branch',
-            'city'        => 'nullable|string|max:100',
-            'phone'       => 'nullable|string|max:30',
-            'address'     => 'nullable|string|max:255',
-            'is_active'   => 'boolean',
+            'branch_code'  => 'required|string|max:20|unique:branches,branch_code',
+            'branch_name'  => 'required|string|max:100',
+            'company_name' => 'nullable|string|max:150',
+            'type'         => 'required|in:hq,branch',
+            'city'         => 'nullable|string|max:100',
+            'phone'        => 'nullable|string|max:30',
+            'address'      => 'nullable|string|max:255',
+            'tax_id'       => 'nullable|string|max:30',
+            'license_no'   => 'nullable|string|max:30',
+            'is_active'    => 'boolean',
         ]);
         $validated['is_active'] = $request->boolean('is_active');
         Branch::create($validated);
@@ -45,13 +48,16 @@ class BranchController extends Controller
     public function update(Request $request, Branch $branch)
     {
         $validated = $request->validate([
-            'branch_code' => 'required|string|max:20|unique:branches,branch_code,' . $branch->id,
-            'branch_name' => 'required|string|max:100',
-            'type'        => 'required|in:hq,branch',
-            'city'        => 'nullable|string|max:100',
-            'phone'       => 'nullable|string|max:30',
-            'address'     => 'nullable|string|max:255',
-            'is_active'   => 'boolean',
+            'branch_code'  => 'required|string|max:20|unique:branches,branch_code,' . $branch->id,
+            'branch_name'  => 'required|string|max:100',
+            'company_name' => 'nullable|string|max:150',
+            'type'         => 'required|in:hq,branch',
+            'city'         => 'nullable|string|max:100',
+            'phone'        => 'nullable|string|max:30',
+            'address'      => 'nullable|string|max:255',
+            'tax_id'       => 'nullable|string|max:30',
+            'license_no'   => 'nullable|string|max:30',
+            'is_active'    => 'boolean',
         ]);
         $validated['is_active'] = $request->boolean('is_active');
         $branch->update($validated);

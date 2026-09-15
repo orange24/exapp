@@ -47,6 +47,7 @@ class MenuSeeder extends Seeder
             ['key' => 'inventory.booking', 'label_th' => 'Booking', 'label_en' => 'Booking', 'route' => 'inventory.booking', 'icon' => 'bookmark', 'parent_id' => 'inventory', 'order' => 2],
             ['key' => 'inventory.transfer', 'label_th' => 'ยืม/คืน/โอน', 'label_en' => 'Transfer', 'route' => 'inventory.borrow-return', 'icon' => 'arrow-path', 'parent_id' => 'inventory', 'order' => 3],
             ['key' => 'inventory.adjustment', 'label_th' => 'ปรับ Denomination', 'label_en' => 'Adjustment', 'route' => 'inventory.adjustment', 'icon' => 'adjustments-horizontal', 'parent_id' => 'inventory', 'order' => 4],
+            ['key' => 'inventory.open-close-day', 'label_th' => 'เปิด/ปิดวันทำการ', 'label_en' => 'Open/Close Day', 'route' => 'inventory.open-close-day', 'icon' => 'lock-closed', 'parent_id' => 'inventory', 'order' => 5],
 
             // Master Data (parent)
             ['key' => 'master-data', 'label_th' => 'ข้อมูลหลัก', 'label_en' => 'Master Data', 'route' => null, 'icon' => 'database', 'parent_id' => null, 'order' => 6],
@@ -108,6 +109,7 @@ class MenuSeeder extends Seeder
             $menuIdMap['inventory.booking'],
             $menuIdMap['inventory.transfer'],
             $menuIdMap['inventory.adjustment'],
+            $menuIdMap['inventory.open-close-day'],
         ]);
 
         // Branch Manager: Everything except Settings and the trader-only tools

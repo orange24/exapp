@@ -9,11 +9,15 @@
 # APP_KEY secret differ.
 #
 # Prerequisites (one-time):
-#   1. gcloud config set account watcharaster@gmail.com
-#   2. gcloud config set project exchange-app-496416
-#   3. Database `cp338215_exapp_uat` created on 163.44.198.71 with
+#   1. Named-config setup (keeps this project isolated from any other
+#      gcloud project/account you use on this machine):
+#      gcloud config configurations create exapp
+#      gcloud config configurations activate exapp
+#      gcloud config set account watcharaster@gmail.com
+#      gcloud config set project exchange-app-496416
+#   2. Database `cp338215_exapp_uat` created on 163.44.198.71 with
 #      user `cp338215_exapp` granted access (done via hosting panel)
-#   4. Secret `exapp-uat-app-key` created (already done — see below)
+#   3. Secret `exapp-uat-app-key` created (already done — see below)
 #
 # Usage:
 #   chmod +x deploy-gcp-uat.sh
@@ -22,6 +26,18 @@
 # ============================================
 
 set -e
+
+# Always deploy under the dedicated "exapp" gcloud configuration — isolates
+# this project's account/project from any other gcloud project on this
+# machine, so you never need to manually gcloud config set anything.
+gcloud config configurations activate exapp >/dev/null 2>&1 || {
+  echo "ERROR: gcloud configuration 'exapp' not found. Run:"
+  echo "  gcloud config configurations create exapp"
+  echo "  gcloud config configurations activate exapp"
+  echo "  gcloud config set account watcharaster@gmail.com"
+  echo "  gcloud config set project exchange-app-496416"
+  exit 1
+}
 
 # --- Configuration ---
 PROJECT_ID=$(gcloud config get-value project 2>/dev/null)

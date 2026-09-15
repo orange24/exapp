@@ -260,10 +260,10 @@
                     @endunless
                 </label>
                 @if ($this->canEditRate)
-                    <input type="number" wire:model.blur="currentRate" min="0" step="0.0001"
+                    <input type="number" wire:model.blur="currentRate" min="0" step="0.000001"
                            class="w-full border border-red-400 rounded px-2 py-2 text-sm text-right font-mono">
                 @else
-                    <input type="text" value="{{ $currentRate > 0 ? number_format($currentRate, 4) : '' }}"
+                    <input type="text" value="{{ $currentRate > 0 ? format_rate($currentRate) : '' }}"
                            readonly disabled
                            class="w-full border border-gray-300 bg-gray-100 text-gray-600 rounded px-2 py-2 text-sm text-right font-mono cursor-not-allowed">
                 @endif
@@ -291,7 +291,7 @@
                 <h3 style="font-size:16px; font-weight:700; color:#dc2626; margin-bottom:16px;">เงินในบูธไม่เพียงพอ</h3>
                 <div style="font-size:14px; color:#333; line-height:1.8;">
                     <div>ลูกค้าให้ = <strong>{{ number_format($addAmount, 0) }} THB</strong></div>
-                    <div>อัตราขาย = <strong>{{ number_format($currentRate, 4) }}</strong></div>
+                    <div>อัตราขาย = <strong>{{ format_rate($currentRate) }}</strong></div>
                     <div>คำนวณได้ = <strong>{{ number_format($currentTotal, 0) }}</strong> (ต่างประเทศ)</div>
                     <div style="color:#dc2626;">เงินในบูธมี = <strong>{{ number_format($boothAmount, 0) }}</strong></div>
                     <hr style="margin:12px 0; border-color:#eee;">
@@ -340,7 +340,7 @@
                                 <span class="text-gray-500 font-normal text-xs">{{ $row['currency_name'] }}</span>
                             </td>
                             <td class="px-3 py-2 text-right font-mono font-bold text-red-700">{{ number_format($row['total'], 0) }}</td>
-                            <td class="px-3 py-2 text-right font-mono">{{ number_format($row['rate'], 4) }}</td>
+                            <td class="px-3 py-2 text-right font-mono">{{ format_rate($row['rate']) }}</td>
                             <td class="px-3 py-2 text-right font-mono font-bold">{{ number_format($row['amount'], 0) }}</td>
                             @if (! $showPrintSlip)
                             <td class="px-3 py-2 text-center">
@@ -434,10 +434,10 @@
                             <div class="text-gray-600 font-semibold mb-1">{{ $info['denomination_label'] }}</div>
                             <div class="grid grid-cols-2 gap-2">
                                 <div class="font-mono text-green-700 text-right">
-                                    {{ $info['buy_rate'] > 0 ? number_format($info['buy_rate'], 4) : '-' }}
+                                    {{ $info['buy_rate'] > 0 ? format_rate($info['buy_rate']) : '-' }}
                                 </div>
                                 <div class="font-mono text-red-700 text-right">
-                                    {{ $info['sell_rate'] > 0 ? number_format($info['sell_rate'], 4) : '-' }}
+                                    {{ $info['sell_rate'] > 0 ? format_rate($info['sell_rate']) : '-' }}
                                 </div>
                             </div>
                         </div>

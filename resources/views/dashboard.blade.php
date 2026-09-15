@@ -104,14 +104,24 @@ function counterSelector() {
             this.setCookie('working_counter_id', this.selectedId, 365);
             this.setCookie('working_counter_name', this.selectedName, 365);
 
-            // Save to session via form POST
-            const form = document.createElement('form');
-            form.method = 'POST';
-            form.action = '{{ route("switch-counter") }}';
-            form.innerHTML = '<input type="hidden" name="_token" value="{{ csrf_token() }}">'
-                           + '<input type="hidden" name="counter_id" value="' + this.selectedId + '">';
-            document.body.appendChild(form);
-            form.submit();
+            // Save to session via AJAX (not a full-page form POST — a POST-only
+            // route stored as the Laravel "intended" URL after a session-expiry
+            // redirect would 404 on the next GET after login)
+            fetch('{{ route("switch-counter") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify({ counter_id: this.selectedId })
+            }).then(res => {
+                if (res.status === 401) {
+                    window.location.href = '{{ route('login') }}';
+                    return;
+                }
+                window.location.reload();
+            });
         },
 
         syncSession(id, name) {

@@ -87,7 +87,7 @@
                         <tr class="hover:bg-gray-50">
                             <td class="border border-gray-200 px-4 py-1.5">{{ $item->currency_name }}</td>
                             <td class="border border-gray-200 px-4 py-1.5 text-right">{{ number_format($item->total_amount, 2) }}</td>
-                            <td class="border border-gray-200 px-4 py-1.5 text-right">{{ number_format($item->avg_rate, 6) }}</td>
+                            <td class="border border-gray-200 px-4 py-1.5 text-right">{{ format_rate($item->avg_rate) }}</td>
                             <td class="border border-gray-200 px-4 py-1.5 text-right">{{ number_format($item->total_thb, 2) }}</td>
                         </tr>
                     @empty
@@ -132,7 +132,7 @@
                         <tr class="hover:bg-gray-50">
                             <td class="border border-gray-200 px-4 py-1.5">{{ $item->currency_name }}</td>
                             <td class="border border-gray-200 px-4 py-1.5 text-right">{{ number_format($item->total_amount, 2) }}</td>
-                            <td class="border border-gray-200 px-4 py-1.5 text-right">{{ number_format($item->avg_rate, 6) }}</td>
+                            <td class="border border-gray-200 px-4 py-1.5 text-right">{{ format_rate($item->avg_rate) }}</td>
                             <td class="border border-gray-200 px-4 py-1.5 text-right">{{ number_format($item->total_thb, 2) }}</td>
                         </tr>
                     @empty
@@ -178,7 +178,7 @@
                         <tr class="hover:bg-gray-50">
                             <td class="border border-gray-200 px-4 py-1.5">{{ $item['currency_name'] }}</td>
                             <td class="border border-gray-200 px-4 py-1.5 text-right">{{ number_format($item['net_amount'], 2) }}</td>
-                            <td class="border border-gray-200 px-4 py-1.5 text-right">{{ $item['buying_avg_rate'] > 0 ? number_format($item['buying_avg_rate'], 6) : '—' }}</td>
+                            <td class="border border-gray-200 px-4 py-1.5 text-right">{{ $item['buying_avg_rate'] > 0 ? format_rate($item['buying_avg_rate']) : '—' }}</td>
                             <td class="border border-gray-200 px-4 py-1.5 text-right">{{ number_format($item['net_thb'], 2) }}</td>
                         </tr>
                     @empty

@@ -159,7 +159,7 @@
                         <tr class="border-b border-gray-100 bg-white">
                             <td class="px-3 py-2 font-medium">{{ $row['denomination_label'] }}</td>
                             <td class="px-3 py-2 text-right font-mono">{{ number_format($row['amount'], 2) }}</td>
-                            <td class="px-3 py-2 text-right font-mono">{{ number_format($row['bank_rate'], 4) }}</td>
+                            <td class="px-3 py-2 text-right font-mono">{{ format_rate($row['bank_rate']) }}</td>
                             <td class="px-3 py-2 text-right font-mono font-bold">{{ number_format($row['total_thb'], 2) }}</td>
                             <td class="px-3 py-2 text-center">
                                 <button type="button" wire:click="removeRow({{ $i }})"

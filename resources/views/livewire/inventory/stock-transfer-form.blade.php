@@ -234,7 +234,7 @@
                             <td class="px-4 py-2 font-medium">{{ $tf->currency_code }}</td>
                             <td class="px-4 py-2">{{ $tf->denomination->denom_label ?? '-' }}</td>
                             <td class="px-4 py-2 text-right font-medium">{{ number_format($tf->amount, 2) }}</td>
-                            <td class="px-4 py-2 text-right">{{ $tf->unit_price > 0 ? number_format($tf->unit_price, 4) : '—' }}</td>
+                            <td class="px-4 py-2 text-right">{{ $tf->unit_price > 0 ? format_rate($tf->unit_price) : '—' }}</td>
                             <td class="px-4 py-2 text-gray-600 text-xs">{{ $tf->createdByUser->name ?? '—' }}</td>
                             <td class="px-4 py-2 whitespace-nowrap text-xs">{{ $tf->transferred_at?->format('d/m/Y H:i') }}</td>
                             <td class="px-4 py-2 text-center">

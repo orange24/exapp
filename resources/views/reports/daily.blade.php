@@ -65,7 +65,7 @@
                         <tr class="hover:bg-gray-50">
                             <td class="border border-gray-200 px-4 py-2">{{ $item->currency_name }}</td>
                             <td class="border border-gray-200 px-4 py-2 text-right">{{ number_format($item->total_amount, 2) }}</td>
-                            <td class="border border-gray-200 px-4 py-2 text-right">{{ number_format($item->unit_price, 6) }}</td>
+                            <td class="border border-gray-200 px-4 py-2 text-right">{{ format_rate($item->unit_price) }}</td>
                             <td class="border border-gray-200 px-4 py-2 text-right">{{ number_format($item->total_thb, 2) }}</td>
                         </tr>
                     @empty
@@ -111,7 +111,7 @@
                         <tr class="hover:bg-gray-50">
                             <td class="border border-gray-200 px-4 py-2">{{ $item->currency_name }}</td>
                             <td class="border border-gray-200 px-4 py-2 text-right">{{ number_format($item->total_amount, 2) }}</td>
-                            <td class="border border-gray-200 px-4 py-2 text-right">{{ number_format($item->unit_price, 6) }}</td>
+                            <td class="border border-gray-200 px-4 py-2 text-right">{{ format_rate($item->unit_price) }}</td>
                             <td class="border border-gray-200 px-4 py-2 text-right">{{ number_format($item->total_thb, 2) }}</td>
                         </tr>
                     @empty

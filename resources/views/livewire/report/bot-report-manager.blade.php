@@ -231,7 +231,7 @@
                             <td class="px-2 py-1 font-mono">{{ $tx->id_number }}</td>
                             <td class="px-2 py-1">{{ $tx->nationality }}</td>
                             <td class="px-2 py-1 font-medium">{{ $tx->currency_code }}</td>
-                            <td class="px-2 py-1 text-right font-mono">{{ number_format($tx->exchange_rate, 4) }}</td>
+                            <td class="px-2 py-1 text-right font-mono">{{ format_rate($tx->exchange_rate) }}</td>
                             <td class="px-2 py-1 text-right font-mono">{{ number_format($tx->fx_amount, 2) }}</td>
                             <td class="px-2 py-1 text-right font-mono">{{ number_format($tx->thb_amount, 2) }}</td>
                             <td class="px-2 py-1 text-gray-500">{{ $tx->remark }}</td>

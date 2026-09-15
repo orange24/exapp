@@ -105,7 +105,7 @@
                     <strong>📋 คำแนะนำ:</strong><br>
                     • นับเงินต่างประเทศแต่ละธนบัตรและกรอกจำนวนจริงที่ส่งมอบ<br>
                     • <strong class="text-red-700">กรอกเฉพาะสกุลเงินที่มีจริง</strong> (ไม่มี = ปล่อยเป็น 0)<br>
-                    • ต้องกรอกอย่างน้อย 1 รายการถึงจะบันทึกได้
+                    • ไม่มียอดเลยก็ปิดวันด้วยยอด 0 ได้
                 </div>
 
                 <div class="overflow-x-auto">
@@ -143,20 +143,14 @@
             </div>
 
             <div class="px-6 py-4 bg-gray-50 border-t">
-                @if (!$this->canSaveClosing)
-                    <div class="mb-3 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-800">
-                        <strong>⚠️ กรุณากรอกยอดเงินจริงอย่างน้อย 1 รายการ</strong> ก่อนบันทึก (กรอกเฉพาะสกุลเงินที่มีจริง)
-                    </div>
-                @endif
                 <div class="flex justify-end gap-3">
                     <button wire:click="showClosingForm = false" type="button"
                             class="px-6 py-2 text-sm font-semibold text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
                         ยกเลิก
                     </button>
                     <button wire:click="saveClosingAmounts"
-                            @if($this->canSaveClosing) wire:confirm="ยืนยันบันทึกยอดปิด? ข้อมูลจะถูกส่งให้ Admin อนุมัติ" @endif
-                            @if(!$this->canSaveClosing) disabled @endif
-                            class="px-6 py-2 text-sm font-semibold text-white rounded-lg {{ $this->canSaveClosing ? 'bg-green-600 hover:bg-green-700 cursor-pointer' : 'bg-gray-400 cursor-not-allowed' }}">
+                            wire:confirm="ยืนยันบันทึกยอดปิด? ข้อมูลจะถูกส่งให้ Admin อนุมัติ"
+                            class="px-6 py-2 text-sm font-semibold text-white rounded-lg bg-green-600 hover:bg-green-700 cursor-pointer">
                         บันทึกยอดปิด
                     </button>
                 </div>
