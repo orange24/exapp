@@ -146,6 +146,21 @@ class InventoryDashboard extends Component
         return $data->sortBy(['currency_seq', 'denom_seq'])->values();
     }
 
+    /**
+     * ยอดเงินบาทในลิ้นชัก — แยกจาก inventoryData เพราะเงินบาทไม่มี denomination
+     * ถ้ายัดลงตารางเดิม (ที่กรอง whereNotNull('denomination_id')) จะทำให้ยอดรวม
+     * มูลค่าสต็อกและตาราง valuation เพี้ยนทั้งหน้า
+     */
+    public function getThbSummaryProperty(): array
+    {
+        if (!$this->counterId) {
+            return ['opening' => 0.0, 'in' => 0.0, 'out' => 0.0, 'closing' => 0.0];
+        }
+
+        return app(\App\Services\ThbCashService::class)
+            ->summaryFor((int) $this->counterId, $this->date);
+    }
+
     public function getSummaryProperty()
     {
         $data = $this->inventoryData;

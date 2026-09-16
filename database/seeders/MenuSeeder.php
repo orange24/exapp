@@ -40,6 +40,7 @@ class MenuSeeder extends Seeder
             ['key' => 'reports', 'label_th' => 'รายงาน', 'label_en' => 'Reports', 'route' => null, 'icon' => 'document-chart-bar', 'parent_id' => null, 'order' => 4],
             ['key' => 'admin.transactions', 'label_th' => 'ค้นหารายการ', 'label_en' => 'Search Transactions', 'route' => 'admin.transactions', 'icon' => 'magnifying-glass', 'parent_id' => 'reports', 'order' => 1],
             ['key' => 'reports.daily', 'label_th' => 'สรุปประจำวัน', 'label_en' => 'Daily Summary', 'route' => 'reports.daily', 'icon' => 'calendar', 'parent_id' => 'reports', 'order' => 2],
+            ['key' => 'reports.my-summary', 'label_th' => 'สรุปยอดของฉัน', 'label_en' => 'Summary Report', 'route' => 'reports.my-summary', 'icon' => 'document-arrow-down', 'parent_id' => 'reports', 'order' => 3],
 
             // Inventory (parent)
             ['key' => 'inventory', 'label_th' => 'คลังสินค้า', 'label_en' => 'Inventory', 'route' => null, 'icon' => 'archive-box', 'parent_id' => null, 'order' => 5],
@@ -64,12 +65,16 @@ class MenuSeeder extends Seeder
         ];
 
         // Create menus in two passes to ensure parents exist before children
+        //
+        // ใช้ updateOrCreate เพราะ migration ที่เพิ่มเมนูทีหลัง (เช่น
+        // seed_my_summary_report_menu) สร้างแถว parent ไว้ก่อนแล้ว ถ้าใช้ create()
+        // ตรงๆ seeder จะชน unique key ของ menus.key ทำให้ test suite ทั้งชุด error
         $menuIdMap = [];
 
         // First pass: Create all parent menus (parent_id = null)
         foreach ($menus as $menuData) {
             if ($menuData['parent_id'] === null) {
-                $menu = Menu::create($menuData);
+                $menu = Menu::updateOrCreate(['key' => $menuData['key']], $menuData);
                 $menuIdMap[$menu->key] = $menu->id;
             }
         }
@@ -80,7 +85,7 @@ class MenuSeeder extends Seeder
                 $parentKey = $menuData['parent_id'];
                 $menuData['parent_id'] = $menuIdMap[$parentKey] ?? null;
 
-                $menu = Menu::create($menuData);
+                $menu = Menu::updateOrCreate(['key' => $menuData['key']], $menuData);
                 $menuIdMap[$menu->key] = $menu->id;
             }
         }
@@ -96,7 +101,7 @@ class MenuSeeder extends Seeder
         // Staff: Dashboard, Buy, Sell, My Transactions, Inventory, Rate Board
         // (view only — "ตั้งราคา" / "ตั้งค่าคำนวณ" / "SuperRich Rates" ยังคงเป็นของ
         // canChangeRates() เท่านั้น คือ admin/branch_manager)
-        $roles['staff']->menus()->attach([
+        $roles['staff']->menus()->syncWithoutDetaching([
             $menuIdMap['dashboard'],
             $menuIdMap['transactions'],
             $menuIdMap['transaction.buy'],
@@ -104,6 +109,8 @@ class MenuSeeder extends Seeder
             $menuIdMap['transaction.my'],
             $menuIdMap['rates'],
             $menuIdMap['rate.board'],
+            $menuIdMap['reports'],
+            $menuIdMap['reports.my-summary'],
             $menuIdMap['inventory'],
             $menuIdMap['inventory.dashboard'],
             $menuIdMap['inventory.booking'],
@@ -114,12 +121,12 @@ class MenuSeeder extends Seeder
 
         // Branch Manager: Everything except Settings and the trader-only tools
         $branchManagerMenus = collect($menuIdMap)->except(['settings', 'admin.branches', 'admin.users', 'admin.permissions', 'admin.sessions', 'trader.inventory', 'admin.bank-sales', 'admin.bank-purchases'])->values();
-        $roles['branch_manager']->menus()->attach($branchManagerMenus);
+        $roles['branch_manager']->menus()->syncWithoutDetaching($branchManagerMenus);
 
         // Trader: Inventory Dashboard is their home screen (/dashboard redirects
         // there), so the generic หน้าหลัก menu is omitted — two links to the same
         // page. Plus Bank Sales, Reports (not Buy/Sell).
-        $roles['trader']->menus()->attach([
+        $roles['trader']->menus()->syncWithoutDetaching([
             $menuIdMap['trader.inventory'],
             $menuIdMap['transactions'], // parent visible but children Buy/Sell not visible
             $menuIdMap['transaction.my'],
@@ -133,7 +140,7 @@ class MenuSeeder extends Seeder
         ]);
 
         // Auditor: Dashboard, Reports, Master Data (read-only)
-        $roles['auditor']->menus()->attach([
+        $roles['auditor']->menus()->syncWithoutDetaching([
             $menuIdMap['dashboard'],
             $menuIdMap['reports'],
             $menuIdMap['admin.transactions'],
@@ -148,9 +155,9 @@ class MenuSeeder extends Seeder
         // guards are abort_unless(isTrader()), so showing them to admin would
         // render links that 403.
         $allMenuIds = collect($menuIdMap)->except(['trader.inventory', 'admin.bank-sales', 'admin.bank-purchases'])->values();
-        $roles['admin']->menus()->attach($allMenuIds);
+        $roles['admin']->menus()->syncWithoutDetaching($allMenuIds);
         if (isset($roles['superadmin'])) {
-            $roles['superadmin']->menus()->attach($allMenuIds);
+            $roles['superadmin']->menus()->syncWithoutDetaching($allMenuIds);
         }
     }
 }

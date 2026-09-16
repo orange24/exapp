@@ -178,7 +178,12 @@ class InventoryService
                 $reverseAmount = -((float) $movement->amount);
 
                 // If reversing a buy (positive amount → now subtracting), recalculate avg cost
-                if ($movement->movement_type === 'buy') {
+                //
+                // เงินบาท (denomination_id = null) ต้องไม่หลุดเข้าสาขานี้ — มันไม่มีต้นทุน
+                // และ recalculateAvgCost() รับ int $denominationId จะ TypeError ทันที
+                // ปกติ THB ใช้ movement_type thb_in/thb_out อยู่แล้วจึงไม่ควรเข้ามา
+                // เงื่อนไขนี้เป็นตัวกันเหนียวเผื่อมีโค้ดใหม่เขียน type ผิด
+                if ($movement->movement_type === 'buy' && $movement->denomination_id !== null) {
                     $newQty = (float) $stock->quantity + $reverseAmount; // decreasing
                     if ($newQty > 0) {
                         // Recalculate avg cost from remaining movements

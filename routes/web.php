@@ -22,6 +22,7 @@ use App\Http\Controllers\Report\CashierPerformanceReportController;
 use App\Http\Controllers\Report\CustomerTransactionReportController;
 use App\Http\Controllers\Report\BotMonthlyReportController;
 use App\Http\Controllers\Report\DailyReportController;
+use App\Http\Controllers\Report\MySummaryReportController;
 use App\Http\Controllers\Report\ProfitLossReportController;
 use App\Http\Controllers\Report\StockMovementReportController;
 use App\Http\Controllers\Report\StockValuationReportController;
@@ -213,6 +214,10 @@ Route::middleware(['auth', 'session.check'])->group(function () {
     // Reports
     Route::get('/reports/daily', [DailyReportController::class, 'index'])->name('reports.daily');
     Route::post('/reports/daily/export', [DailyReportController::class, 'exportExcel'])->name('reports.daily.export');
+
+    // My Summary Report — staff's own transactions at their working counter
+    Route::get('/reports/my-summary', [MySummaryReportController::class, 'index'])->name('reports.my-summary');
+    Route::post('/reports/my-summary/export', [MySummaryReportController::class, 'exportExcel'])->name('reports.my-summary.export');
 
     // Accounting Summary Report (All Branches) — admin/auditor only
     Route::get('/reports/accounting-summary', [AccountingSummaryController::class, 'index'])->name('reports.accounting-summary');

@@ -22,12 +22,31 @@
                 <p style="font-size:13px; color:#888; margin-top:4px;">กรุณาเลือกเคาน์เตอร์ที่คุณจะใช้งานวันนี้</p>
             </div>
 
+            {{-- staff เปลี่ยนสาขาได้ในตัว modal ด้วย ไม่ต้องออกไปหา dropdown ใน sidebar --}}
+            @if (auth()->user()->canSwitchBranch() && auth()->user()->role?->name === 'staff')
+                <div style="margin-bottom:16px;">
+                    <label style="display:block; font-size:12px; color:#888; margin-bottom:4px;">สาขาทำงาน</label>
+                    <form method="POST" action="{{ route('switch-branch') }}">
+                        @csrf
+                        <select name="branch_id" onchange="this.form.submit();"
+                                style="width:100%; font-size:14px; border:1px solid #d1d5db; border-radius:8px; padding:8px 10px;">
+                            @foreach (auth()->user()->selectableBranches() as $b)
+                                <option value="{{ $b->id }}"
+                                    {{ session('working_branch_id', auth()->user()->branch_id) == $b->id ? 'selected' : '' }}>
+                                    {{ $b->branch_name }} ({{ $b->branch_code }})
+                                </option>
+                            @endforeach
+                        </select>
+                    </form>
+                </div>
+            @endif
+
             {{-- Counter list --}}
             <div style="display:flex; flex-direction:column; gap:8px; max-height:360px; overflow-y:auto; margin-bottom:20px;">
                 @php
-                    $availableCounters = auth()->user()->isAdmin()
-                        ? \App\Models\Counter::where('is_active', true)->with('branch')->orderBy('branch_id')->get()
-                        : \App\Models\Counter::where('is_active', true)->where('branch_id', auth()->user()->branch_id)->with('branch')->get();
+                    // ขอบเขตเดียวกับที่ POST /switch-counter บังคับ — ไม่งั้นจะเสนอ
+                    // ตัวเลือกที่กดแล้ว firstOrFail() โยน 404 กลับมา
+                    $availableCounters = auth()->user()->selectableCounters();
                 @endphp
                 @foreach ($availableCounters as $c)
                     <button type="button"
@@ -44,13 +63,22 @@
             </div>
 
             {{-- Confirm button --}}
-            <button type="button" @click="confirm()"
-                    :disabled="!selectedId"
-                    :style="selectedId
-                        ? 'width:100%; padding:12px; background:#0e513a; color:#fff; border:none; border-radius:10px; font-size:16px; font-weight:600; cursor:pointer;'
-                        : 'width:100%; padding:12px; background:#ccc; color:#888; border:none; border-radius:10px; font-size:16px; font-weight:600; cursor:not-allowed;'">
-                ยืนยัน
-            </button>
+            <div style="display:flex; gap:8px;">
+                {{-- เปิดจาก "เลือกใหม่" ต้องมีทางถอย ไม่ใช่ปิดตายอยู่ใน modal --}}
+                @if (request()->boolean('switch'))
+                    <a href="{{ route('dashboard') }}"
+                       style="flex:0 0 auto; padding:12px 20px; background:#fff; color:#555; border:1px solid #d1d5db; border-radius:10px; font-size:16px; font-weight:600; text-decoration:none; text-align:center;">
+                        ยกเลิก
+                    </a>
+                @endif
+                <button type="button" @click="confirm()"
+                        :disabled="!selectedId"
+                        :style="selectedId
+                            ? 'flex:1; padding:12px; background:#0e513a; color:#fff; border:none; border-radius:10px; font-size:16px; font-weight:600; cursor:pointer;'
+                            : 'flex:1; padding:12px; background:#ccc; color:#888; border:none; border-radius:10px; font-size:16px; font-weight:600; cursor:not-allowed;'">
+                    ยืนยัน
+                </button>
+            </div>
         </div>
     </div>
 </div>
@@ -63,6 +91,14 @@ function counterSelector() {
         selectedName: '',
 
         init() {
+            // ?switch=1 — ผู้ใช้กด "เลือกใหม่" จาก sidebar เพราะเลือกผิดตอนแรก
+            // ต้องเปิด modal แม้จะมี cookie อยู่แล้ว ไม่งั้นไม่มีทางแก้ได้เลย
+            @if (request()->boolean('switch'))
+                this.selectedId = {{ session('working_counter_id') ?: 'null' }};
+                this.showModal = true;
+                return;
+            @endif
+
             // Check cookie — if working_counter cookie exists, don't show modal
             const cookie = this.getCookie('working_counter_id');
             if (cookie) {
@@ -75,8 +111,9 @@ function counterSelector() {
             @if (auth()->user()->requiresCounterAtLogin())
                 // Staff: show modal or auto-select if only 1 counter
                 @php
-                    $counters = \App\Models\Counter::where('is_active', true)
-                        ->where('branch_id', auth()->user()->branch_id)->get();
+                    // ต้องใช้สาขาทำงานใน session ไม่ใช่ branch_id บน user record
+                    // — staff ที่ย้ายสาขาแล้วจะถูกเสนอเคาน์เตอร์ของสาขาต้นสังกัด
+                    $counters = auth()->user()->selectableCounters();
                 @endphp
                 @if ($counters->count() === 1)
                     // Auto-select the only counter
@@ -120,7 +157,9 @@ function counterSelector() {
                     window.location.href = '{{ route('login') }}';
                     return;
                 }
-                window.location.reload();
+                // ไปที่ URL สะอาด ไม่ reload — ถ้า reload ทั้ง ?switch=1 จะติดมาด้วย
+                // แล้ว modal จะเด้งขึ้นมาอีกทันทีวนไม่จบ
+                window.location.href = '{{ route('dashboard') }}';
             });
         },
 

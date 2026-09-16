@@ -95,9 +95,71 @@ class User extends Authenticatable
         return $this->role?->name === 'trader';
     }
 
+    /**
+     * เปลี่ยน "สาขาทำงาน" เองได้หรือไม่
+     *
+     * staff ย้ายสาขาได้อยู่แล้วผ่าน POST /switch-branch (dropdown "สาขาทำงาน"
+     * ใน sidebar) เมธอดนี้เคยคืน isAdmin() เฉยๆ ซึ่งขัดกับพฤติกรรมจริง และ
+     * layout ก็เลยไปเช็ค role === 'staff' ตรงๆ แทนที่จะใช้เมธอดนี้
+     */
     public function canSwitchBranch(): bool
     {
-        return $this->isAdmin(); // Only Admin/SuperAdmin can switch branches
+        return $this->isAdmin() || $this->role?->name === 'staff';
+    }
+
+    /**
+     * เปลี่ยน "เคาน์เตอร์ทำงาน" เองได้หรือไม่
+     *
+     * แยกจาก canSwitchBranch() เพราะขอบเขตไม่เท่ากัน — branch_manager ย้าย
+     * สาขาไม่ได้ แต่ต้องเปลี่ยนเคาน์เตอร์ในสาขาตัวเองได้ ส่วน trader/auditor
+     * ไม่ได้ทำรายการหน้าเคาน์เตอร์เลย (canAccessBuySell() เป็น false)
+     */
+    public function canSwitchCounter(): bool
+    {
+        return in_array($this->role?->name, ['superadmin', 'admin', 'staff', 'branch_manager'], true);
+    }
+
+    /**
+     * สาขาที่ผู้ใช้เลือกเป็นสาขาทำงานได้
+     *
+     * @return \Illuminate\Database\Eloquent\Collection<int, Branch>
+     */
+    public function selectableBranches()
+    {
+        if (! $this->canSwitchBranch()) {
+            return Branch::whereKey($this->branch_id)->get();
+        }
+
+        return Branch::orderBy('branch_code')->get();
+    }
+
+    /**
+     * เคาน์เตอร์ที่ผู้ใช้เลือกเป็นเคาน์เตอร์ทำงานได้
+     *
+     * ขอบเขตต้องตรงกับที่ POST /switch-counter บังคับไว้ ไม่งั้นหน้าจอจะเสนอ
+     * ตัวเลือกที่กด แล้ว firstOrFail() โยน 404 กลับมา
+     *
+     * staff ใช้ session('working_branch_id') ไม่ใช่ branch_id บน user record
+     * เพราะเขาอาจกำลังทำงานอยู่สาขาอื่นที่ไม่ใช่สาขาต้นสังกัด
+     *
+     * @return \Illuminate\Database\Eloquent\Collection<int, Counter>
+     */
+    public function selectableCounters()
+    {
+        $query = Counter::where('is_active', true)
+            ->with('branch')
+            ->orderBy('branch_id')
+            ->orderBy('counter_name');
+
+        if ($this->isAdmin()) {
+            return $query->get();
+        }
+
+        if ($this->role?->name === 'staff') {
+            return $query->where('branch_id', session('working_branch_id', $this->branch_id))->get();
+        }
+
+        return $query->where('branch_id', $this->branch_id)->get();
     }
 
     public function getVisibleBranchIds(): array

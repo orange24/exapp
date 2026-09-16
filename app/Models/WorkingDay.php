@@ -10,6 +10,7 @@ class WorkingDay extends Model
         'counter_id', 'work_date', 'opening_thb_cash', 'status',
         'opened_by', 'opened_at', 'closed_by', 'closed_at', 'note',
         'closing_items', 'closing_status', 'closing_approved_by', 'closing_approved_at', 'closing_notes',
+        'closing_thb_expected', 'closing_thb_actual', 'closing_thb_variance',
     ];
 
     protected function casts(): array
@@ -20,6 +21,10 @@ class WorkingDay extends Model
             'closed_at' => 'datetime',
             'closing_items' => 'array',
             'closing_approved_at' => 'datetime',
+            'opening_thb_cash' => 'float',
+            'closing_thb_expected' => 'float',
+            'closing_thb_actual' => 'float',
+            'closing_thb_variance' => 'float',
         ];
     }
 

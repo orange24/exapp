@@ -38,12 +38,41 @@
             <img x-show="!sidebarOpen" src="{{ asset('images/logo-mini.png') }}" alt="Logo" class="w-8 h-8" style="object-fit:contain;">
         </div>
 
-        {{-- Working Branch Selector (Staff only) --}}
+        @php
+            $workingName = session('working_counter_name');
+            if (!$workingName) {
+                $defaultCounter = \App\Models\Counter::where('branch_id', session('working_branch_id', auth()->user()->branch_id))
+                    ->where('is_active', true)->first();
+                $workingName = $defaultCounter?->counter_name ?? auth()->user()->branch?->branch_name ?? '—';
+            }
+
+            // เตือนก่อนเปลี่ยนสาขา/เคาน์เตอร์ ถ้าเคาน์เตอร์ปัจจุบันมีงานค้างอยู่
+            // — บิลที่บันทึกไปแล้วตราไว้กับ counter_id เดิมและไม่ย้ายตาม
+            $currentCounter = session('working_counter_id')
+                ? \App\Models\Counter::find(session('working_counter_id'))
+                : null;
+            $counterActivity = $currentCounter?->workingDayActivity() ?? ['has_open_day' => false, 'transaction_count' => 0];
+
+            $switchWarning = '';
+            if ($counterActivity['has_open_day'] || $counterActivity['transaction_count'] > 0) {
+                $parts = [];
+                if ($counterActivity['has_open_day']) {
+                    $parts[] = 'วันทำการเปิดอยู่';
+                }
+                if ($counterActivity['transaction_count'] > 0) {
+                    $parts[] = 'มีบิลวันนี้ ' . $counterActivity['transaction_count'] . ' รายการ';
+                }
+                $switchWarning = 'เคาน์เตอร์ ' . $workingName . ' ' . implode(' และ ', $parts)
+                    . "\n\nรายการที่บันทึกไปแล้วจะยังอยู่ที่เคาน์เตอร์เดิม ไม่ย้ายตาม\n\nยืนยันเปลี่ยนหรือไม่?";
+            }
+        @endphp
+
+        {{-- Working Branch Selector --}}
         @if(auth()->user()->role?->name === 'staff')
         @php
             $workingBranchId = session('working_branch_id', auth()->user()->branch_id);
             $workingBranch = \App\Models\Branch::find($workingBranchId);
-            $allBranches = \App\Models\Branch::orderBy('branch_code')->get();
+            $allBranches = auth()->user()->selectableBranches();
         @endphp
         <div x-show="sidebarOpen" class="px-3 py-2" x-data="{ showBranchSwitch: false }" style="border-bottom:1px solid #e5e7eb;">
             <div class="text-xs mb-1" style="color:#888;">สาขาทำงาน</div>
@@ -57,7 +86,10 @@
             <div x-show="showBranchSwitch" x-cloak x-transition class="mt-1">
                 <form method="POST" action="{{ route('switch-branch') }}">
                     @csrf
-                    <select name="branch_id" onchange="this.form.submit();"
+                    <select name="branch_id"
+                            data-warning="{{ $switchWarning }}"
+                            data-current="{{ $workingBranchId }}"
+                            onchange="switchWorkingBranch(this);"
                             class="w-full text-xs text-gray-800 bg-white border border-gray-300 rounded px-2 py-1.5">
                         @foreach ($allBranches as $branch)
                             <option value="{{ $branch->id }}" {{ $workingBranchId == $branch->id ? 'selected' : '' }}>
@@ -72,19 +104,15 @@
 
         {{-- Working Counter Selector --}}
         @php
-            $workingName = session('working_counter_name');
-            if (!$workingName) {
-                $workingBranchId = session('working_branch_id', auth()->user()->branch_id);
-                $defaultCounter = \App\Models\Counter::where('branch_id', $workingBranchId)->where('is_active', true)->first();
-                $workingName = $defaultCounter?->counter_name ?? auth()->user()->branch?->branch_name ?? '—';
-            }
-            $canSwitchCounter = auth()->user()->canSwitchBranch();
+            // เดิมบรรทัดนี้เช็ค canSwitchBranch() (= isAdmin) ทำให้ staff และ
+            // branch_manager แก้เคาน์เตอร์ที่เลือกผิดตอน login ไม่ได้เลย
+            $canSwitchCounter = auth()->user()->canSwitchCounter();
+            $switchableCounters = $canSwitchCounter ? auth()->user()->selectableCounters() : collect();
         @endphp
         <div x-show="sidebarOpen" class="px-3 py-2" x-data="{ showSwitch: false }" style="border-bottom:1px solid #e5e7eb;">
             <div class="text-xs mb-1" style="color:#888;">เคาน์เตอร์ทำงาน</div>
 
             @if ($canSwitchCounter)
-                {{-- Admin: can switch counter --}}
                 <button @click="showSwitch = !showSwitch"
                         class="w-full text-left flex items-center justify-between gap-2 px-2 py-1.5 rounded text-sm font-semibold hover:bg-gray-100 transition-colors" style="color:#0e513a;">
                     <span>{{ $workingName }}</span>
@@ -96,9 +124,11 @@
                     <form method="POST" action="{{ route('switch-counter') }}">
                         @csrf
                         <select name="counter_id"
-                                onchange="var opt=this.options[this.selectedIndex]; var d=new Date(); d.setTime(d.getTime()+365*24*60*60*1000); document.cookie='working_counter_id='+this.value+';expires='+d.toUTCString()+';path=/;SameSite=Lax'; document.cookie='working_counter_name='+encodeURIComponent(opt.dataset.name)+';expires='+d.toUTCString()+';path=/;SameSite=Lax'; this.form.submit();"
+                                data-warning="{{ $switchWarning }}"
+                                data-current="{{ session('working_counter_id') }}"
+                                onchange="switchWorkingCounter(this);"
                                 class="w-full text-xs text-gray-800 bg-white border border-gray-300 rounded px-2 py-1.5">
-                            @foreach (\App\Models\Counter::where('is_active', true)->with('branch')->orderBy('branch_id')->get() as $c)
+                            @foreach ($switchableCounters as $c)
                                 <option value="{{ $c->id }}"
                                     data-name="{{ $c->counter_name }}"
                                     {{ session('working_counter_id') == $c->id ? 'selected' : '' }}>
@@ -107,9 +137,21 @@
                             @endforeach
                         </select>
                     </form>
+                    @if ($switchWarning)
+                        <p class="mt-1 px-1 text-[11px] leading-snug text-amber-700">
+                            เคาน์เตอร์นี้มีงานค้างอยู่ — เปลี่ยนแล้วบิลเดิมไม่ย้ายตาม
+                        </p>
+                    @endif
+
+                    {{-- เปิด modal เลือกสาขา+เคาน์เตอร์ตัวเดิมที่ใช้ตอน login
+                         ปกติมันไม่โผล่อีกเพราะ cookie อยู่ 365 วัน --}}
+                    <a href="{{ route('dashboard') }}?switch=1"
+                       class="mt-1 block px-1 text-[11px] text-gray-500 hover:text-[#0e513a] hover:underline">
+                        เลือกสาขา / เคาน์เตอร์ใหม่ →
+                    </a>
                 </div>
             @else
-                {{-- Staff/Branch Manager: show counter name only, no switching --}}
+                {{-- Trader/Auditor: ไม่ได้ทำรายการหน้าเคาน์เตอร์ แสดงชื่อเฉยๆ --}}
                 <div class="px-2 py-1.5 text-sm font-semibold" style="color:#0e513a;">
                     {{ $workingName }}
                 </div>
@@ -293,6 +335,51 @@
             @yield('content')
         </main>
     </div>
+
+    <script>
+        /**
+         * เปลี่ยนเคาน์เตอร์ทำงาน
+         *
+         * cookie ต้องถูกตั้งก่อน submit เพราะ modal เลือกเคาน์เตอร์บนหน้า
+         * dashboard อ่าน cookie เพื่อตัดสินใจว่าจะโผล่หรือไม่ ถ้าไม่ตั้งให้ตรงกัน
+         * modal จะเด้งขึ้นมาทับทันทีหลังเปลี่ยน
+         */
+        function switchWorkingCounter(select) {
+            var warning = select.dataset.warning;
+            if (warning && !confirm(warning)) {
+                select.value = select.dataset.current || '';
+                return;
+            }
+
+            var opt = select.options[select.selectedIndex];
+            setWorkingCookie('working_counter_id', select.value);
+            setWorkingCookie('working_counter_name', encodeURIComponent(opt.dataset.name || ''));
+            select.form.submit();
+        }
+
+        /**
+         * เปลี่ยนสาขาทำงาน — /switch-branch จะเลือกเคาน์เตอร์แรกของสาขาใหม่ให้
+         * เท่ากับว่าเคาน์เตอร์เปลี่ยนไปด้วย จึงต้องเตือนด้วยเงื่อนไขเดียวกัน
+         * และต้องล้าง cookie เคาน์เตอร์เดิมที่ไม่ได้อยู่ในสาขาใหม่แล้ว
+         */
+        function switchWorkingBranch(select) {
+            var warning = select.dataset.warning;
+            if (warning && !confirm(warning)) {
+                select.value = select.dataset.current || '';
+                return;
+            }
+
+            setWorkingCookie('working_counter_id', '', -1);
+            setWorkingCookie('working_counter_name', '', -1);
+            select.form.submit();
+        }
+
+        function setWorkingCookie(name, value, days) {
+            var d = new Date();
+            d.setTime(d.getTime() + (days === undefined ? 365 : days) * 24 * 60 * 60 * 1000);
+            document.cookie = name + '=' + value + ';expires=' + d.toUTCString() + ';path=/;SameSite=Lax';
+        }
+    </script>
 
     {{-- Alpine.js is included by Livewire 4 automatically — do NOT load CDN separately --}}
     @livewireScripts

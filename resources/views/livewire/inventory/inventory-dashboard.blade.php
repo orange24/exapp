@@ -31,6 +31,37 @@
         </div>
     </div>
 
+    {{-- เงินบาทในลิ้นชัก — แยกแถบเพราะไม่มี denomination จึงไม่อยู่ในตารางสต็อกข้างล่าง --}}
+    @if ($counterId)
+    <div class="mb-6 rounded-lg border border-gray-200 bg-white p-4 shadow">
+        <div class="mb-3 flex items-center justify-between">
+            <h3 class="font-semibold text-gray-700">เงินบาทในลิ้นชัก (THB Cash)</h3>
+            <a href="{{ route('inventory.open-close-day') }}"
+               class="text-xs text-blue-600 hover:underline">จัดการเงินทุน →</a>
+        </div>
+        <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <div class="rounded-lg bg-gray-50 p-3">
+                <div class="text-xs text-gray-600">ยอดยกมา</div>
+                <div class="font-mono text-lg font-bold text-gray-800">{{ number_format($this->thbSummary['opening'], 2) }}</div>
+            </div>
+            <div class="rounded-lg bg-green-50 p-3">
+                <div class="text-xs text-gray-600">รับเข้า</div>
+                <div class="font-mono text-lg font-bold text-green-700">{{ number_format($this->thbSummary['in'], 2) }}</div>
+            </div>
+            <div class="rounded-lg bg-red-50 p-3">
+                <div class="text-xs text-gray-600">จ่ายออก</div>
+                <div class="font-mono text-lg font-bold text-red-700">{{ number_format($this->thbSummary['out'], 2) }}</div>
+            </div>
+            <div class="rounded-lg p-3 {{ $this->thbSummary['closing'] < 0 ? 'bg-amber-50' : 'bg-blue-50' }}">
+                <div class="text-xs text-gray-600">คงเหลือ</div>
+                <div class="font-mono text-lg font-bold {{ $this->thbSummary['closing'] < 0 ? 'text-amber-700' : 'text-blue-800' }}">
+                    {{ number_format($this->thbSummary['closing'], 2) }}
+                </div>
+            </div>
+        </div>
+    </div>
+    @endif
+
     {{-- Filters --}}
     <div class="bg-white rounded-lg shadow p-4 mb-6">
         <div class="flex flex-wrap items-end gap-4">

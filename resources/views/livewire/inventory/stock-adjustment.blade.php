@@ -33,13 +33,15 @@
                     <label class="block text-sm font-medium text-gray-700 mb-1">สกุลเงิน</label>
                     <select wire:model.live="currencyCode" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
                         <option value="">-- เลือกสกุลเงิน --</option>
+                        {{-- เงินบาทไม่มีแถวในตาราง currencies จึงต้องเติมตัวเลือกให้เอง --}}
+                        <option value="THB">THB - เงินบาทในลิ้นชัก</option>
                         @foreach ($this->currencies as $cur)
                             <option value="{{ $cur->currency_code }}">{{ $cur->currency_code }} - {{ $cur->currency_name }}</option>
                         @endforeach
                     </select>
                     @error('currencyCode') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
                 </div>
-                <div>
+                <div @class(["hidden" => $this->isThb])>
                     <label class="block text-sm font-medium text-gray-700 mb-1">ธนบัตร</label>
                     <select wire:model.live="denominationId" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
                         <option value="">-- เลือกธนบัตร --</option>
@@ -60,7 +62,7 @@
                     <label class="block text-sm font-medium text-gray-700 mb-1">จำนวน</label>
                     <input type="number" step="0.01" wire:model.blur="amount" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="0.00">
                     @error('amount') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
-                    @if ($counterId && $denominationId)
+                    @if ($counterId && ($denominationId || $this->isThb))
                         <div class="mt-1 text-xs text-gray-500">
                             สต็อกปัจจุบัน: <span class="font-semibold {{ $currentStock >= 0 ? 'text-green-600' : 'text-red-600' }}">{{ number_format($currentStock, 2) }}</span>
                         </div>
@@ -73,7 +75,7 @@
                 </div>
             </div>
 
-            @if ($amount && $counterId && $denominationId)
+            @if ($amount && $counterId && ($denominationId || $this->isThb))
             <div class="mt-4 p-3 rounded-lg {{ $adjustType === 'add' ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200' }}">
                 <span class="text-sm font-medium {{ $adjustType === 'add' ? 'text-green-800' : 'text-red-800' }}">
                     ผลลัพธ์: {{ number_format($currentStock, 2) }}

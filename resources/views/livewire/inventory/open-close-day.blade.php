@@ -35,11 +35,20 @@
                 @if (!$wd)
                     {{-- Not opened yet --}}
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">เงินทุนหมุน THB <span class="text-red-500">*</span></label>
-                        <x-number-input model="openingThbCash" :value="$openingThbCash"
+                        <label class="block text-sm font-medium text-gray-700 mb-1">ยอดบาทยกมา</label>
+                        <div class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-mono font-semibold text-gray-800"
+                             style="width: 180px;">
+                            {{ number_format($this->thbSummary['opening'], 2) }}
+                        </div>
+                        <p class="mt-1 text-xs text-gray-500">คำนวณจากระบบ</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">เติมเงินทุนเพิ่ม</label>
+                        <x-number-input model="topupThbCash" :value="$topupThbCash"
                                class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
                                placeholder="0.00"
                                style="width: 180px;" />
+                        <p class="mt-1 text-xs text-gray-500">เว้นว่างได้ถ้าเงินยกมาพอแล้ว</p>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">หมายเหตุ</label>
@@ -59,7 +68,8 @@
                                 เปิดอยู่ — เปิดเมื่อ {{ $wd->opened_at?->format('H:i') }} โดย {{ $wd->openedByUser?->name ?? '-' }}
                             </span>
                             <span class="text-xs text-gray-600 px-3">
-                                เงินทุนหมุน: <span class="font-mono font-semibold">{{ number_format($wd->opening_thb_cash ?? 0, 2) }}</span> บาท
+                                บาทยกมา: <span class="font-mono font-semibold">{{ number_format($this->thbSummary['opening'], 2) }}</span>
+                                → คงเหลือ: <span class="font-mono font-semibold">{{ number_format($this->thbSummary['closing'], 2) }}</span> บาท
                             </span>
                         </div>
                         <button wire:click="prepareClosing"
@@ -92,6 +102,66 @@
         </div>
     </div>
 
+    {{-- เงินบาทในลิ้นชัก --}}
+    @if ($counterId)
+    <div class="bg-white rounded-lg shadow overflow-hidden mb-6">
+        <div class="px-4 py-3 border-b" style="background:#0e513a;">
+            <h3 class="text-white font-semibold">เงินบาทในลิ้นชัก — {{ \Carbon\Carbon::parse($date)->format('d/m/Y') }}</h3>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4 p-4 md:grid-cols-4">
+            <div class="rounded-lg bg-gray-50 p-3">
+                <div class="text-xs text-gray-600">ยอดยกมา</div>
+                <div class="font-mono text-lg font-semibold text-gray-800">{{ number_format($this->thbSummary['opening'], 2) }}</div>
+            </div>
+            <div class="rounded-lg bg-green-50 p-3">
+                <div class="text-xs text-gray-600">รับเข้า</div>
+                <div class="font-mono text-lg font-semibold text-green-700">{{ number_format($this->thbSummary['in'], 2) }}</div>
+            </div>
+            <div class="rounded-lg bg-red-50 p-3">
+                <div class="text-xs text-gray-600">จ่ายออก</div>
+                <div class="font-mono text-lg font-semibold text-red-700">{{ number_format($this->thbSummary['out'], 2) }}</div>
+            </div>
+            <div class="rounded-lg p-3 {{ $this->thbSummary['closing'] < 0 ? 'bg-amber-50' : 'bg-blue-50' }}">
+                <div class="text-xs text-gray-600">คงเหลือ</div>
+                <div class="font-mono text-lg font-bold {{ $this->thbSummary['closing'] < 0 ? 'text-amber-700' : 'text-blue-800' }}">
+                    {{ number_format($this->thbSummary['closing'], 2) }}
+                </div>
+            </div>
+        </div>
+
+        <div class="border-t bg-gray-50 px-4 py-4">
+            <div class="flex flex-wrap items-end gap-4">
+                <div>
+                    <label class="mb-1 block text-sm font-medium text-gray-700">จำนวนเงิน (บาท)</label>
+                    <x-number-input model="transferAmount" :value="$transferAmount"
+                           class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
+                           placeholder="0.00"
+                           style="width: 180px;" />
+                </div>
+                <div class="flex-1 min-w-[200px]">
+                    <label class="mb-1 block text-sm font-medium text-gray-700">หมายเหตุ</label>
+                    <input type="text" wire:model.blur="transferNote"
+                           class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
+                           placeholder="หมายเหตุ (ถ้ามี)">
+                </div>
+                <button wire:click="topUpCash" wire:confirm="ยืนยันเติมเงินทุนเข้าลิ้นชัก?"
+                        class="px-5 py-2 text-sm font-semibold text-white rounded-lg bg-green-600 hover:bg-green-700">
+                    เติมเงินทุนเข้า
+                </button>
+                <button wire:click="withdrawCash" wire:confirm="ยืนยันนำเงินบาทออกจากลิ้นชัก?"
+                        class="px-5 py-2 text-sm font-semibold text-white rounded-lg bg-orange-600 hover:bg-orange-700">
+                    นำเงินออก
+                </button>
+            </div>
+            <p class="mt-2 text-xs text-gray-500">
+                เงินทุนมาจากบัญชีธนาคาร/เจ้าของ ซึ่งอยู่นอกบัญชีเงินสดเคาน์เตอร์ —
+                บันทึกเฉพาะฝั่งลิ้นชักนี้ ไม่ตัดยอดที่ไหนอีก
+            </p>
+        </div>
+    </div>
+    @endif
+
     {{-- Closing Form Modal --}}
     @if ($showClosingForm)
     <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" style="padding: 20px;">
@@ -106,6 +176,38 @@
                     • นับเงินต่างประเทศแต่ละธนบัตรและกรอกจำนวนจริงที่ส่งมอบ<br>
                     • <strong class="text-red-700">กรอกเฉพาะสกุลเงินที่มีจริง</strong> (ไม่มี = ปล่อยเป็น 0)<br>
                     • ไม่มียอดเลยก็ปิดวันด้วยยอด 0 ได้
+                </div>
+
+                {{-- เงินบาท — แยกจากตารางเงินตราต่างประเทศเพราะไม่มี denomination --}}
+                @php
+                    $thbExpected = $this->thbSummary['closing'];
+                    $thbVariance = $closingThbActual - $thbExpected;
+                @endphp
+                <div class="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+                    <h4 class="mb-3 font-semibold text-emerald-900">เงินบาทในลิ้นชัก</h4>
+                    <div class="flex flex-wrap items-end gap-6">
+                        <div>
+                            <div class="mb-1 text-xs text-gray-600">ยอดตามระบบ</div>
+                            <div class="font-mono text-lg font-semibold text-blue-700">
+                                {{ number_format($thbExpected, 2) }}
+                            </div>
+                        </div>
+                        <div>
+                            <label class="mb-1 block text-xs text-gray-600">ยอดที่นับได้จริง</label>
+                            <x-number-input model="closingThbActual" :value="$closingThbActual"
+                                   class="border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-green-500"
+                                   style="width: 180px;" />
+                        </div>
+                        <div>
+                            <div class="mb-1 text-xs text-gray-600">ผลต่าง</div>
+                            <div class="font-mono text-lg font-semibold {{ abs($thbVariance) < 0.005 ? 'text-gray-400' : ($thbVariance > 0 ? 'text-green-700' : 'text-red-700') }}">
+                                {{ $thbVariance > 0 ? '+' : '' }}{{ number_format($thbVariance, 2) }}
+                            </div>
+                        </div>
+                    </div>
+                    <p class="mt-3 text-xs text-emerald-800">
+                        ผลต่างจะถูกปรับเข้าระบบเมื่อ Admin อนุมัติ แล้วยอดที่นับได้จริงจะกลายเป็นยอดยกมาของวันถัดไป
+                    </p>
                 </div>
 
                 <div class="overflow-x-auto">
@@ -265,7 +367,10 @@
                         <th class="px-4 py-3 text-left font-semibold">วันที่</th>
                         <th class="px-4 py-3 text-center font-semibold">สถานะ</th>
                         <th class="px-4 py-3 text-center font-semibold">อนุมัติ</th>
-                        <th class="px-4 py-3 text-right font-semibold">เงินทุนหมุน (THB)</th>
+                        <th class="px-4 py-3 text-right font-semibold">บาทยกมา</th>
+                        <th class="px-4 py-3 text-right font-semibold">ปิดตามระบบ</th>
+                        <th class="px-4 py-3 text-right font-semibold">นับได้จริง</th>
+                        <th class="px-4 py-3 text-right font-semibold">ผลต่าง</th>
                         <th class="px-4 py-3 text-left font-semibold">เปิดเมื่อ</th>
                         <th class="px-4 py-3 text-left font-semibold">เปิดโดย</th>
                         <th class="px-4 py-3 text-left font-semibold">ปิดเมื่อ</th>
@@ -295,8 +400,21 @@
                                     <span class="text-gray-400">—</span>
                                 @endif
                             </td>
-                            <td class="px-4 py-2 text-right font-mono font-semibold text-blue-700">
+                            <td class="px-4 py-2 text-right font-mono text-gray-700">
                                 {{ number_format($wd->opening_thb_cash ?? 0, 2) }}
+                            </td>
+                            <td class="px-4 py-2 text-right font-mono text-blue-700">
+                                {{ $wd->closing_thb_expected === null ? '—' : number_format($wd->closing_thb_expected, 2) }}
+                            </td>
+                            <td class="px-4 py-2 text-right font-mono font-semibold text-green-700">
+                                {{ $wd->closing_thb_actual === null ? '—' : number_format($wd->closing_thb_actual, 2) }}
+                            </td>
+                            <td class="px-4 py-2 text-right font-mono font-semibold {{ $wd->closing_thb_variance === null ? 'text-gray-400' : (abs($wd->closing_thb_variance) < 0.005 ? 'text-gray-400' : ($wd->closing_thb_variance > 0 ? 'text-green-700' : 'text-red-700')) }}">
+                                @if ($wd->closing_thb_variance === null)
+                                    —
+                                @else
+                                    {{ $wd->closing_thb_variance > 0 ? '+' : '' }}{{ number_format($wd->closing_thb_variance, 2) }}
+                                @endif
                             </td>
                             <td class="px-4 py-2">{{ $wd->opened_at?->format('d/m/Y H:i') }}</td>
                             <td class="px-4 py-2 text-gray-600">{{ $wd->openedByUser?->name ?? '-' }}</td>
@@ -306,7 +424,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="9" class="px-4 py-8 text-center text-gray-400">ยังไม่มีประวัติ</td>
+                            <td colspan="12" class="px-4 py-8 text-center text-gray-400">ยังไม่มีประวัติ</td>
                         </tr>
                     @endforelse
                 </tbody>

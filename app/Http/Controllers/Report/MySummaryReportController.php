@@ -13,57 +13,40 @@ use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
-class DailyReportController extends Controller
+class MySummaryReportController extends Controller
 {
     /**
-     * Show the daily report page with date picker and preview.
+     * Show the "my summary" page — date picker + export, scoped to the
+     * logged-in user's own transactions at their current working counter.
      */
     public function index(Request $request)
     {
         $date = $request->input('date', now()->format('Y-m-d'));
-        $counterId = session('working_counter_id');
+        $counter = $this->workingCounter();
 
-        [$dateStart, $dateEnd] = $this->getDateRange($date);
-
-        // Get visible counters based on user role
-        $visibleBranchIds = auth()->user()->getVisibleBranchIds();
-        $visibleCounterIds = Counter::whereIn('branch_id', $visibleBranchIds)
-            ->pluck('id')
-            ->toArray();
-
-        $counter = $counterId ? Counter::find($counterId) : null;
-
-        $buying = $this->getSummary('BUYING', $visibleCounterIds, $dateStart, $dateEnd);
-        $selling = $this->getSummary('SELLING', $visibleCounterIds, $dateStart, $dateEnd);
-
-        return view('reports.daily', compact('date', 'counterId', 'counter', 'buying', 'selling'));
+        return view('reports.my-summary', compact('date', 'counter'));
     }
 
     /**
-     * Generate and download Excel file.
+     * Generate and download Excel file for the logged-in user's own
+     * transactions at their current working counter.
      */
     public function exportExcel(Request $request)
     {
         $date = $request->input('date', now()->format('Y-m-d'));
-        $counterId = session('working_counter_id');
+        $counter = $this->workingCounter();
 
         [$dateStart, $dateEnd] = $this->getDateRange($date);
 
-        // Get visible counters based on user role
-        $visibleBranchIds = auth()->user()->getVisibleBranchIds();
-        $visibleCounterIds = Counter::whereIn('branch_id', $visibleBranchIds)
-            ->pluck('id')
-            ->toArray();
-
-        $counter = $counterId ? Counter::find($counterId) : null;
-        $counterName = $counter?->counter_name ?? '-';
-
-        $buying = $this->getSummary('BUYING', $visibleCounterIds, $dateStart, $dateEnd);
-        $selling = $this->getSummary('SELLING', $visibleCounterIds, $dateStart, $dateEnd);
+        $buying = $this->getSummary('BUYING', $counter?->id, $dateStart, $dateEnd);
+        $selling = $this->getSummary('SELLING', $counter?->id, $dateStart, $dateEnd);
 
         // Build spreadsheet
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
+        $sheetName = $counter->counter_name ?? 'Summary';
+        $sheetName = str_replace(['/', '\\', '?', '*', '[', ']', ':'], '-', $sheetName);
+        $sheet->setTitle(mb_substr($sheetName, 0, 31, 'UTF-8'));
 
         // Column widths
         $sheet->getColumnDimension('A')->setWidth(25);
@@ -74,20 +57,16 @@ class DailyReportController extends Controller
         // Right-align numeric columns
         $sheet->getStyle('B:D')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
 
-        // Row 1: empty
-        // Row 2: Title (merged A:D, bold, 15pt)
+        // Row 2: Title
         $sheet->mergeCells('A2:D2');
         $sheet->setCellValue('A2', 'สรุปยอดการรับซื้ออัตราแลกเปลี่ยนเงินตราต่างประเทศ');
         $sheet->getStyle('A2')->getFont()->setBold(true)->setSize(15);
         $sheet->getStyle('A2')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
 
-        // Row 3: empty
         // Row 4: date + counter
         $sheet->setCellValue('A4', 'ยอดประจำวันที่ ' . Carbon::parse($date)->format('d/m/Y'));
-        $sheet->setCellValue('D4', $counterName);
+        $sheet->setCellValue('D4', $counter->counter_name ?? '-');
         $sheet->getStyle('A4')->getFont()->setBold(true);
-
-        // Row 5: empty
 
         // --- BUYING SECTION ---
         $row = 6;
@@ -116,23 +95,19 @@ class DailyReportController extends Controller
             $row++;
         }
 
-        // Buying total row
         $sheet->setCellValue("A{$row}", 'รวมยอดรับซื้อ');
         $sheet->setCellValue("D{$row}", $buyingTotalThb);
         $sheet->getStyle("A{$row}:D{$row}")->getFont()->setBold(true);
         $buyingEndRow = $row;
 
-        // Apply borders to buying section (rows 7 to buyingEndRow)
         $this->applyBorders($sheet, "A7:D{$buyingEndRow}");
 
-        // Number formats for buying data rows
         if ($buyingStartRow <= $buyingEndRow) {
             $sheet->getStyle("B{$buyingStartRow}:B{$buyingEndRow}")->getNumberFormat()->setFormatCode('#,##0.00');
             $sheet->getStyle("C{$buyingStartRow}:C{$buyingEndRow}")->getNumberFormat()->setFormatCode('#,##0.000000');
             $sheet->getStyle("D{$buyingStartRow}:D{$buyingEndRow}")->getNumberFormat()->setFormatCode('#,##0.00');
         }
 
-        // 2 empty rows
         $row += 3;
 
         // --- SELLING SECTION ---
@@ -162,23 +137,19 @@ class DailyReportController extends Controller
             $row++;
         }
 
-        // Selling total row
         $sheet->setCellValue("A{$row}", 'รวมยอดขาย');
         $sheet->setCellValue("D{$row}", $sellingTotalThb);
         $sheet->getStyle("A{$row}:D{$row}")->getFont()->setBold(true);
         $sellingEndRow = $row;
 
-        // Apply borders to selling section
         $this->applyBorders($sheet, "A{$headerRow}:D{$sellingEndRow}");
 
-        // Number formats for selling data rows
         if ($sellingStartRow <= $sellingEndRow) {
             $sheet->getStyle("B{$sellingStartRow}:B{$sellingEndRow}")->getNumberFormat()->setFormatCode('#,##0.00');
             $sheet->getStyle("C{$sellingStartRow}:C{$sellingEndRow}")->getNumberFormat()->setFormatCode('#,##0.000000');
             $sheet->getStyle("D{$sellingStartRow}:D{$sellingEndRow}")->getNumberFormat()->setFormatCode('#,##0.00');
         }
 
-        // Output to browser
         $filename = "SummaryReport_{$date}.xlsx";
         $writer = new Xlsx($spreadsheet);
 
@@ -189,9 +160,14 @@ class DailyReportController extends Controller
         ]);
     }
 
+    private function workingCounter(): ?Counter
+    {
+        $counterId = session('working_counter_id');
+
+        return $counterId ? Counter::find($counterId) : null;
+    }
+
     /**
-     * Calculate the date range using WORKING_CUT_OFF.
-     *
      * @return array{0: string, 1: string}
      */
     private function getDateRange(string $date): array
@@ -204,13 +180,14 @@ class DailyReportController extends Controller
     }
 
     /**
-     * Get transaction summary grouped by currency and rate.
+     * Get transaction summary for the logged-in user's own transactions at
+     * one counter, grouped by currency and rate.
      *
      * BUYING:  transactions_detail.amount = foreign currency, .total = THB
      * SELLING: transactions_detail.amount = THB, .total = foreign currency
      * — so which column is "fc_amount" vs "thb_amount" flips by $trnsType.
      */
-    private function getSummary(string $trnsType, array $counterIds, string $dateStart, string $dateEnd)
+    private function getSummary(string $trnsType, ?int $counterId, string $dateStart, string $dateEnd)
     {
         $fcColumn = $trnsType === 'BUYING' ? 'amount' : 'total';
         $thbColumn = $trnsType === 'BUYING' ? 'total' : 'amount';
@@ -218,22 +195,23 @@ class DailyReportController extends Controller
         $query = TransactionDetail::join('transactions_master', 'transactions_detail.transaction_id', '=', 'transactions_master.id')
             ->where('transactions_master.trns_type', $trnsType)
             ->where('transactions_master.flag_cancel', 'N')
+            ->where('transactions_master.created_by', auth()->id())
             ->where('transactions_master.trns_datetime', '>', $dateStart)
             ->where('transactions_master.trns_datetime', '<=', $dateEnd)
             ->selectRaw("transactions_detail.currency_name, transactions_detail.unit_price, SUM(transactions_detail.{$fcColumn}) as fc_amount, SUM(transactions_detail.{$thbColumn}) as thb_amount")
             ->groupBy('transactions_detail.currency_name', 'transactions_detail.unit_price')
             ->orderBy('transactions_detail.currency_name');
 
-        if (!empty($counterIds)) {
-            $query->whereIn('transactions_master.counter_id', $counterIds);
+        if ($counterId) {
+            $query->where('transactions_master.counter_id', $counterId);
+        } else {
+            // No working counter selected — a user with no counter has no transactions to show.
+            $query->whereRaw('1 = 0');
         }
 
         return $query->get();
     }
 
-    /**
-     * Apply thin borders to a cell range.
-     */
     private function applyBorders($sheet, string $range): void
     {
         $sheet->getStyle($range)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);

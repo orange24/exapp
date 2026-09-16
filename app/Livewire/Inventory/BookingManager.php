@@ -12,6 +12,7 @@ use App\Models\TransactionMaster;
 use App\Models\TransactionDetail;
 use App\Services\AutoJournalService;
 use App\Services\InventoryService;
+use App\Services\ThbCashService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Livewire\Component;
@@ -249,6 +250,17 @@ class BookingManager extends Component
                         Auth::id()
                     );
                 }
+            }
+
+            // เงินบาทเข้า/ออกลิ้นชัก — บิลที่มาจาก booking ต้องบันทึกเหมือนบิล
+            // ที่ทำจากหน้าเคาน์เตอร์ ไม่งั้นยอดเงินบาทจะเพี้ยนเฉพาะทางนี้
+            // อยู่นอก if ($denomId) เพราะเงินบาทเคลื่อนไหวจริงไม่ว่าจะระบุ denom หรือไม่
+            $thbCash = app(ThbCashService::class);
+
+            if ($booking->type === 'sell') {
+                $thbCash->recordSaleReceipt($booking->counter_id, $thbAmount, $master->id, Auth::id());
+            } else {
+                $thbCash->recordPurchasePayment($booking->counter_id, $thbAmount, $master->id, Auth::id());
             }
 
             // Auto GL Journal

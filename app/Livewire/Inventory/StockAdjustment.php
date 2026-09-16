@@ -7,6 +7,7 @@ use App\Models\CounterStock;
 use App\Models\Currency;
 use App\Models\CurrencyDenomination;
 use App\Models\StockMovement;
+use App\Services\ThbCashService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Livewire\Component;
@@ -57,14 +58,26 @@ class StockAdjustment extends Component
 
     public function getDenominationsProperty()
     {
-        if (!$this->currencyCode) return collect();
+        if (!$this->currencyCode || $this->isThb) return collect();
         return CurrencyDenomination::where('currency_code', $this->currencyCode)->orderBy('seq')->get();
+    }
+
+    /**
+     * กำลังปรับปรุงยอดเงินบาทอยู่หรือไม่
+     *
+     * เงินบาทไม่มีแถวใน currencies และไม่มี denomination — มันจึงไม่โผล่ใน
+     * dropdown สกุลเงินเอง ต้องเติมตัวเลือกให้เองในหน้าจอ
+     */
+    public function getIsThbProperty(): bool
+    {
+        return $this->currencyCode === CounterStock::THB;
     }
 
     public function updatedCurrencyCode(): void
     {
         $this->denominationId = '';
         $this->currentStock = 0;
+        $this->updateCurrentStock();
     }
 
     public function updatedDenominationId(): void
@@ -79,7 +92,9 @@ class StockAdjustment extends Component
 
     private function updateCurrentStock(): void
     {
-        if ($this->counterId && $this->denominationId) {
+        if ($this->counterId && $this->isThb) {
+            $this->currentStock = app(ThbCashService::class)->balance((int) $this->counterId);
+        } elseif ($this->counterId && $this->denominationId) {
             $stock = CounterStock::where('counter_id', $this->counterId)
                 ->where('denomination_id', $this->denominationId)->first();
             $this->currentStock = $stock ? (float) $stock->quantity : 0;
@@ -93,7 +108,8 @@ class StockAdjustment extends Component
         $this->validate([
             'counterId' => 'required|exists:counters,id',
             'currencyCode' => 'required',
-            'denominationId' => 'required|exists:currency_denominations,id',
+            // เงินบาทไม่มี denomination ให้เลือก
+            'denominationId' => $this->isThb ? 'nullable' : 'required|exists:currency_denominations,id',
             'adjustType' => 'required|in:add,subtract',
             'amount' => 'required|numeric|min:0.01',
             'note' => 'required|min:3',
@@ -114,6 +130,21 @@ class StockAdjustment extends Component
                 return;
             }
             $adjustAmount = -$adjustAmount;
+        }
+
+        if ($this->isThb) {
+            // ยอดบาทไปทาง ThbCashService เพื่อให้แถว counter_stock/movement ของ THB
+            // ถูกเขียนด้วยรูปแบบเดียวกับที่ buy/sell และการปิดวันใช้
+            app(ThbCashService::class)->adjust(
+                (int) $this->counterId,
+                $adjustAmount,
+                Auth::id(),
+                ($this->adjustType === 'add' ? 'ปรับเพิ่ม: ' : 'ปรับลด: ') . $this->note,
+            );
+
+            $this->resetForm();
+            session()->flash('success', 'ปรับปรุงยอดเงินบาทสำเร็จ');
+            return;
         }
 
         DB::transaction(function () use ($adjustAmount) {

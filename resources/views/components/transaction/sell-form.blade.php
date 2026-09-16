@@ -281,8 +281,12 @@ new class extends Component
         $counter = Counter::find($this->counterId);
         $docNo   = $this->generateDocNo('S');
 
+        // ฝั่งขาย amount คือเงินบาทที่ลูกค้าจ่ายมา ส่วน total คือเงินตราต่างประเทศ
+        // ที่จ่ายออกไป — สลับกันกับฝั่งรับซื้อ (ดู print-slip.blade.php)
+        $thbReceipt = (float) collect($this->rows)->sum('amount');
+
         try {
-            DB::transaction(function () use ($counter, $docNo) {
+            DB::transaction(function () use ($counter, $docNo, $thbReceipt) {
                 $master = TransactionMaster::create([
                     'trns_no'              => $docNo,
                     'trns_type'            => 'SELLING',
@@ -326,6 +330,14 @@ new class extends Component
                         );
                     }
                 }
+
+                // รับเงินบาทเข้าลิ้นชัก — บันทึกทีเดียวต่อบิล ไม่แยกตามรายการย่อย
+                app(\App\Services\ThbCashService::class)->recordSaleReceipt(
+                    (int) $this->counterId,
+                    $thbReceipt,
+                    $master->id,
+                    Auth::id(),
+                );
 
                 // Save customer data if we have passport no (from OCR or manual input)
                 if ($this->ocrPassportNo) {

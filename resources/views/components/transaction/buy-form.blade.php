@@ -41,6 +41,10 @@ new class extends Component
     public bool $showPrintSlip = false;
     public array $savedRows = [];  // keep rows for display after save
 
+    // เตือนเมื่อจ่ายบาทออกเกินยอดที่มีในลิ้นชัก — เตือนเท่านั้น ไม่บล็อกการบันทึก
+    // (เงินทุนตั้งต้นในระบบมักไม่ครบ ถ้าบล็อกหน้าเคาน์เตอร์จะทำงานไม่ได้)
+    public string $thbWarning = '';
+
     // Passport OCR fields (filled after capture)
     public string $passportImageB64 = '';
     public string $ocrFirstName = '';
@@ -213,7 +217,17 @@ new class extends Component
         $counter = Counter::find($this->counterId);
         $docNo = $this->generateDocNo('B');
 
-        DB::transaction(function () use ($counter, $docNo) {
+        $thbCash = app(\App\Services\ThbCashService::class);
+        $thbPayout = (float) collect($this->rows)->sum('total');
+
+        // เช็กก่อนบันทึก เพราะหลังบันทึกยอดจะถูกหักไปแล้ว
+        $this->thbWarning = $thbCash->wouldGoNegative((int) $this->counterId, $thbPayout)
+            ? 'ยอดเงินบาทในลิ้นชักไม่พอจ่าย (คงเหลือ '
+                . number_format($thbCash->balance((int) $this->counterId), 2)
+                . ' บาท ต้องจ่าย ' . number_format($thbPayout, 2) . ' บาท) — บันทึกรายการแล้ว แต่ยอดคงเหลือจะติดลบ'
+            : '';
+
+        DB::transaction(function () use ($counter, $docNo, $thbPayout) {
             $master = TransactionMaster::create([
                 'trns_no'        => $docNo,
                 'trns_type'      => 'BUYING',
@@ -254,6 +268,18 @@ new class extends Component
                     );
                 }
             }
+
+            // จ่ายเงินบาทออกจากลิ้นชัก — บันทึกทีเดียวต่อบิล ไม่แยกตามรายการย่อย
+            //
+            // ต่างจาก recordBuy() ข้างบนที่ข้ามแถวไม่มี denomination_id เพราะ
+            // ไม่รู้จะลงสต็อกช่องไหน — เงินบาทออกไปจริงทุกกรณี ไม่ว่าจะระบุ
+            // denomination ของสกุลที่รับซื้อมาหรือไม่
+            app(\App\Services\ThbCashService::class)->recordPurchasePayment(
+                (int) $this->counterId,
+                $thbPayout,
+                $master->id,
+                Auth::id(),
+            );
 
             // Save customer data if we have passport no (from OCR or manual input)
             if ($this->ocrPassportNo) {

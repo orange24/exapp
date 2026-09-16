@@ -9,6 +9,7 @@ use App\Models\Setting;
 use App\Models\StockMovement;
 use App\Models\WorkingDay;
 use App\Services\InventoryService;
+use App\Services\ThbCashService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
@@ -18,12 +19,28 @@ class OpenCloseDay extends Component
     public string $counterId = '';
     public string $date = '';
     public string $note = '';
-    public float $openingThbCash = 0;
+
+    /**
+     * เงินทุนที่จะเติมเข้าลิ้นชักตอนเปิดวัน — optional
+     *
+     * เดิมช่องนี้คือ "ยอดบาทที่รับมา" ที่พนักงานต้องกรอกทุกวันและถูกเก็บลง
+     * working_days.opening_thb_cash ตรงๆ โดยไม่มีใครคำนวณยอดคงเหลือต่อ
+     * ตอนนี้ยอดยกมาถูกคำนวณสดจาก movement แล้ว ช่องนี้จึงเหลือหน้าที่แค่
+     * "เติมเงินเพิ่มเท่าไหร่" ซึ่งเว้นว่างได้ถ้าเงินทุนยกมาพอแล้ว
+     */
+    public float $topupThbCash = 0;
 
     // Closing flow
     public bool $showClosingForm = false;
     public array $closingItems = [];
     public string $closingNotes = '';
+
+    /** ยอดบาทที่นับได้จริงตอนปิดวัน */
+    public float $closingThbActual = 0;
+
+    // เติมเงินทุน / ส่งบาทคืนคลัง (ตัดสองขากับเคาน์เตอร์คลัง)
+    public float $transferAmount = 0;
+    public string $transferNote = '';
 
     public function mount(): void
     {
@@ -50,7 +67,7 @@ class OpenCloseDay extends Component
         }
 
         return WorkingDay::where('counter_id', $this->counterId)
-            ->where('work_date', $this->date)
+            ->whereDate('work_date', $this->date)
             ->first();
     }
 
@@ -65,6 +82,21 @@ class OpenCloseDay extends Component
             ->with('denomination')
             ->orderBy('currency_code')
             ->get();
+    }
+
+    /**
+     * ยอดเงินบาท: ยกมา / เข้า / ออก / คงเหลือ ของวันที่เลือก
+     *
+     * คำนวณสดจาก movement ทุกครั้ง ไม่อ่านยอดปิดของวันก่อนหน้า — วันก่อนจะปิดยอด
+     * หรือเว้นไปกี่วันก็ไม่กระทบ
+     */
+    public function getThbSummaryProperty(): array
+    {
+        if (! $this->counterId || ! $this->date) {
+            return ['opening' => 0.0, 'in' => 0.0, 'out' => 0.0, 'closing' => 0.0];
+        }
+
+        return app(ThbCashService::class)->summaryFor((int) $this->counterId, $this->date);
     }
 
     public function getRecentDaysProperty()
@@ -87,14 +119,12 @@ class OpenCloseDay extends Component
             return;
         }
 
-        if ($this->openingThbCash <= 0) {
-            session()->flash('error', 'กรุณากรอกจำนวนเงิน THB ที่รับมา');
-            return;
-        }
+        // ไม่บังคับให้กรอกเงินทุนอีกต่อไป — เคาน์เตอร์ที่มีเงินบาทยกมาจากวันก่อน
+        // เปิดวันได้เลยโดยไม่ต้องเติมอะไร
 
         // Check if already opened
         $existing = WorkingDay::where('counter_id', $this->counterId)
-            ->where('work_date', $this->date)
+            ->whereDate('work_date', $this->date)
             ->first();
 
         if ($existing) {
@@ -102,12 +132,27 @@ class OpenCloseDay extends Component
             return;
         }
 
-        // Create working day record
-        $cashAmount = $this->openingThbCash;
+        $thbCash = app(ThbCashService::class);
+        $topup = (float) $this->topupThbCash;
+
+        // เงินที่เติมตอนนี้เกิดที่ now() ซึ่งอยู่หลัง cutoff ของวันนี้ จึงนับเป็น
+        // "รับเข้าระหว่างวัน" ไม่ใช่ "ยอดยกมา" — opening_thb_cash ข้างล่างจะยัง
+        // เป็นยอดที่ยกมาจากวันก่อนเท่านั้น ตามความหมายของคำว่ายกมา
+        if ($topup > 0) {
+            $thbCash->topUp(
+                (int) $this->counterId,
+                $topup,
+                Auth::id(),
+                'เติมเงินทุนตอนเปิดวันทำการ ' . Carbon::parse($this->date)->format('d/m/Y'),
+            );
+        }
+
+        // opening_thb_cash เก็บยอดยกมาที่ระบบคำนวณได้ ไม่ใช่ยอดที่พนักงานกรอก
+        // — เป็น snapshot ไว้ตรวจย้อนหลังว่าตอนเปิดวันระบบเห็นเท่าไหร่
         WorkingDay::create([
             'counter_id' => $this->counterId,
             'work_date' => $this->date,
-            'opening_thb_cash' => $cashAmount,
+            'opening_thb_cash' => $thbCash->openingFor((int) $this->counterId, $this->date),
             'status' => 'open',
             'opened_by' => Auth::id(),
             'opened_at' => now(),
@@ -119,8 +164,48 @@ class OpenCloseDay extends Component
         $service->openDay((int) $this->counterId, $this->date);
 
         $this->note = '';
-        $this->openingThbCash = 0;
-        session()->flash('success', 'เปิดวันทำการสำเร็จ - เงินทุนหมุน: ' . number_format($cashAmount, 2) . ' บาท');
+        $this->topupThbCash = 0;
+
+        session()->flash('success', 'เปิดวันทำการสำเร็จ - เงินบาทคงเหลือ: '
+            . number_format($thbCash->balance((int) $this->counterId), 2) . ' บาท');
+    }
+
+    /** เติมเงินทุนเข้าลิ้นชักระหว่างวัน */
+    public function topUpCash(): void
+    {
+        $this->runCashMovement(isTopUp: true);
+    }
+
+    /** นำเงินบาทออกจากลิ้นชัก (ฝากเข้าบัญชี / ส่งคืน) */
+    public function withdrawCash(): void
+    {
+        $this->runCashMovement(isTopUp: false);
+    }
+
+    private function runCashMovement(bool $isTopUp): void
+    {
+        if (! $this->counterId) {
+            session()->flash('error', 'กรุณาเลือกเคาน์เตอร์');
+            return;
+        }
+
+        $thbCash = app(ThbCashService::class);
+        $amount = (float) $this->transferAmount;
+
+        try {
+            $isTopUp
+                ? $thbCash->topUp((int) $this->counterId, $amount, Auth::id(), $this->transferNote ?: null)
+                : $thbCash->withdraw((int) $this->counterId, $amount, Auth::id(), $this->transferNote ?: null);
+        } catch (\InvalidArgumentException $e) {
+            session()->flash('error', $e->getMessage());
+            return;
+        }
+
+        $this->transferAmount = 0;
+        $this->transferNote = '';
+
+        session()->flash('success', ($isTopUp ? 'เติมเงินทุน ' : 'นำเงินออก ')
+            . number_format($amount, 2) . ' บาท สำเร็จ');
     }
 
     public function prepareClosing(): void
@@ -149,6 +234,10 @@ class OpenCloseDay extends Component
             ];
         })->toArray();
 
+        // ตั้งค่าเริ่มต้นเป็นยอดตามระบบ พนักงานนับเงินแล้วแก้ทับถ้าไม่ตรง
+        $this->closingThbActual = app(ThbCashService::class)
+            ->expectedClosingFor((int) $this->counterId, $this->date);
+
         $this->showClosingForm = true;
     }
 
@@ -168,7 +257,7 @@ class OpenCloseDay extends Component
         }
 
         $workingDay = WorkingDay::where('counter_id', $this->counterId)
-            ->where('work_date', $this->date)
+            ->whereDate('work_date', $this->date)
             ->where('status', 'open')
             ->first();
 
@@ -181,17 +270,30 @@ class OpenCloseDay extends Component
         $service = app(InventoryService::class);
         $service->closeDay((int) $this->counterId, $this->date);
 
-        // Update working day status to closed + pending approval
+        $expected = app(ThbCashService::class)
+            ->expectedClosingFor((int) $this->counterId, $this->date);
+        $actual = (float) $this->closingThbActual;
+
+        // เก็บผลต่างไว้ก่อน ยังไม่โพสต์เป็น movement — รอ admin อนุมัติ ไม่งั้น
+        // ยอดในระบบจะถูกแก้ไปแล้วทั้งที่การนับอาจถูกปฏิเสธ
         $workingDay->update([
             'status' => 'closed',
             'closed_by' => Auth::id(),
             'closed_at' => now(),
             'closing_items' => $this->closingItems,
             'closing_status' => 'pending',
+            'closing_thb_expected' => $expected,
+            'closing_thb_actual' => $actual,
+            'closing_thb_variance' => $actual - $expected,
         ]);
 
         $this->showClosingForm = false;
-        session()->flash('success', 'บันทึกยอดปิดสำเร็จ - รออนุมัติจาก Admin');
+
+        $variance = $actual - $expected;
+        session()->flash('success', 'บันทึกยอดปิดสำเร็จ - รออนุมัติจาก Admin'
+            . (abs($variance) >= 0.005
+                ? ' (เงินบาท' . ($variance > 0 ? 'เกิน ' : 'ขาด ') . number_format(abs($variance), 2) . ' บาท)'
+                : ''));
     }
 
     public function approveClosing(int $workingDayId): void
@@ -210,6 +312,11 @@ class OpenCloseDay extends Component
         // Transfer stock to HQ
         $this->transferStockToHQ($workingDay);
 
+        // โพสต์ผลต่างเงินบาทตอนนี้ — ยอดยกมาวันถัดไปจึงเท่ากับเงินที่นับได้จริง
+        // เงินบาทไม่ถูกโอนไปคลังอัตโนมัติ ต่างจากเงินตราต่างประเทศ เพราะ
+        // เคาน์เตอร์ต้องเก็บเงินทุนหมุนข้ามคืน ถ้าจะส่งคืนให้ใช้เมนูส่งคืนคลัง
+        $variance = app(ThbCashService::class)->postClosingVariance($workingDay, Auth::id());
+
         // Approve
         $workingDay->update([
             'closing_status' => 'approved',
@@ -217,7 +324,8 @@ class OpenCloseDay extends Component
             'closing_approved_at' => now(),
         ]);
 
-        session()->flash('success', 'อนุมัติยอดปิดสำเร็จ - โอนสต็อกไปส่วนกลางแล้ว');
+        session()->flash('success', 'อนุมัติยอดปิดสำเร็จ - โอนสต็อกไปส่วนกลางแล้ว'
+            . ($variance ? ' และปรับปรุงผลต่างเงินบาท ' . number_format((float) $variance->amount, 2) . ' บาท' : ''));
     }
 
     public function rejectClosing(int $workingDayId, string $reason): void
