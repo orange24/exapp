@@ -4,32 +4,46 @@
         <div class="rounded-lg p-4 text-white" style="background:#0e513a;">
             <div class="text-xs opacity-75">ยอดยกมา (Opening)</div>
             <div class="text-lg font-bold">{{ number_format($this->summary['opening'], 2) }}</div>
+            <div class="text-[10px] opacity-60">ต้นทุนเฉลี่ย</div>
         </div>
         <div class="rounded-lg p-4 text-white bg-green-600">
             <div class="text-xs opacity-75">ซื้อเข้า (Bought)</div>
             <div class="text-lg font-bold">{{ number_format($this->summary['bought'], 2) }}</div>
+            <div class="text-[10px] opacity-60">เรทในบิล</div>
         </div>
         <div class="rounded-lg p-4 text-white bg-red-600">
             <div class="text-xs opacity-75">ขายออก (Sold)</div>
             <div class="text-lg font-bold">{{ number_format($this->summary['sold'], 2) }}</div>
+            <div class="text-[10px] opacity-60">เรทในบิล</div>
         </div>
         <div class="rounded-lg p-4 text-white bg-blue-600">
             <div class="text-xs opacity-75">โอนเข้า (Transfer In)</div>
             <div class="text-lg font-bold">{{ number_format($this->summary['tfr_in'], 2) }}</div>
+            <div class="text-[10px] opacity-60">เรทในบิล</div>
         </div>
         <div class="rounded-lg p-4 text-white bg-pink-600">
             <div class="text-xs opacity-75">โอนออก (Transfer Out)</div>
             <div class="text-lg font-bold">{{ number_format($this->summary['tfr_out'], 2) }}</div>
+            <div class="text-[10px] opacity-60">เรทในบิล</div>
         </div>
         <div class="rounded-lg p-4 text-white bg-yellow-600">
             <div class="text-xs opacity-75">ปรับปรุง (Adjust)</div>
             <div class="text-lg font-bold">{{ number_format($this->summary['adjust'], 2) }}</div>
+            <div class="text-[10px] opacity-60">เรทในบิล</div>
         </div>
         <div class="rounded-lg p-4 text-white bg-amber-700">
             <div class="text-xs opacity-75">คงเหลือ (Remaining)</div>
             <div class="text-lg font-bold">{{ number_format($this->summary['remaining'], 2) }}</div>
+            <div class="text-[10px] opacity-60">ต้นทุนเฉลี่ย</div>
         </div>
     </div>
+
+    <p class="-mt-4 mb-6 text-xs text-gray-500">
+        ซื้อเข้า/ขายออก/โอน/ปรับปรุง = เงินบาทตามเรทที่ใช้จริงในแต่ละรายการ ตรงกับบิลและรายการของฉัน &nbsp;·&nbsp;
+        ยอดยกมา/คงเหลือ = มูลค่าสต็อกที่ยังไม่ได้ขาย คิดด้วยต้นทุนเฉลี่ย &nbsp;·&nbsp;
+        แถบนี้จึงไม่บวกลบกันลงตัว ส่วนต่างคือกำไร/ขาดทุน ดูที่
+        <a href="{{ route('reports.profit-loss') }}" class="text-blue-600 hover:underline">รายงานกำไรขาดทุน</a>
+    </p>
 
     {{-- เงินบาทในลิ้นชัก — แยกแถบเพราะไม่มี denomination จึงไม่อยู่ในตารางสต็อกข้างล่าง --}}
     @if ($counterId)
@@ -159,8 +173,9 @@
         </div>
     </div>
 
-    {{-- Formula explanation --}}
+    {{-- Formula explanation — ใช้กับตารางแยกสกุลเงินข้างบน ซึ่งเป็นจำนวนเงินตรา
+         ไม่ใช่แถบสรุปด้านบนสุดที่เป็นเงินบาทคนละฐาน --}}
     <div class="mt-4 text-xs text-gray-400 text-right">
-        คงเหลือ = ยอดยกมา + ซื้อเข้า - ขายออก + โอนเข้า - โอนออก + ปรับปรุง
+        ตารางด้านบน (จำนวนเงินตรา): คงเหลือ = ยอดยกมา + ซื้อเข้า - ขายออก + โอนเข้า - โอนออก + ปรับปรุง
     </div>
 </div>

@@ -31,23 +31,27 @@
                     <table class="w-full text-xs">
                         <thead class="border-b" style="border-color:#0e513a;">
                             <tr>
-                                <th class="text-left py-2 px-1" style="color:#0e513a;">สกุลเงิน</th>
+                                <th class="text-left py-2 px-1" style="color:#0e513a;">สกุลเงิน / ธนบัตร</th>
                                 <th class="text-right py-2 px-1" style="color:#0e513a;">Avg Cost</th>
                                 <th class="text-right py-2 px-1" style="color:#0e513a;">Balance</th>
+                                <th class="text-right py-2 px-1" style="color:#0e513a;">มูลค่า (THB)</th>
                             </tr>
                         </thead>
                         <tbody>
                             @foreach($inventoryData[$branch->id] as $item)
                             <tr class="border-b border-gray-100 hover:bg-gray-50">
                                 <td class="py-2 px-1 font-medium" style="color:#0e513a;">
-                                    {{ $item['currency_name'] }}
-                                    <span class="text-gray-400 text-xs ml-1">({{ $item['currency_code'] }})</span>
+                                    {{ $item['currency_code'] }}
+                                    <span class="text-gray-500">({{ $item['denom_label'] }})</span>
                                 </td>
                                 <td class="text-right py-2 px-1 font-mono text-gray-700">
                                     {{ number_format($item['avg_cost'], 4) }}
                                 </td>
                                 <td class="text-right py-2 px-1 font-mono font-bold" style="color:#0e513a;">
                                     {{ number_format($item['balance'], 2) }}
+                                </td>
+                                <td class="text-right py-2 px-1 font-mono text-gray-500">
+                                    {{ number_format($item['thb_value'], 2) }}
                                 </td>
                             </tr>
                             @endforeach
@@ -79,23 +83,27 @@
                     <table class="w-full text-xs">
                         <thead class="border-b-2 border-green-600">
                             <tr>
-                                <th class="text-left py-2 px-1" style="color:#0e513a;">สกุลเงิน</th>
+                                <th class="text-left py-2 px-1" style="color:#0e513a;">สกุลเงิน / ธนบัตร</th>
                                 <th class="text-right py-2 px-1" style="color:#0e513a;">Avg Cost</th>
                                 <th class="text-right py-2 px-1" style="color:#0e513a;">Balance</th>
+                                <th class="text-right py-2 px-1" style="color:#0e513a;">มูลค่า (THB)</th>
                             </tr>
                         </thead>
                         <tbody>
                             @foreach($combinedData as $item)
                             <tr class="border-b border-green-200 hover:bg-green-100">
                                 <td class="py-2 px-1 font-medium" style="color:#0e513a;">
-                                    {{ $item['currency_name'] }}
-                                    <span class="text-gray-500 text-xs ml-1">({{ $item['currency_code'] }})</span>
+                                    {{ $item['currency_code'] }}
+                                    <span class="text-gray-500">({{ $item['denom_label'] }})</span>
                                 </td>
                                 <td class="text-right py-2 px-1 font-mono text-gray-700 font-bold">
                                     {{ number_format($item['avg_cost'], 4) }}
                                 </td>
                                 <td class="text-right py-2 px-1 font-mono font-bold text-green-700">
                                     {{ number_format($item['balance'], 2) }}
+                                </td>
+                                <td class="text-right py-2 px-1 font-mono text-gray-600">
+                                    {{ number_format($item['thb_value'], 2) }}
                                 </td>
                             </tr>
                             @endforeach
