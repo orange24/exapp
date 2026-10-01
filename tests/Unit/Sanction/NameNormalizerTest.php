@@ -33,6 +33,29 @@ class NameNormalizerTest extends TestCase
         $this->assertSame('มิง อำรัน', NameNormalizer::normalize('นางสาว อำรัน มิง'));
     }
 
+    public function test_normalize_strips_abbreviated_thai_titles_with_dots(): void
+    {
+        // "น.ส." ต้องถูกตัดทั้งก้อน ไม่ใช่แตกเป็น token "น" กับ "ส" ค้างไว้
+        // ถ้าหลุด จะเทียบกับรายชื่อ ปปง. ไม่ติด (false negative ที่หน้าเคาน์เตอร์)
+        $this->assertSame('มิง อำรัน', NameNormalizer::normalize('น.ส. อำรัน มิง'));
+        $this->assertSame('มิง อำรัน', NameNormalizer::normalize('นส อำรัน มิง'));
+        $this->assertSame('สมชาย ใจดี', NameNormalizer::normalize('ด.ช. สมชาย ใจดี'));
+        $this->assertSame('สมหญิง ใจดี', NameNormalizer::normalize('ด.ญ. สมหญิง ใจดี'));
+    }
+
+    public function test_normalize_does_not_strip_a_name_that_merely_starts_like_a_title(): void
+    {
+        // "นายก" ขึ้นต้นด้วย "นาย" แต่เป็นชื่อจริง — ห้ามตัดหัว
+        $this->assertSame('นายก สมชาย', NameNormalizer::normalize('นายก สมชาย'));
+    }
+
+    public function test_normalize_keeps_thai_vowels_and_tone_marks(): void
+    {
+        // สระ/วรรณยุกต์ไทยเป็น combining mark (\p{M}) ไม่ใช่ \p{L}
+        // ถ้า regex ตัดอักขระพิเศษไม่เก็บไว้ ชื่อไทยทุกชื่อจะถูกทำลาย
+        $this->assertSame('มิง อำรัน', NameNormalizer::normalize('อำรัน มิง'));
+    }
+
     public function test_normalize_strips_punctuation(): void
     {
         $this->assertSame('AMRAN MING', NameNormalizer::normalize('AMRAN, MING.'));
