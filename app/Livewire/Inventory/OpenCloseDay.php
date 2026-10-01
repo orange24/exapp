@@ -296,6 +296,104 @@ class OpenCloseDay extends Component
                 : ''));
     }
 
+    /**
+     * เปิดวันทำการที่กดปิดผิดกลับมาใหม่
+     *
+     * ตอนกดปิดระบบแค่เก็บยอดที่นับได้ไว้รออนุมัติ ยังไม่โอนสต็อกและยังไม่โพสต์ผลต่าง
+     * เงินบาท — สองอย่างนั้นอยู่ใน approveClosing การเปิดกลับจึงเป็นแค่การล้างยอดปิด
+     * ที่กรอกค้างไว้ ไม่มี movement ไหนต้องกลับรายการ ตราบใดที่ยังไม่อนุมัติ
+     */
+    public function reopenDay(string $reason = ''): void
+    {
+        if (!$this->counterId) {
+            session()->flash('error', 'กรุณาเลือกเคาน์เตอร์');
+            return;
+        }
+
+        // จำกัดไว้ที่วันปัจจุบัน — หน้า buy/sell มองหาวันทำการของวันนี้เท่านั้น
+        // การเปิดวันเก่ากลับมาจึงไม่ช่วยให้ทำรายการได้ มีแต่จะทำให้ยอดปิดที่ปิดไป
+        // แล้วเปลี่ยนย้อนหลัง
+        if ($this->date !== now()->format('Y-m-d')) {
+            session()->flash('error', 'เปิดใหม่ได้เฉพาะวันทำการปัจจุบันเท่านั้น');
+            return;
+        }
+
+        $workingDay = WorkingDay::where('counter_id', $this->counterId)
+            ->whereDate('work_date', $this->date)
+            ->first();
+
+        if (!$workingDay) {
+            session()->flash('error', 'ไม่พบวันทำการของวันที่เลือก');
+            return;
+        }
+
+        if ($workingDay->isOpen()) {
+            session()->flash('error', 'วันทำการนี้เปิดอยู่แล้ว');
+            return;
+        }
+
+        if (!$workingDay->canReopen()) {
+            session()->flash('error', 'ยอดปิดถูกอนุมัติไปแล้ว เปิดใหม่ไม่ได้ '
+                . '— สต็อกถูกโอนไปคลังกลางและผลต่างเงินบาทถูกบันทึกแล้ว '
+                . 'ถ้าต้องแก้ให้ใช้เมนูปรับปรุงสต็อก');
+            return;
+        }
+
+        $reason = trim($reason);
+        if ($reason === '') {
+            session()->flash('error', 'กรุณาระบุเหตุผลที่เปิดวันทำการใหม่');
+            return;
+        }
+
+        // ไม่เรียก InventoryService::openDay() ซ้ำ — เมธอดนั้นเขียน opening_balance
+        // ด้วยสต็อกคงเหลือ ณ ตอนเรียก ถ้าเปิดใหม่หลังเทรดไปแล้วครึ่งวัน ยอดยกมาจะ
+        // กลายเป็นสต็อกกลางวัน แถว Inventory ของวันนี้ปล่อยไว้ ตอนปิดรอบใหม่
+        // closeDay() คำนวณทับให้เอง
+        $workingDay->update([
+            'status' => 'open',
+            'closed_by' => null,
+            'closed_at' => null,
+            'closing_items' => null,
+            'closing_status' => null,
+            'closing_notes' => null,
+            'closing_approved_by' => null,
+            'closing_approved_at' => null,
+            'closing_thb_expected' => null,
+            'closing_thb_actual' => null,
+            'closing_thb_variance' => null,
+            'reopened_by' => Auth::id(),
+            'reopened_at' => now(),
+            'reopen_reason' => $this->appendReopenLog($workingDay, $reason),
+        ]);
+
+        // ล้าง state ของฟอร์มปิดวันที่ค้างอยู่ฝั่ง client
+        $this->showClosingForm = false;
+        $this->closingItems = [];
+        $this->closingThbActual = 0;
+
+        session()->flash('success', 'เปิดวันทำการใหม่สำเร็จ - ยอดปิดที่กรอกไว้ถูกยกเลิก '
+            . 'ทำรายการต่อได้เลย');
+    }
+
+    /**
+     * ต่อบรรทัด log ท้ายของเดิม — working_days เก็บได้แถวเดียวต่อวัน
+     * (unique counter_id + work_date) ถ้าเปิด-ปิดซ้ำหลายรอบต้องเห็นครบทุกรอบ
+     */
+    private function appendReopenLog(WorkingDay $workingDay, string $reason): string
+    {
+        $discarded = 'ยกเลิกยอดปิด: บาทนับได้ '
+            . number_format((float) $workingDay->closing_thb_actual, 2)
+            . ' (ตามระบบ ' . number_format((float) $workingDay->closing_thb_expected, 2) . ')'
+            . ', ' . count($workingDay->closing_items ?? []) . ' รายการสกุลเงิน';
+
+        $line = now()->format('d/m/Y H:i')
+            . ' | ' . (Auth::user()?->name ?? '-')
+            . ' | ' . $reason
+            . ' | ' . $discarded;
+
+        return trim(($workingDay->reopen_reason ? $workingDay->reopen_reason . "\n" : '') . $line);
+    }
+
     public function approveClosing(int $workingDayId): void
     {
         if (!Auth::user()->isAdmin()) {

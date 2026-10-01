@@ -96,6 +96,22 @@
                                 ปฏิเสธ
                             </span>
                         @endif
+
+                        {{-- กดปิดผิด: เปิดกลับได้ตราบใดที่ยังไม่อนุมัติ และต้องเป็นวันปัจจุบัน --}}
+                        @if ($wd->canReopen() && $date === now()->format('Y-m-d'))
+                            <div x-data="{ reopenReason: '' }">
+                                <button @click="reopenReason = prompt('ระบุเหตุผลที่เปิดวันทำการใหม่:'); if(reopenReason && reopenReason.trim()) { $wire.reopenDay(reopenReason) }"
+                                        class="px-5 py-2 text-sm font-semibold text-white rounded-lg bg-amber-500 hover:bg-amber-600">
+                                    ↺ เปิดวันทำการใหม่
+                                </button>
+                            </div>
+                        @elseif ($wd->isApproved())
+                            <span class="text-xs text-gray-500">
+                                อนุมัติยอดปิดแล้ว เปิดใหม่ไม่ได้ — ถ้าต้องแก้ให้ใช้เมนูปรับปรุงสต็อก
+                            </span>
+                        @elseif ($wd->canReopen())
+                            <span class="text-xs text-gray-500">เปิดใหม่ได้เฉพาะวันทำการปัจจุบัน</span>
+                        @endif
                     </div>
                 @endif
             @endif
@@ -387,6 +403,10 @@
                                     <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">เปิดอยู่</span>
                                 @else
                                     <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">ปิดแล้ว</span>
+                                @endif
+                                @if ($wd->wasReopened())
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800"
+                                          title="{{ $wd->reopen_reason }}">เปิดใหม่</span>
                                 @endif
                             </td>
                             <td class="px-4 py-2 text-center">
