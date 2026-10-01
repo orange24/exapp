@@ -234,16 +234,25 @@ class AmloHtmlParser
         return null;
     }
 
-    /** "1. อำรัน มิง" -> "อำรัน มิง" (ตัดเฉพาะเลขลำดับตัวแรกตัวเดียว) */
+    /**
+     * ตัดเลขลำดับออกจากชื่อให้หมด ไม่ใช่แค่ตัวแรก
+     *
+     *   TH: "1. อำรัน มิง"                       -> "อำรัน มิง"
+     *   UN: "1. IYAD 2. NAZMI 3. SALIH 4. KHALIL" -> "IYAD NAZMI SALIH KHALIL"
+     *
+     * ถ้าตัดแค่ตัวแรก เลข 2. 3. 4. จะค้างอยู่ในคอลัมน์ name_en ซึ่งเป็นค่าที่
+     * แถบเตือนหน้าเคาน์เตอร์ คิวตรวจสอบ และ noti ที่ส่งหาส่วนกลางเอาไปแสดง
+     * คนที่ต้องตัดสินใจว่า "ใช่คนเดียวกันไหม" จะอ่านเทียบกับพาสปอร์ตในมือได้ยากขึ้น
+     */
     private static function stripLeadingNumber(?string $value): ?string
     {
         if ($value === null) {
             return null;
         }
 
-        $stripped = preg_replace('/^\s*\d+\.\s*/u', '', $value) ?? $value;
+        $parts = NameNormalizer::splitNumberedParts($value);
 
-        return self::nullIfBlank(trim($stripped));
+        return self::nullIfBlank(trim(implode(' ', $parts)));
     }
 
     private static function xpath(string $html): DOMXPath

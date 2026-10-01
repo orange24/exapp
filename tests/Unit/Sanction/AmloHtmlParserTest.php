@@ -110,6 +110,16 @@ class AmloHtmlParserTest extends TestCase
         $this->assertCount(2, $passports);
     }
 
+    public function test_un_display_name_has_no_leftover_sequence_numbers(): void
+    {
+        // name_en คือค่าที่แถบเตือนหน้าเคาน์เตอร์ คิวตรวจสอบ และ noti เอาไปแสดง
+        // ถ้าเลข 2. 3. 4. ค้างอยู่ คนอนุมัติจะอ่านเทียบกับพาสปอร์ตในมือได้ยาก
+        $dto = AmloHtmlParser::parseDetail($this->fixture('detail_un_individual'), '17313');
+
+        $this->assertSame('IYAD NAZMI SALIH KHALIL', $dto->nameEn);
+        $this->assertDoesNotMatchRegularExpression('/\d+\./', (string) $dto->nameEn);
+    }
+
     public function test_un_detail_splits_numbered_name_parts(): void
     {
         $dto = AmloHtmlParser::parseDetail($this->fixture('detail_un_individual'), '17313');
