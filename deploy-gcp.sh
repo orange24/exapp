@@ -92,6 +92,59 @@ gcloud run deploy "$SERVICE_NAME" \
   --update-secrets "APP_KEY=exapp-app-key:latest" \
   --update-secrets "DB_PASSWORD=exapp-db-password:latest"
 
+# --- Step 2.5: Deploy Cloud Run Jobs ---
+#
+# ใช้ Job ไม่ใช่ HTTP endpoint เพราะ:
+#   1. Cloud Run service มีเพดาน request timeout 60 นาที
+#      ส่วน sanctions:sync ครั้งแรกใช้ ~17 นาที/ลิสต์ และอาจนานกว่านั้น
+#   2. การยิง HTTP เข้า service เดียวกับที่ลูกค้าใช้ จะไปแย่ง instance
+#      กับหน้าเคาน์เตอร์ตอนกลางคืนที่สาขาสนามบินยังเปิด
+#
+# Job ใช้ image เดียวกับ service — ไม่ต้อง build ใหม่
+deploy_job() {
+  JOB_NAME="$1"
+  TASK_TIMEOUT="$2"
+  shift 2
+
+  echo ""
+  echo "Deploying Cloud Run Job: $JOB_NAME"
+
+  # jobs deploy = create ถ้ายังไม่มี, update ถ้ามีแล้ว
+  gcloud run jobs deploy "$JOB_NAME" \
+    --image "$IMAGE" \
+    --region "$REGION" \
+    --command "/job-entrypoint.sh" \
+    --args "$(IFS=, ; echo "$*")" \
+    --task-timeout "$TASK_TIMEOUT" \
+    --max-retries 1 \
+    --memory 512Mi \
+    --cpu 1 \
+    --set-env-vars "APP_ENV=production" \
+    --set-env-vars "APP_DEBUG=false" \
+    --set-env-vars "APP_URL=https://exapp.softernity.com" \
+    --set-env-vars "DB_CONNECTION=mysql" \
+    --set-env-vars "DB_HOST=163.44.198.71" \
+    --set-env-vars "DB_PORT=3306" \
+    --set-env-vars "DB_DATABASE=cp338215_exapp" \
+    --set-env-vars "DB_USERNAME=cp338215_exapp" \
+    --set-env-vars "SESSION_DRIVER=database" \
+    --set-env-vars "CACHE_STORE=database" \
+    --set-env-vars "QUEUE_CONNECTION=database" \
+    --set-env-vars "LOG_CHANNEL=stderr" \
+    --set-env-vars "SANCTION_SYNC_CONTACT_EMAIL=${SANCTION_SYNC_CONTACT_EMAIL:-}" \
+    --update-secrets "APP_KEY=exapp-app-key:latest" \
+    --update-secrets "DB_PASSWORD=exapp-db-password:latest"
+}
+
+# sync รายชื่อ ปปง. — ครั้งแรก ~17 นาที/ลิสต์ ให้เวลาเหลือเฟือ
+deploy_job "exapp-sanctions-sync" "3600s" php artisan sanctions:sync --list=all
+
+# Laravel scheduler — ทำให้ bookings:expire กลับมาทำงาน
+deploy_job "exapp-scheduler" "600s" php artisan schedule:run
+
+# canary ตรวจว่า parser ยังอ่านหน้าเว็บ ปปง. ได้
+deploy_job "exapp-parser-canary" "600s" php artisan sanctions:verify-parser
+
 # --- Step 3: Get URL ---
 echo ""
 URL=$(gcloud run services describe "$SERVICE_NAME" --region "$REGION" --format='value(status.url)')
@@ -106,3 +159,7 @@ echo "     gcloud run services update $SERVICE_NAME --region $REGION --set-env-v
 echo "  2. Store secrets (ครั้งแรก):"
 echo "     echo -n 'base64:qOx...' | gcloud secrets create exapp-app-key --data-file=-"
 echo "     echo -n 'a8&P;dw86TD\$' | gcloud secrets create exapp-db-password --data-file=-"
+echo "  3. ตั้ง Cloud Scheduler (ครั้งแรกครั้งเดียว):"
+echo "     ./scripts/setup-cloud-scheduler.sh"
+echo "  4. ตั้งอีเมลติดต่อใน User-Agent ที่ยิงไปหา ปปง.:"
+echo "     export SANCTION_SYNC_CONTACT_EMAIL=admin@yourshop.co.th แล้ว deploy ใหม่"
