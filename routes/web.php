@@ -24,6 +24,8 @@ use App\Http\Controllers\Report\BotMonthlyReportController;
 use App\Http\Controllers\Report\DailyReportController;
 use App\Http\Controllers\Report\MySummaryReportController;
 use App\Http\Controllers\Report\ProfitLossReportController;
+use App\Http\Controllers\Report\SanctionDecisionReportController;
+use App\Http\Controllers\Report\SanctionScreeningLogController;
 use App\Http\Controllers\Report\StockMovementReportController;
 use App\Http\Controllers\Report\StockValuationReportController;
 use App\Http\Controllers\Report\TransferReportController;
@@ -259,6 +261,13 @@ Route::middleware(['auth', 'session.check'])->group(function () {
     // BOT Report Staging (จัดการข้อมูลก่อนส่ง ธปท.)
     Route::get('/reports/bot-staging', fn() => view('reports.bot-staging'))->name('reports.bot-staging');
     Route::get('/reports/bot-staging/{report}/export', [BotMonthlyReportController::class, 'exportFromStaging'])->name('reports.bot-monthly.export-staging');
+
+    // Sanction reports — หลักฐานชุดที่ใช้ตอบผู้ตรวจ ปปง.
+    Route::get('/reports/sanction-screening-log', [SanctionScreeningLogController::class, 'index'])->name('reports.sanction-screening-log');
+    Route::post('/reports/sanction-screening-log/export', [SanctionScreeningLogController::class, 'exportExcel'])->name('reports.sanction-screening-log.export');
+
+    Route::get('/reports/sanction-decisions', [SanctionDecisionReportController::class, 'index'])->name('reports.sanction-decisions');
+    Route::post('/reports/sanction-decisions/export', [SanctionDecisionReportController::class, 'exportExcel'])->name('reports.sanction-decisions.export');
 
     // Notifications — generic notification centre (ใครจะเอาไปแจ้งเรื่องอื่นก็ใช้หน้านี้ได้)
     Route::get('/notifications', fn () => view('notifications.index'))->name('notifications.index');

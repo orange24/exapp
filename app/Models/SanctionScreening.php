@@ -66,6 +66,15 @@ class SanctionScreening extends Model
         return $this->belongsTo(User::class, 'decided_by');
     }
 
+    /**
+     * รอบ sync ที่เป็นต้นทางของรายชื่อที่ใช้ตรวจครั้งนี้ —
+     * ใช้พิสูจน์กับ ปปง. ว่าตรวจกับรายชื่อเวอร์ชันไหน
+     */
+    public function syncRun()
+    {
+        return $this->belongsTo(SanctionSyncRun::class, 'sync_run_id');
+    }
+
     public function isBlocked(): bool
     {
         return $this->result === self::RESULT_CONFIRMED_MATCH;
