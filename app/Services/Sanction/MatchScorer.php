@@ -20,6 +20,9 @@ class MatchScorer
     public const SCORE_FUZZY_MAX = 80.0;
     public const SCORE_SOUNDEX = 55.0;
 
+    /** ชื่อชิ้นเดียวที่ตรงกัน — เตือนได้ แต่ไม่ใช่หลักฐานระดับชื่อเต็ม */
+    public const SCORE_SINGLE_TOKEN = 72.0;
+
     /** เพดาน 99 — สงวน 100 ไว้ให้ exact ID เท่านั้น ไม่ให้คะแนนชื่อไต่ไปชน */
     public const SCORE_CAP = 99.0;
 
@@ -46,6 +49,18 @@ class MatchScorer
         }
 
         if ($customerTokens === $entryTokens) {
+            // ชื่อชิ้นเดียวไม่ใช่การระบุตัวบุคคล
+            //
+            // UN list เก็บชื่อเป็นชิ้น ๆ ("1. MOHAMMAD 2. AMAN 3. AKHUND") และเราเก็บ
+            // ทุกชิ้นเป็นชื่อที่ค้นได้ ถ้าปล่อยให้ชิ้นเดียวได้ 95 ลูกค้าชื่อ "Aman"
+            // จะขึ้นแถบแดงเต็ม ๆ ทั้งที่หลักฐานมีแค่ชื่อต้นที่คนใช้กันทั่วไป
+            //
+            // ยังต้องเตือนอยู่ (ส้ม) แต่ไม่ใช่ระดับเดียวกับชื่อเต็มที่ตรงทุกส่วน
+            // ไม่งั้นพนักงานจะชินกับแถบแดงจนกดผ่านวันที่เจอของจริง
+            if (count($entryTokens) < 2) {
+                return ['type' => 'name_fuzzy', 'score' => self::SCORE_SINGLE_TOKEN];
+            }
+
             return ['type' => 'name_exact', 'score' => self::SCORE_NAME_EXACT];
         }
 

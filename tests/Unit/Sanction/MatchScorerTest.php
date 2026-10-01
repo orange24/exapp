@@ -25,6 +25,26 @@ class MatchScorerTest extends TestCase
         );
     }
 
+    public function test_a_single_matching_name_token_is_not_treated_as_a_full_identification(): void
+    {
+        // เคสจริงจาก UAT: ลูกค้าชื่อ "Aman" ตรงกับชิ้นส่วนชื่อ "AMAN" ของ
+        // MOHAMMAD AMAN AKHUND ใน UN list แล้วได้ 95 = แถบแดงเต็ม ๆ
+        // ทั้งที่หลักฐานมีแค่ชื่อต้นที่คนใช้กันทั่วไป
+        $result = MatchScorer::nameScore('Aman', 'AMAN');
+
+        $this->assertNotSame('name_exact', $result['type']);
+        $this->assertLessThan(MatchScorer::SCORE_TOKEN_CONTAINMENT, $result['score']);
+        $this->assertGreaterThanOrEqual(70.0, $result['score'], 'ยังต้องเตือนอยู่ ไม่ใช่ปล่อยผ่านเงียบ ๆ');
+    }
+
+    public function test_a_full_two_part_name_still_scores_as_exact(): void
+    {
+        $this->assertSame(
+            ['type' => 'name_exact', 'score' => 95.0],
+            MatchScorer::nameScore('MOHAMMAD AKHUND', 'AKHUND MOHAMMAD')
+        );
+    }
+
     public function test_entry_name_fully_contained_in_customer_name_scores_85(): void
     {
         $result = MatchScorer::nameScore('AMRAN BIN MING', 'AMRAN MING');
