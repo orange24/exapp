@@ -19,6 +19,9 @@ use RuntimeException;
  */
 class AmloPublicScraper implements SanctionSource
 {
+    /** @var array<int, array{source_ref: string, row_hash: string}>|null */
+    private ?array $listRows = null;
+
     public function __construct(
         private readonly string $listCode,
     ) {
@@ -42,8 +45,7 @@ class AmloPublicScraper implements SanctionSource
         $slug = config("sanction.amlo.lists.{$this->listCode}");
         $base = rtrim((string) config('sanction.amlo.base_url'), '/');
 
-        $listHtml = $this->get("{$base}/{$slug}/");
-        $rows = AmloHtmlParser::parseList($listHtml, $slug);
+        $rows = $this->fetchListRows();
 
         $entries = [];
         $failedRefs = [];
@@ -94,6 +96,16 @@ class AmloPublicScraper implements SanctionSource
      * @return array<int, array{source_ref: string, row_hash: string}>
      */
     public function fetchListRows(): array
+    {
+        return $this->listRows ??= $this->loadListRows();
+    }
+
+    /**
+     * SanctionSyncService เรียก fetchListRows() แล้วเรียก fetch() ต่อ ซึ่งเดิมโหลด
+     * หน้า list ซ้ำอีกรอบ = ยิง server ของหน่วยงานราชการ 2 ครั้งต่อการ sync 1 ครั้ง
+     * โดยไม่ได้อะไรเพิ่ม — cache ไว้ใน instance เดียวกันพอ
+     */
+    private function loadListRows(): array
     {
         $slug = config("sanction.amlo.lists.{$this->listCode}");
         $base = rtrim((string) config('sanction.amlo.base_url'), '/');

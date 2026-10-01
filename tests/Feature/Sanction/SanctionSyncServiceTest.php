@@ -216,6 +216,23 @@ class SanctionSyncServiceTest extends TestCase
         $this->assertSame(100, SanctionEntry::count());
     }
 
+    public function test_as_of_carries_forward_when_nothing_changed(): void
+    {
+        // รอบที่ไม่มีอะไรเปลี่ยนจะไม่ดึงหน้า detail เลย จึงไม่มี As Of กลับมาจาก source
+        // ถ้าปล่อยเป็น null รายงานสุขภาพจะตอบไม่ได้ว่าใช้ข้อมูล ปปง. ณ วันที่เท่าไหร่
+        $entries = [FakeSanctionSource::entry('1', 'AMRAN MING', '5960500028101')];
+
+        $first = $this->service()->sync($this->sourceWith($entries));
+        $second = $this->service()->sync($this->sourceWith($entries));
+
+        $this->assertSame(0, $second->entries_updated);
+        $this->assertNotNull($second->source_as_of);
+        $this->assertSame(
+            $first->source_as_of->format('Y-m-d'),
+            $second->source_as_of->format('Y-m-d')
+        );
+    }
+
     public function test_records_source_adapter_and_as_of_on_the_run(): void
     {
         $run = $this->service()->sync($this->sourceWith([

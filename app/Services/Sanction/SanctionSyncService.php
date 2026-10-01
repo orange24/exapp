@@ -103,7 +103,7 @@ class SanctionSyncService
 
         $run->update([
             'status' => SanctionSyncRun::STATUS_SUCCESS,
-            'source_as_of' => $result->asOfDate,
+            'source_as_of' => $result->asOfDate ?? $this->lastKnownAsOf($listCode),
             'entries_parsed' => count($listRows),
             'entries_added' => $stats['added'],
             'entries_updated' => $stats['updated'],
@@ -112,6 +112,21 @@ class SanctionSyncService
         ]);
 
         return $run->fresh();
+    }
+
+    /**
+     * รอบที่ไม่มีอะไรเปลี่ยน source จะไม่ได้ดึงหน้า detail เลย จึงไม่มี As Of กลับมา
+     *
+     * ถ้าปล่อยเป็น null รายงานสุขภาพการ sync จะอ่าน "ข้อมูล ปปง. ณ วันที่เท่าไหร่"
+     * จากรอบล่าสุดไม่ได้ ทั้งที่ระบบทำงานปกติ — ซึ่งเป็นคำถามที่ผู้ตรวจถามตรง ๆ
+     * จึงยกค่าล่าสุดที่เคยรู้มาใส่ไว้แทน
+     */
+    private function lastKnownAsOf(string $listCode): ?string
+    {
+        return SanctionSyncRun::where('list_code', $listCode)
+            ->whereNotNull('source_as_of')
+            ->latest('finished_at')
+            ->value('source_as_of')?->format('Y-m-d');
     }
 
     /**
