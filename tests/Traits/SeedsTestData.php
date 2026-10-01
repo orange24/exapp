@@ -96,6 +96,10 @@ trait SeedsTestData
         // Sidebar is rendered from the menus table — without this the layout
         // renders an empty nav and page tests never exercise the real menu tree.
         $this->seed(MenuSeeder::class);
+
+        // Role ถูกสร้างหลัง migration รันไปแล้ว — migration ที่ grant สิทธิ์
+        // module7 จึงหา role ไม่เจอตอนนั้น ต้อง grant ซ้ำที่นี่
+        $this->seed(\Database\Seeders\SanctionPermissionSeeder::class);
     }
 
     protected function actingAsAdmin()
