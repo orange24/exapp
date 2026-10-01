@@ -386,6 +386,63 @@ class SanctionScreeningServiceTest extends TestCase
         );
     }
 
+    public function test_cannot_overwrite_an_existing_decision(): void
+    {
+        $this->makeEntry('AMRAN MING');
+
+        $screening = $this->service()->screen(
+            input: new ScreeningInput(name: 'AMRAN MING', nationality: 'TH'),
+            trigger: SanctionScreening::TRIGGER_TRANSACTION,
+            screenedBy: $this->staffUser->id,
+        );
+
+        $this->service()->decide(
+            screening: $screening,
+            decision: SanctionScreening::DECISION_FALSE_POSITIVE,
+            decidedBy: $this->adminUser->id,
+            reason: 'ตรวจพาสปอร์ตเล่มจริงแล้ว คนละคน วันเกิดต่างกัน 12 ปี',
+        );
+
+        // คนที่สองต้องเขียนทับชื่อผู้อนุมัติและเหตุผลของคนแรกไม่ได้
+        $this->expectException(\InvalidArgumentException::class);
+
+        $this->service()->decide(
+            screening: $screening->fresh(),
+            decision: SanctionScreening::DECISION_TRUE_MATCH,
+            decidedBy: $this->staffUser->id,
+            reason: 'เปลี่ยนใจ ขอบันทึกใหม่ว่าเป็นบุคคลเดียวกันจริง',
+        );
+    }
+
+    public function test_sync_run_cited_is_the_stalest_list_not_the_freshest(): void
+    {
+        // FREEZE-05 สดเมื่อคืน แต่ FREEZE-04 ค้างมาอาทิตย์หนึ่ง
+        // หลักฐานต้องอ้างตัวที่เก่ากว่า ไม่งั้นรายงานจะคุยโม้เกินจริงต่อผู้ตรวจ
+        $stale = \App\Models\SanctionSyncRun::create([
+            'list_code' => SanctionEntry::LIST_FREEZE_04_UN,
+            'source_adapter' => 'amlo_public_scraper',
+            'status' => \App\Models\SanctionSyncRun::STATUS_SUCCESS,
+            'started_at' => now()->subWeek(),
+            'finished_at' => now()->subWeek(),
+        ]);
+
+        \App\Models\SanctionSyncRun::create([
+            'list_code' => SanctionEntry::LIST_FREEZE_05_TH,
+            'source_adapter' => 'amlo_public_scraper',
+            'status' => \App\Models\SanctionSyncRun::STATUS_SUCCESS,
+            'started_at' => now()->subHours(8),
+            'finished_at' => now()->subHours(8),
+        ]);
+
+        $screening = $this->service()->screen(
+            input: new ScreeningInput(name: 'SOMCHAI JAIDEE'),
+            trigger: SanctionScreening::TRIGGER_TRANSACTION,
+            screenedBy: $this->staffUser->id,
+        );
+
+        $this->assertSame($stale->id, $screening->sync_run_id);
+    }
+
     public function test_screening_records_the_sync_run_it_was_checked_against(): void
     {
         $run = \App\Models\SanctionSyncRun::create([

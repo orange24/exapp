@@ -91,6 +91,16 @@ class SanctionScreeningService
         int $decidedBy,
         string $reason,
     ): SanctionScreening {
+        // ห้ามทับการตัดสินใจเดิม — ตารางเก็บได้ชุดเดียวต่อหนึ่ง screening
+        // ถ้าปล่อยให้เขียนทับ ชื่อผู้อนุมัติและเหตุผลของคนแรกจะหายไปโดยไม่มีร่องรอย
+        // ซึ่งเป็นสิ่งเดียวที่กัน supervisor override ถูกใช้ในทางที่ผิด
+        if ($screening->decision !== null) {
+            throw new InvalidArgumentException(
+                'รายการนี้ถูกตัดสินไปแล้วเมื่อ ' . $screening->decided_at?->format('d/m/Y H:i')
+                . ' — ตัดสินซ้ำไม่ได้'
+            );
+        }
+
         $reason = trim($reason);
 
         if (mb_strlen($reason) < self::MIN_REASON_LENGTH) {
@@ -243,10 +253,27 @@ class SanctionScreeningService
     }
 
     /** ตรวจกับรายชื่อเวอร์ชันไหน — รายงานต้องตอบคำถามนี้ได้ */
+    /**
+     * แต่ละบัญชี sync แยกกัน การตรวจหนึ่งครั้งจึงเทียบกับหลายลิสต์ที่สดไม่เท่ากัน
+     *
+     * อ้างรอบที่ "ใหม่ที่สุดของลิสต์ใดก็ได้" จะทำให้รายงานคุยโม้เกินจริง —
+     * ถ้า FREEZE-04 ค้างมาอาทิตย์หนึ่งแต่ FREEZE-05 เพิ่ง sync เมื่อคืน
+     * หลักฐานจะดูเหมือนตรวจกับข้อมูลสดทั้งหมด
+     *
+     * จึงอ้างรอบของลิสต์ที่ "เก่าที่สุด" ซึ่งเป็นคำกล่าวอ้างที่อนุรักษ์นิยมที่สุด
+     * และเป็นสิ่งที่ตอบผู้ตรวจได้โดยไม่ต้องแก้ตัวทีหลัง
+     */
     private function latestSuccessfulSyncRunId(): ?int
     {
-        return SanctionSyncRun::where('status', SanctionSyncRun::STATUS_SUCCESS)
-            ->latest('finished_at')
-            ->value('id');
+        $perList = SanctionSyncRun::where('status', SanctionSyncRun::STATUS_SUCCESS)
+            ->get(['id', 'list_code', 'finished_at'])
+            ->groupBy('list_code')
+            ->map(fn ($runs) => $runs->sortByDesc('finished_at')->first());
+
+        if ($perList->isEmpty()) {
+            return null;
+        }
+
+        return $perList->sortBy('finished_at')->first()?->id;
     }
 }
