@@ -116,28 +116,9 @@ class SanctionMatcher
         $normalized = implode(' ', $tokens);
         $soundex = NameNormalizer::soundexOf($input->name);
 
-        $query = SanctionEntryName::query()
-            ->whereHas('entry', fn ($q) => $q->whereNull('delisted_at'))
-            ->where(function ($q) use ($normalized, $soundex, $tokens) {
-                $q->where('name_normalized', $normalized);
-
-                if ($soundex !== '') {
-                    $q->orWhere('name_soundex', $soundex);
-                }
-
-                // token ตัวใดตัวหนึ่งโผล่ในชื่อ — จับเคส token_containment และ typo
-                foreach ($tokens as $token) {
-                    if (mb_strlen($token) >= 3) {
-                        $q->orWhere('name_normalized', 'like', '%' . $token . '%');
-                    }
-                }
-            })
-            ->with('entry')
-            ->limit(self::MAX_NAME_CANDIDATES);
-
         $out = [];
 
-        foreach ($query->get() as $row) {
+        foreach ($this->nameCandidates($normalized, $soundex, $tokens) as $row) {
             $entry = $row->entry;
 
             if ($entry === null) {
@@ -170,6 +151,52 @@ class SanctionMatcher
         }
 
         return $out;
+    }
+
+    /**
+     * ดึง candidate ชื่อแบบ "แยก query ตามชั้นความแม่นยำ" ไม่ใช่ OR รวมแล้ว limit ทีเดียว
+     *
+     * ถ้ารวมเป็น query เดียวแล้ว limit 50 ชั้น LIKE จะกินโควตาจนหมดได้
+     * — token อย่าง "MOHAMMED" แมตช์เป็นร้อยแถว แล้วแถวที่ชื่อตรงเป๊ะ
+     * อาจไม่ติดมาใน 50 แถวแรกเลย กลายเป็นปล่อยคนที่ควรถูกจับผ่านไปเงียบ ๆ
+     * โดยที่ระบบไม่มีอะไรฟ้องว่าผิดปกติ
+     *
+     * เรียงชั้นจากแม่นที่สุดไปหยาบที่สุด และให้แต่ละชั้นมีโควตาของตัวเอง
+     *
+     * @param array<int, string> $tokens
+     * @return \Illuminate\Support\Collection<int, SanctionEntryName>
+     */
+    private function nameCandidates(string $normalized, string $soundex, array $tokens)
+    {
+        $collected = collect();
+
+        $layer = function ($apply) use (&$collected): void {
+            $query = SanctionEntryName::query()
+                ->whereHas('entry', fn ($q) => $q->whereNull('delisted_at'))
+                ->with('entry')
+                ->limit(self::MAX_NAME_CANDIDATES);
+
+            $apply($query);
+
+            $collected = $collected->concat($query->get());
+        };
+
+        // ชั้น 1 — ชื่อ normalize แล้วตรงทั้งก้อน
+        $layer(fn ($q) => $q->where('name_normalized', $normalized));
+
+        // ชั้น 2 — เสียงพ้อง (เฉพาะชื่อ latin, ชื่อไทยคอลัมน์นี้ว่าง)
+        if ($soundex !== '') {
+            $layer(fn ($q) => $q->where('name_soundex', $soundex));
+        }
+
+        // ชั้น 3 — token ตัวใดตัวหนึ่งโผล่ในชื่อ จับ token_containment และ typo
+        foreach ($tokens as $token) {
+            if (mb_strlen($token) >= 3) {
+                $layer(fn ($q) => $q->where('name_normalized', 'like', '%' . $token . '%'));
+            }
+        }
+
+        return $collected->unique('id')->values();
     }
 
     /**

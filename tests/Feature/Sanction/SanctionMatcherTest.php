@@ -259,6 +259,35 @@ class SanctionMatcherTest extends TestCase
         $this->assertSame(100.0, $candidates[0]->score);
     }
 
+    public function test_exact_name_match_is_not_crowded_out_by_common_token_noise(): void
+    {
+        // ชื่ออาหรับ/มุสลิมใน UN list ใช้ token ซ้ำกันเยอะมาก (MOHAMMED, ABDUL, AL)
+        // ถ้าดึง candidate ด้วย query เดียวแล้ว limit ชั้น LIKE จะกินโควตาจนหมด
+        // แล้วแถวที่ชื่อตรงเป๊ะอาจไม่ติดมาเลย = ปล่อยคนที่ควรถูกจับผ่านไปเงียบ ๆ
+        for ($i = 1; $i <= 60; $i++) {
+            $this->makeEntry("MOHAMMED DECOY{$i}", nationality: 'TH', dob: null);
+        }
+
+        // ตัวจริงถูกสร้างท้ายสุด -> id สูงสุด -> ถ้า limit ไม่มี ORDER BY จะตกหล่นง่ายที่สุด
+        $target = $this->makeEntry('MOHAMMED ALFULANI', nationality: 'TH', dob: null);
+
+        $candidates = $this->matcher()->match(new ScreeningInput(
+            name: 'MOHAMMED ALFULANI',
+            nationality: 'TH',
+        ));
+
+        $ids = array_map(
+            static fn ($c): int => $c->sanctionEntryId,
+            $candidates
+        );
+
+        $this->assertContains(
+            $target->id,
+            $ids,
+            'ชื่อที่ตรงเป๊ะต้องไม่ถูก token ที่พบบ่อยเบียดตกจากชุด candidate'
+        );
+    }
+
     public function test_candidates_are_sorted_by_score_descending(): void
     {
         $this->makeEntry('AMRAN MING', nationality: 'TH', dob: null);
