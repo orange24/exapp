@@ -152,13 +152,36 @@ class CustomerController extends Controller
      *
      * ถ้าเข้าข่าย ผลตรวจจะเข้าคิวให้สำนักงานใหญ่ตัดสินภายหลัง
      */
+    /**
+     * ตรวจรายชื่อหลังบันทึกลูกค้า — ไม่บล็อกการบันทึก
+     *
+     * ลูกค้าถูก commit ไปแล้วตอนมาถึงบรรทัดนี้ ถ้าปล่อยให้ exception หลุดขึ้นไป
+     * พนักงานจะเห็นหน้า error ทั้งที่ข้อมูลเซฟเรียบร้อย แล้วจะพิมพ์ซ้ำเป็นข้อมูลซ้ำ
+     *
+     * แต่จะกลืนเงียบก็ไม่ได้ เพราะนั่นคือรูในหลักฐานที่ฟีเจอร์นี้มีไว้อุด
+     * จึง log ไว้ให้ครบ + แจ้งพนักงานว่ายังตรวจไม่ได้ เพื่อให้มีคนตามต่อ
+     */
     private function screenAgainstSanctionLists(Customer $customer): void
     {
-        app(SanctionScreeningService::class)->screen(
-            input: ScreeningInput::fromCustomer($customer),
-            trigger: SanctionScreening::TRIGGER_CUSTOMER_CREATE,
-            screenedBy: auth()->id(),
-            customerId: $customer->id,
-        );
+        try {
+            app(SanctionScreeningService::class)->screen(
+                input: ScreeningInput::fromCustomer($customer),
+                trigger: SanctionScreening::TRIGGER_CUSTOMER_CREATE,
+                screenedBy: auth()->id(),
+                customerId: $customer->id,
+            );
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Sanction screening failed for customer', [
+                'customer_id' => $customer->id,
+                'user_id' => auth()->id(),
+                'error' => $e->getMessage(),
+            ]);
+
+            session()->flash(
+                'error',
+                'บันทึกข้อมูลลูกค้าเรียบร้อย แต่ยังตรวจรายชื่อบุคคลต้องห้ามไม่สำเร็จ '
+                . '— โปรดแจ้งผู้ดูแลระบบให้ตรวจย้อนหลัง'
+            );
+        }
     }
 }

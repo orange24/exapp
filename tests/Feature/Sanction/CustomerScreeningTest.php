@@ -117,4 +117,24 @@ class CustomerScreeningTest extends TestCase
         $this->assertSame(SanctionScreening::RESULT_CLEAR, $screening->result);
         $this->assertFalse($screening->needsDecision());
     }
+
+    public function test_customer_still_saves_when_screening_blows_up(): void
+    {
+        // ลูกค้าถูก commit ไปก่อนขั้นตอนตรวจแล้ว ถ้า exception หลุดขึ้นไป
+        // พนักงานจะเห็นหน้า error ทั้งที่ข้อมูลเซฟแล้ว แล้วจะพิมพ์ซ้ำเป็นข้อมูลซ้ำ
+        $this->mock(\App\Services\Sanction\SanctionScreeningService::class, function ($mock) {
+            $mock->shouldReceive('screen')->andThrow(new \RuntimeException('ลิสต์พัง'));
+        });
+
+        $response = $this->actingAs($this->adminUser)->post(route('admin.customers.store'), [
+            'type' => 'individual',
+            'id_type' => 'passport',
+            'id_number' => 'ZZ999999',
+            'name_en' => 'SOMCHAI JAIDEE',
+            'nationality' => 'TH',
+        ]);
+
+        $response->assertSessionHas('error');
+        $this->assertDatabaseHas('customers', ['id_number' => 'ZZ999999']);
+    }
 }
