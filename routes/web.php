@@ -267,21 +267,24 @@ Route::middleware(['auth', 'session.check'])->group(function () {
     Route::get('/reports/bot-staging/{report}/export', [BotMonthlyReportController::class, 'exportFromStaging'])->name('reports.bot-monthly.export-staging');
 
     // Sanction reports — หลักฐานชุดที่ใช้ตอบผู้ตรวจ ปปง.
-    Route::get('/reports/sanction-screening-log', [SanctionScreeningLogController::class, 'index'])->name('reports.sanction-screening-log');
-    Route::post('/reports/sanction-screening-log/export', [SanctionScreeningLogController::class, 'exportExcel'])->name('reports.sanction-screening-log.export');
+    // รายงานกลุ่มนี้แสดงเอกสารแสดงตนของลูกค้าคู่กับผลการตรวจรายชื่อบุคคลต้องห้าม
+    // การซ่อนเมนูไม่ใช่การควบคุมสิทธิ์ — ต้องกันที่ route ด้วย ไม่งั้นใครที่ล็อกอินได้
+    // ก็พิมพ์ URL เข้ามาอ่านหลักฐาน compliance ทั้งชุดได้
+    Route::get('/reports/sanction-screening-log', [SanctionScreeningLogController::class, 'index'])->name('reports.sanction-screening-log')->middleware('permission:module7,read');
+    Route::post('/reports/sanction-screening-log/export', [SanctionScreeningLogController::class, 'exportExcel'])->name('reports.sanction-screening-log.export')->middleware('permission:module7,read');
 
-    Route::get('/reports/sanction-decisions', [SanctionDecisionReportController::class, 'index'])->name('reports.sanction-decisions');
-    Route::post('/reports/sanction-decisions/export', [SanctionDecisionReportController::class, 'exportExcel'])->name('reports.sanction-decisions.export');
+    Route::get('/reports/sanction-decisions', [SanctionDecisionReportController::class, 'index'])->name('reports.sanction-decisions')->middleware('permission:module7,read');
+    Route::post('/reports/sanction-decisions/export', [SanctionDecisionReportController::class, 'exportExcel'])->name('reports.sanction-decisions.export')->middleware('permission:module7,read');
 
-    Route::get('/reports/sanction-rescan', [SanctionRescanReportController::class, 'index'])->name('reports.sanction-rescan');
-    Route::get('/reports/sanction-list-delta', [SanctionListDeltaReportController::class, 'index'])->name('reports.sanction-list-delta');
-    Route::get('/reports/sanction-sync-health', [SanctionSyncHealthReportController::class, 'index'])->name('reports.sanction-sync-health');
-    Route::get('/reports/sanction-coverage-gap', [SanctionCoverageGapReportController::class, 'index'])->name('reports.sanction-coverage-gap');
+    Route::get('/reports/sanction-rescan', [SanctionRescanReportController::class, 'index'])->name('reports.sanction-rescan')->middleware('permission:module7,read');
+    Route::get('/reports/sanction-list-delta', [SanctionListDeltaReportController::class, 'index'])->name('reports.sanction-list-delta')->middleware('permission:module7,read');
+    Route::get('/reports/sanction-sync-health', [SanctionSyncHealthReportController::class, 'index'])->name('reports.sanction-sync-health')->middleware('permission:module7,read');
+    Route::get('/reports/sanction-coverage-gap', [SanctionCoverageGapReportController::class, 'index'])->name('reports.sanction-coverage-gap')->middleware('permission:module7,read');
 
     // Notifications — generic notification centre (ใครจะเอาไปแจ้งเรื่องอื่นก็ใช้หน้านี้ได้)
     Route::get('/notifications', fn () => view('notifications.index'))->name('notifications.index');
 
     // Sanction screening — คิวให้ admin เคลียร์ false positive เป็นชุด
-    Route::get('/sanctions/review', fn () => view('sanction.review'))->name('sanctions.review');
+    Route::get('/sanctions/review', fn () => view('sanction.review'))->name('sanctions.review')->middleware('permission:module7,read');
 });
 

@@ -27,6 +27,7 @@ return $app
         $middleware->alias([
             'session.check' => \App\Http\Middleware\CheckSessionTerminated::class,
             'admin'         => \App\Http\Middleware\EnsureUserIsAdmin::class,
+            'permission'    => \App\Http\Middleware\EnsurePermission::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
