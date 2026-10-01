@@ -100,6 +100,10 @@ trait SeedsTestData
         // Role ถูกสร้างหลัง migration รันไปแล้ว — migration ที่ grant สิทธิ์
         // module7 จึงหา role ไม่เจอตอนนั้น ต้อง grant ซ้ำที่นี่
         $this->seed(\Database\Seeders\SanctionPermissionSeeder::class);
+
+        // เหตุผลเดียวกัน — migration ที่ seed เมนู sanction ผูก role ไม่ได้
+        // เพราะยังไม่มี role ตอนนั้น sidebar ใน test จึงไม่มีเมนูกลุ่มนี้เลย
+        $this->seed(\Database\Seeders\SanctionMenuSeeder::class);
     }
 
     protected function actingAsAdmin()
