@@ -243,4 +243,35 @@ class SanctionSyncServiceTest extends TestCase
         $this->assertSame('2026-10-01', $run->source_as_of->format('Y-m-d'));
         $this->assertNotNull($run->finished_at);
     }
+
+    public function test_entries_with_no_letters_in_the_name_are_not_made_matchable(): void
+    {
+        // ปปง. มีรายการที่ข้อมูลต้นทางว่างจริง ๆ ชื่อเป็น "1." เฉย ๆ
+        // ถ้าเก็บเป็นชื่อที่ค้นได้ ลูกค้าที่ OCR ติดเลขมาจะโดนแถบแดงจากข้อมูลขยะ
+        $junk = new \App\Services\Sanction\Dto\SanctionEntryDto(
+            sourceRef: '99',
+            nameTh: '1.',
+            status: 'Designated person',
+            asOfDate: '2026-10-01',
+            names: ['1.'],
+            identifiers: [],
+            rowHash: 'junk-row-hash',
+        );
+
+        $source = new FakeSanctionSource(
+            listCode: SanctionEntry::LIST_FREEZE_05_TH,
+            entries: [$junk],
+            listRows: [['source_ref' => '99', 'row_hash' => 'junk-row-hash']],
+        );
+
+        $run = $this->service()->sync($source);
+
+        $this->assertSame(SanctionSyncRun::STATUS_SUCCESS, $run->status);
+
+        // entry ยังถูกเก็บ เพราะมันอยู่บนบัญชีทางการจริง
+        $this->assertSame(1, SanctionEntry::count());
+
+        // แต่ต้องไม่มีชื่อที่เอาไปแมตช์ได้
+        $this->assertSame(0, SanctionEntryName::count());
+    }
 }

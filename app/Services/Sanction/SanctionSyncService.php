@@ -294,7 +294,18 @@ class SanctionSyncService
         foreach ($dto->names as $index => $raw) {
             $normalized = NameNormalizer::normalize($raw);
 
-            if ($normalized === '' || isset($seen[$normalized])) {
+            // ชื่อต้องมีตัวอักษรอย่างน้อยหนึ่งตัวถึงจะเอาไปแมตช์ได้
+            //
+            // ปปง. มีรายการที่ข้อมูลต้นทางว่างเปล่าจริง ๆ อยู่ (ชื่อเป็น "1." เฉย ๆ
+            // ไม่มีเลขเอกสาร ไม่มีสัญชาติ) ถ้าเก็บเป็นชื่อที่ค้นได้ ชื่อนั้นจะเหลือ
+            // token "1" แล้วลูกค้าที่ OCR ติดเลขมาจะได้ token_containment 85 คะแนน
+            // = แถบแดงหน้าเคาน์เตอร์จากข้อมูลขยะ
+            //
+            // ยังเก็บตัว entry ไว้ เพราะมันอยู่บนบัญชีทางการจริง การลบทิ้ง
+            // จะทำให้จำนวนรายชื่อที่เรารายงานไม่ตรงกับของ ปปง.
+            if ($normalized === ''
+                || preg_match('/\p{L}/u', $normalized) !== 1
+                || isset($seen[$normalized])) {
                 continue;
             }
             $seen[$normalized] = true;
