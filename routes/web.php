@@ -259,5 +259,8 @@ Route::middleware(['auth', 'session.check'])->group(function () {
     // BOT Report Staging (จัดการข้อมูลก่อนส่ง ธปท.)
     Route::get('/reports/bot-staging', fn() => view('reports.bot-staging'))->name('reports.bot-staging');
     Route::get('/reports/bot-staging/{report}/export', [BotMonthlyReportController::class, 'exportFromStaging'])->name('reports.bot-monthly.export-staging');
+
+    // Notifications — generic notification centre (ใครจะเอาไปแจ้งเรื่องอื่นก็ใช้หน้านี้ได้)
+    Route::get('/notifications', fn () => view('notifications.index'))->name('notifications.index');
 });
 
