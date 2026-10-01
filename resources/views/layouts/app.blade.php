@@ -320,7 +320,12 @@
                 </svg>
             </button>
             <h1 class="text-white font-semibold text-sm">@yield('title', 'Dashboard')</h1>
-            <div class="ml-auto text-sm text-white/70">{{ now()->format('d/m/Y H:i') }}</div>
+            <div class="ml-auto flex items-center gap-3">
+                @auth
+                    <livewire:notification-bell />
+                @endauth
+                <div class="text-sm text-white/70">{{ now()->format('d/m/Y H:i') }}</div>
+            </div>
         </header>
 
         {{-- Flash messages --}}
