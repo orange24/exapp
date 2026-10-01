@@ -54,6 +54,21 @@ new class extends Component
     public string $ocrPassportNo = '';
     public string $ocrExpiry = '';
 
+    // --- Sanction screening ---------------------------------------------
+    /** ผลการตรวจล่าสุด (array เพื่อให้ Livewire serialize ได้) */
+    public ?array $sanctionScreening = null;
+
+    /** @var array<int, array<string, mixed>> */
+    public array $sanctionMatches = [];
+
+    /** id ของ screening ที่ถูกอนุมัติแล้ว — ใช้ปลดล็อก saveTransaction */
+    public ?int $approvedScreeningId = null;
+
+    public bool $showSanctionApproval = false;
+    public string $approverEmail = '';
+    public string $approverPassword = '';
+    public string $approvalReason = '';
+
     public function mount(): void
     {
         $user = Auth::user();
@@ -214,6 +229,18 @@ new class extends Component
     {
         if (empty($this->rows) || ! $this->counterId) return;
 
+        // Sanction gate — ต้องอยู่ "ก่อน" DB::transaction() ข้างล่าง
+        //
+        // ถ้าเช็กข้างในแล้วเจอ hit จะต้อง rollback ทั้งก้อน แปลว่า inventory,
+        // GL journal และ ThbCash ถูกเขียนแล้วถอยกลับ เสี่ยงกับ auto-increment
+        // ของเลขที่เอกสารและทำให้ debug ยาก
+        //
+        // แบบแผนเดียวกับยอดเงินบาทในลิ้นชักที่คำนวณก่อนเข้า transaction
+        // ด้วยเหตุผลเดียวกันเป๊ะ
+        if (! $this->passesSanctionGate()) {
+            return;
+        }
+
         $counter = Counter::find($this->counterId);
         $docNo = $this->generateDocNo('B');
 
@@ -291,6 +318,16 @@ new class extends Component
             app(\App\Services\AutoJournalService::class)->createFromTransaction($master);
 
             $this->savedTransactionId = $master->id;
+
+            // ผูกผลการตรวจเข้ากับธุรกรรม — รายงานต้องตอบได้ว่า
+            // ธุรกรรมใบนี้ตรวจกับรายชื่อเวอร์ชันไหน ผลเป็นอะไร ใครอนุมัติ
+            if (! empty($this->sanctionScreening['id'])) {
+                \App\Models\SanctionScreening::where('id', $this->sanctionScreening['id'])
+                    ->update([
+                        'transaction_id' => $master->id,
+                        'customer_id' => $this->customerId,
+                    ]);
+            }
         });
 
         $this->savedRows = $this->rows;
@@ -399,6 +436,8 @@ new class extends Component
         $this->custName       = $customer->name_en ?: trim($this->ocrFirstName . ' ' . $this->ocrLastName);
         $this->passportSearch = '';
         $this->showSuggestions = false;
+
+        $this->runSanctionScreening(\App\Models\SanctionScreening::TRIGGER_TRANSACTION);
     }
 
     public function hideSuggestions(): void
@@ -487,6 +526,8 @@ new class extends Component
         $this->ocrPassportNo = $data['passportNo'] ?? '';
         $this->ocrExpiry     = $data['expiry'] ?? '';
         $this->custName      = trim($this->ocrFirstName . ' ' . $this->ocrLastName);
+
+        $this->runSanctionScreening(\App\Models\SanctionScreening::TRIGGER_TRANSACTION);
     }
 
     public function receivePassportImage(string $imageB64): void
@@ -604,6 +645,240 @@ new class extends Component
             ->toArray();
 
         return $result;
+    }
+
+    // =====================================================================
+    // Sanction screening
+    // =====================================================================
+
+    private function screeningInput(): \App\Services\Sanction\Dto\ScreeningInput
+    {
+        $name = trim($this->custName) !== ''
+            ? trim($this->custName)
+            : trim(($this->ocrFirstName ?? '') . ' ' . ($this->ocrLastName ?? ''));
+
+        return new \App\Services\Sanction\Dto\ScreeningInput(
+            name: trim($name) !== '' ? trim($name) : null,
+            idType: trim((string) $this->ocrPassportNo) !== '' ? 'passport' : null,
+            idNumber: trim((string) $this->ocrPassportNo) !== '' ? trim((string) $this->ocrPassportNo) : null,
+            nationality: trim((string) $this->ocrNationality) !== '' ? trim((string) $this->ocrNationality) : null,
+            dob: trim((string) $this->ocrDob) !== '' ? trim((string) $this->ocrDob) : null,
+        );
+    }
+
+    /**
+     * ตรวจและเก็บผลไว้แสดงบนหน้าจอ
+     * เรียกจาก receiveOcrData(), selectCustomer() และ saveTransaction()
+     */
+    public function runSanctionScreening(string $trigger = \App\Models\SanctionScreening::TRIGGER_TRANSACTION): \App\Models\SanctionScreening
+    {
+        // counterId เป็น string property — ว่างได้ตอน OCR ยิงมาก่อนเลือกเคาน์เตอร์
+        // ส่ง '' เข้า ?int จะเป็น TypeError ต้อง cast เองที่นี่
+        $counterId = $this->counterId !== '' ? (int) $this->counterId : null;
+        $counter = $counterId ? Counter::find($counterId) : null;
+
+        $screening = app(\App\Services\Sanction\SanctionScreeningService::class)->screen(
+            input: $this->screeningInput(),
+            trigger: $trigger,
+            screenedBy: Auth::id(),
+            customerId: $this->customerId,
+            branchId: $counter?->branch_id,
+            counterId: $counterId,
+        );
+
+        $this->sanctionScreening = [
+            'id' => $screening->id,
+            'result' => $screening->result,
+            'input_name' => $screening->input_name,
+            'input_dob' => $screening->input_dob,
+            'input_nationality' => $screening->input_nationality,
+            'input_id_number' => $screening->input_id_number,
+            'screened_at_label' => $screening->screened_at->format('d/m/Y H:i'),
+        ];
+
+        $this->sanctionMatches = $screening->matches()->with('entry')->get()
+            ->map(fn (\App\Models\SanctionScreeningMatch $m): array => [
+                'score' => (float) $m->score,
+                'severity' => \App\Services\Sanction\MatchScorer::severity((float) $m->score),
+                'matched_on' => $m->matched_on,
+                'list_label' => $m->entry->list_code === \App\Models\SanctionEntry::LIST_FREEZE_05_TH
+                    ? 'FREEZE-05 Thailand list'
+                    : ($m->entry->list_code === \App\Models\SanctionEntry::LIST_FREEZE_04_UN
+                        ? 'FREEZE-04 UN list'
+                        : $m->entry->list_code),
+                'section' => $m->entry->section,
+                'notification_number' => $m->entry->notification_number,
+                'reference_number' => $m->entry->reference_number,
+                'entry_name_en' => $m->entry->name_en,
+                'entry_name_th' => $m->entry->name_th,
+                'entry_dob' => $m->entry->date_of_birth,
+                'entry_nationality' => $m->entry->nationality,
+                'entry_id_number' => $m->entry->national_id,
+            ])->all();
+
+        return $screening;
+    }
+
+    public function openSanctionApproval(): void
+    {
+        $this->showSanctionApproval = true;
+        $this->approverEmail = '';
+        $this->approverPassword = '';
+        $this->approvalReason = '';
+    }
+
+    public function cancelForSanction(): void
+    {
+        $this->sanctionScreening = null;
+        $this->sanctionMatches = [];
+        $this->approvedScreeningId = null;
+        $this->showSanctionApproval = false;
+        $this->rows = [];
+    }
+
+    /**
+     * Supervisor override ที่เคาน์เตอร์ — ผู้จัดการเดินมาใส่รหัสของตัวเอง
+     * ตรวจ credential + permission โดยไม่ logout พนักงาน
+     *
+     * screened_by ยังเป็นพนักงาน ส่วน decided_by เป็นผู้จัดการ
+     */
+    public function submitSanctionApproval(): void
+    {
+        $this->resetErrorBag();
+
+        if (mb_strlen(trim($this->approvalReason)) < \App\Services\Sanction\SanctionScreeningService::MIN_REASON_LENGTH) {
+            $this->addError('approvalReason', 'ต้องระบุเหตุผลอย่างน้อย '
+                . \App\Services\Sanction\SanctionScreeningService::MIN_REASON_LENGTH . ' ตัวอักษร');
+
+            return;
+        }
+
+        $approver = \App\Models\User::where('email', $this->approverEmail)->first();
+
+        if ($approver === null
+            || ! \Illuminate\Support\Facades\Hash::check($this->approverPassword, $approver->password)) {
+            $this->addError('approverEmail', 'อีเมลหรือรหัสผ่านไม่ถูกต้อง');
+
+            return;
+        }
+
+        if (! $approver->hasPermission('module7', 'approve')) {
+            $this->addError('approverEmail', 'ผู้ใช้นี้ไม่มีสิทธิ์อนุมัติรายการที่พบชื่อใกล้เคียง');
+
+            return;
+        }
+
+        $screeningId = $this->sanctionScreening['id'] ?? null;
+
+        if ($screeningId === null) {
+            $this->addError('approverEmail', 'ไม่พบผลการตรวจที่จะอนุมัติ');
+
+            return;
+        }
+
+        $screening = \App\Models\SanctionScreening::find($screeningId);
+
+        if ($screening === null || $screening->isBlocked()) {
+            // ตรงเป๊ะด้วยเลขเอกสารบน FREEZE list — กฎหมายไม่เปิดช่องให้อนุมัติผ่าน
+            $this->addError('approverEmail', 'รายการนี้อนุมัติผ่านไม่ได้');
+
+            return;
+        }
+
+        // decide() ปฏิเสธการตัดสินซ้ำด้วย exception — ถ้าหน้าจอค้างแล้วกดยืนยัน
+        // สองครั้ง จะกลายเป็น 500 ใส่หน้าพนักงาน จึงจับไว้เป็น error ในฟอร์ม
+        try {
+            app(\App\Services\Sanction\SanctionScreeningService::class)->decide(
+                screening: $screening,
+                decision: \App\Models\SanctionScreening::DECISION_FALSE_POSITIVE,
+                decidedBy: $approver->id,
+                reason: trim($this->approvalReason),
+            );
+        } catch (\InvalidArgumentException $e) {
+            $this->addError('approverEmail', $e->getMessage());
+
+            return;
+        }
+
+        $this->approvedScreeningId = $screening->id;
+        $this->showSanctionApproval = false;
+        $this->approverPassword = '';
+
+        $this->dispatch('sanction-approved', screeningId: $screening->id);
+    }
+
+    /**
+     * ลายนิ้วมือของการตรวจหนึ่งครั้ง — "ใครถูกตรวจ และชนกับใครในลิสต์"
+     *
+     * ใช้ผูกการอนุมัติไว้กับคนคนนั้น ไม่ใช่ผูกไว้กับหน้าจอ
+     */
+    private function sanctionFingerprint(\App\Models\SanctionScreening $screening): string
+    {
+        $entryIds = $screening->matches()->pluck('sanction_entry_id')->sort()->values()->all();
+
+        return sha1(implode('|', [
+            mb_strtoupper(trim((string) $screening->input_name)),
+            mb_strtoupper(trim((string) $screening->input_id_number)),
+            implode(',', $entryIds),
+        ]));
+    }
+
+    /**
+     * ด่านสุดท้าย — คืน true แปลว่าให้ทำรายการต่อได้
+     *
+     * บังคับใช้ฝั่ง server เสมอ: saveTransaction() ถูกเรียกจาก client ได้ตรงๆ
+     * เลยต้องตรวจซ้ำว่ามี decision record จริง ไม่เชื่อ state ฝั่งหน้าจอ
+     */
+    private function passesSanctionGate(): bool
+    {
+        $screening = $this->runSanctionScreening(\App\Models\SanctionScreening::TRIGGER_TRANSACTION);
+
+        if ($screening->result === \App\Models\SanctionScreening::RESULT_CLEAR) {
+            $this->approvedScreeningId = $screening->id;
+
+            return true;
+        }
+
+        if ($screening->isBlocked()) {
+            $this->approvedScreeningId = null;
+
+            return false;
+        }
+
+        // potential_match — ผ่านได้ก็ต่อเมื่อมี decision ที่บันทึกไว้จริงในฐานข้อมูล
+        $approval = $this->approvedScreeningId === null
+            ? null
+            : \App\Models\SanctionScreening::where('id', $this->approvedScreeningId)
+                ->whereNotNull('decision')
+                ->whereNotNull('decided_by')
+                ->first();
+
+        // การอนุมัติผูกกับ "คนที่ถูกตรวจ" ไม่ใช่ผูกกับหน้าจอ — ถ้าไม่เทียบลายนิ้วมือ
+        // พนักงานขออนุมัติชื่อที่พิสูจน์ได้ทีเดียว แล้วแก้ชื่อเป็นคนอื่นในลิสต์
+        // กดบันทึกต่อได้เรื่อย ๆ โดยใช้ใบอนุมัติเดิม
+        if ($approval !== null
+            && $this->sanctionFingerprint($approval) !== $this->sanctionFingerprint($screening)) {
+            $approval = null;
+            $this->approvedScreeningId = null;
+        }
+
+        if ($approval !== null) {
+            // ผูก screening ล่าสุดเข้ากับการอนุมัติเดิม แล้วปล่อยผ่าน
+            // เขียนตรงไม่ผ่าน decide() โดยตั้งใจ — decide() ห้ามตัดสินซ้ำ
+            // และนี่คือการ "สืบทอด" การตัดสินเดิม ไม่ใช่การตัดสินใหม่
+            $screening->update([
+                'decision' => $approval->decision,
+                'decided_by' => $approval->decided_by,
+                'decided_at' => now(),
+                'decision_reason' => $approval->decision_reason,
+            ]);
+
+            return true;
+        }
+
+        $this->openSanctionApproval();
+
+        return false;
     }
 
     public function render()

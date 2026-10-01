@@ -1,5 +1,40 @@
 <div class="p-4" x-data="buyForm()" x-ref="lwRoot">
 
+{{-- Sanction screening — แถบเตือน + ช่องขออนุมัติจากผู้จัดการ --}}
+<x-sanction.alert :screening="$sanctionScreening" :matches="$sanctionMatches" />
+
+@if ($showSanctionApproval)
+    <div class="mb-4 border rounded p-4 bg-white" wire:key="sanction-approval">
+        <div class="font-semibold mb-2">ขออนุมัติทำรายการต่อ</div>
+
+        <div class="grid gap-2 max-w-md">
+            <label class="text-sm">ผู้มีสิทธิ์อนุมัติ (อีเมล)
+                <input type="email" wire:model="approverEmail" class="w-full border rounded px-2 py-1">
+            </label>
+            @error('approverEmail') <div class="text-red-600 text-xs">{{ $message }}</div> @enderror
+
+            <label class="text-sm">รหัสผ่าน
+                <input type="password" wire:model="approverPassword" class="w-full border rounded px-2 py-1">
+            </label>
+
+            <label class="text-sm">เหตุผล (บังคับ อย่างน้อย 20 ตัวอักษร)
+                <textarea wire:model="approvalReason" rows="2" class="w-full border rounded px-2 py-1"
+                          placeholder="เช่น วันเกิดไม่ตรง ต่างกัน 12 ปี ตรวจพาสปอร์ตเล่มจริงแล้ว"></textarea>
+            </label>
+            @error('approvalReason') <div class="text-red-600 text-xs">{{ $message }}</div> @enderror
+
+            <div class="flex gap-2 mt-1">
+                <button type="button" wire:click="submitSanctionApproval"
+                        class="px-3 py-1.5 rounded text-white text-sm" style="background:#0e513a;">
+                    ยืนยันอนุมัติ
+                </button>
+                <button type="button" wire:click="$set('showSanctionApproval', false)"
+                        class="px-3 py-1.5 rounded border text-sm">ยกเลิก</button>
+            </div>
+        </div>
+    </div>
+@endif
+
 {{-- Counter Selection Modal --}}
 @if($showCounterModal)
 <div style="position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.6); display:flex; align-items:center; justify-content:center;">
