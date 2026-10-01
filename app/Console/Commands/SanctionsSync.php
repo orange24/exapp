@@ -60,6 +60,15 @@ class SanctionsSync extends Command
 
             $this->reportRun($run);
 
+            if ($run->status === SanctionSyncRun::STATUS_SUCCESS && $run->hasEntryChanges()) {
+                // รันต่อท้ายในกระบวนการเดียวกัน ไม่ dispatch เข้า queue
+                // เพราะ production ไม่มี queue worker (ดูแผนที่ 4)
+                $this->call('sanctions:rescan', [
+                    '--since' => $run->started_at->toDateTimeString(),
+                    '--close-delisted' => true,
+                ]);
+            }
+
             if ($run->status !== SanctionSyncRun::STATUS_SUCCESS) {
                 $failed = true;
             }
