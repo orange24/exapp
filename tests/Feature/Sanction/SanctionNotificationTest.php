@@ -180,4 +180,25 @@ class SanctionNotificationTest extends TestCase
         $this->assertGreaterThan(0, $this->adminUser->notifications()->count());
         $this->assertSame(1, $this->adminUser->unreadNotifications()->count());
     }
+
+    public function test_decision_notification_title_matches_the_actual_decision(): void
+    {
+        $screening = $this->blockedScreening();
+
+        $screening->update([
+            'result' => SanctionScreening::RESULT_POTENTIAL_MATCH,
+            'decision' => SanctionScreening::DECISION_TRUE_MATCH,
+            'decided_by' => $this->managerHere->id,
+            'decided_at' => now(),
+            'decision_reason' => 'ยืนยันว่าเป็นบุคคลเดียวกัน ระงับธุรกรรมและแจ้ง ปปง. แล้ว',
+        ]);
+
+        $payload = (new SanctionApprovedDespiteMatch($screening->fresh()))
+            ->toArray($this->adminUser);
+
+        // เคสนี้คือ "ยืนยันว่าตรงกันจริง" ไม่ใช่ "อนุมัติให้ผ่าน" — หัวข้อต้องไม่สลับความหมาย
+        $this->assertStringNotContainsString('อนุมัติทำรายการต่อ', $payload['title']);
+        $this->assertStringContainsString('ระงับ', $payload['title']);
+        $this->assertSame('blocked', $payload['severity']);
+    }
 }

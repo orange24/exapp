@@ -21,8 +21,20 @@ class SanctionApprovedDespiteMatch extends Notification
     {
         return [
             'category' => 'sanction',
-            'severity' => 'approved',
-            'title' => 'อนุมัติทำรายการต่อ ทั้งที่พบชื่อใกล้เคียง',
+            // decide() ถูกเรียกกับทุกผลการตัดสิน ไม่ใช่แค่การอนุมัติผ่าน
+            // ถ้าใช้หัวข้อเดียวตายตัว เคสที่ยืนยันว่า "เป็นบุคคลเดียวกันจริง"
+            // จะขึ้นในกระดิ่งว่า "อนุมัติทำรายการต่อ" ซึ่งความหมายตรงข้ามกันคนละขั้ว
+            'severity' => match ($this->screening->decision) {
+                SanctionScreening::DECISION_TRUE_MATCH => 'blocked',
+                SanctionScreening::DECISION_ESCALATED => 'info',
+                default => 'approved',
+            },
+            'decision' => $this->screening->decision,
+            'title' => match ($this->screening->decision) {
+                SanctionScreening::DECISION_TRUE_MATCH => 'ยืนยันว่าเป็นบุคคลเดียวกัน — ต้องระงับและรายงาน ปปง.',
+                SanctionScreening::DECISION_ESCALATED => 'ส่งต่อให้ผู้บริหารตัดสิน — ยังไม่ได้ข้อยุติ',
+                default => 'อนุมัติทำรายการต่อ ทั้งที่พบชื่อใกล้เคียง',
+            },
             'screening_id' => $this->screening->id,
             'transaction_id' => $this->screening->transaction_id,
             'branch_name' => $this->screening->branch?->branch_name,
