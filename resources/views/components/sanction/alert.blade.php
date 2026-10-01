@@ -1,4 +1,11 @@
-@props(['screening' => null, 'matches' => [], 'canApprove' => false])
+{{--
+    ปุ่ม "ขออนุมัติทำรายการต่อ" ต้องแสดงให้ "พนักงาน" เห็น ไม่ใช่เฉพาะผู้มีสิทธิ์อนุมัติ
+
+    flow จริงคือพนักงานเป็นคนกดปุ่มเพื่อเปิดช่องให้ผู้จัดการเดินมาใส่รหัสของตัวเอง
+    (supervisor override) ถ้าไปซ่อนปุ่มจากคนที่ไม่มีสิทธิ์ ก็เท่ากับซ่อนจากคนที่ต้องกด
+    การบังคับสิทธิ์อยู่ฝั่ง server ตอน submitSanctionApproval() ไม่ใช่ที่การแสดงปุ่ม
+--}}
+@props(['screening' => null, 'matches' => []])
 
 @if ($screening && $screening['result'] !== 'clear')
     @php
