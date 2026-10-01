@@ -20,7 +20,12 @@ class SanctionTransactionBlocked extends Notification
 
     public function toArray(object $notifiable): array
     {
-        $entry = $this->screening->matches()->with('entry')->first()?->entry;
+        // เรียงตามคะแนนก่อน — ไม่งั้นจะหยิบ match แถวไหนก็ได้ที่ DB คืนมาแถวแรก
+        // ซึ่งอาจเป็นตัวที่คะแนนต่ำกว่า แล้ว noti จะระบุชื่อผิดคน
+        $entry = $this->screening->matches()
+            ->with('entry')
+            ->orderByDesc('score')
+            ->first()?->entry;
 
         return [
             'category' => 'sanction',
