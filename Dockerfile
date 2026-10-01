@@ -71,9 +71,10 @@ RUN mkdir -p \
 RUN php artisan package:discover --ansi 2>/dev/null || true \
     && php artisan view:cache || true
 
-# Copy entrypoint
+# Copy entrypoints
 COPY docker/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+COPY docker/job-entrypoint.sh /job-entrypoint.sh
+RUN chmod +x /entrypoint.sh /job-entrypoint.sh
 
 # Cloud Run uses PORT env variable (default 8080)
 ENV PORT=8080
