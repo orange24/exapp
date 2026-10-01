@@ -5,7 +5,6 @@ namespace App\Console\Commands;
 use App\Services\Sanction\AmloHtmlParser;
 use App\Services\Sanction\Source\AmloPublicScraper;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Http;
 use Throwable;
 
 /**
@@ -25,7 +24,6 @@ class SanctionsVerifyParser extends Command
 
     public function handle(): int
     {
-        $base = rtrim((string) config('sanction.amlo.base_url'), '/');
         $lists = (array) config('sanction.amlo.lists');
 
         $problems = [];
@@ -55,13 +53,8 @@ class SanctionsVerifyParser extends Command
             $ref = $rows[0]['source_ref'];
 
             try {
-                $html = Http::withHeaders(['User-Agent' => 'ExApp-SanctionSync/1.0'])
-                    ->timeout((int) config('sanction.amlo.timeout_seconds'))
-                    ->get("{$base}/{$slug}/detail/{$ref}")
-                    ->throw()
-                    ->body();
-
-                $dto = AmloHtmlParser::parseDetail($html, $ref);
+                // ใช้ HTTP policy เดียวกับการ sync (retry + User-Agent ที่มีอีเมลติดต่อ)
+                $dto = AmloHtmlParser::parseDetail($source->fetchDetailHtml($ref), $ref);
             } catch (Throwable $e) {
                 $problems[] = "{$listCode}: parse หน้า detail {$ref} ไม่ได้ — {$e->getMessage()}";
                 $this->error("  หน้า detail {$ref}: {$e->getMessage()}");

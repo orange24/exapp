@@ -113,6 +113,21 @@ class AmloPublicScraper implements SanctionSource
         return AmloHtmlParser::parseList($this->get("{$base}/{$slug}/"), $slug);
     }
 
+    /**
+     * ดึงหน้า detail หนึ่งหน้าโดยใช้นโยบาย HTTP เดียวกับการ sync
+     * (timeout, retry, User-Agent ที่มีอีเมลติดต่อ)
+     *
+     * มีไว้ให้ canary เรียก — ไม่งั้น canary จะยิงเองโดยไม่มี retry
+     * แล้วเน็ตสะดุดครั้งเดียวจะกลายเป็นแจ้งเตือนว่า "parser พัง" ทั้งที่ไม่พัง
+     */
+    public function fetchDetailHtml(string $sourceRef): string
+    {
+        $slug = config("sanction.amlo.lists.{$this->listCode}");
+        $base = rtrim((string) config('sanction.amlo.base_url'), '/');
+
+        return $this->get("{$base}/{$slug}/detail/{$sourceRef}");
+    }
+
     private function get(string $url): string
     {
         $contact = (string) config('sanction.amlo.contact_email');
