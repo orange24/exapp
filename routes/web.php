@@ -262,5 +262,8 @@ Route::middleware(['auth', 'session.check'])->group(function () {
 
     // Notifications — generic notification centre (ใครจะเอาไปแจ้งเรื่องอื่นก็ใช้หน้านี้ได้)
     Route::get('/notifications', fn () => view('notifications.index'))->name('notifications.index');
+
+    // Sanction screening — คิวให้ admin เคลียร์ false positive เป็นชุด
+    Route::get('/sanctions/review', fn () => view('sanction.review'))->name('sanctions.review');
 });
 
