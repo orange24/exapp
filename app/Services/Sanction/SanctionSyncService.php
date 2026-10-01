@@ -24,6 +24,11 @@ use Throwable;
  */
 class SanctionSyncService
 {
+    public function __construct(
+        private readonly SanctionNotifier $notifier,
+    ) {
+    }
+
     public function sync(SanctionSource $source, bool $force = false, ?int $forcedBy = null): SanctionSyncRun
     {
         $run = SanctionSyncRun::create([
@@ -49,7 +54,11 @@ class SanctionSyncService
                 'finished_at' => now(),
             ]);
 
-            return $run->fresh();
+            $run = $run->fresh();
+
+            $this->notifier->syncFailed($run);
+
+            return $run;
         }
     }
 
@@ -95,7 +104,11 @@ class SanctionSyncService
                 'reason' => $abort,
             ]);
 
-            return $run->fresh();
+            $run = $run->fresh();
+
+            $this->notifier->syncFailed($run);
+
+            return $run;
         }
 
         // --- เฟส 5: COMMIT ------------------------------------------------
@@ -111,7 +124,16 @@ class SanctionSyncService
             'finished_at' => now(),
         ]);
 
-        return $run->fresh();
+        $fresh = $run->fresh();
+
+        // แจ้งหลัง commit — และเฉพาะรอบที่รายชื่อขยับจริง
+        // ถ้าแจ้งทุกรอบ กระดิ่งจะมีแต่ "sync สำเร็จ ไม่มีอะไรเปลี่ยน" ทุกคืน
+        // แล้วคนจะเลิกกดดู รวมถึงคืนที่มีชื่อเพิ่มเข้ามาจริง
+        if ($fresh->hasEntryChanges()) {
+            $this->notifier->listUpdated($fresh);
+        }
+
+        return $fresh;
     }
 
     /**

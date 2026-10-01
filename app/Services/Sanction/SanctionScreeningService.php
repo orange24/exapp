@@ -20,6 +20,7 @@ class SanctionScreeningService
 
     public function __construct(
         private readonly SanctionMatcher $matcher,
+        private readonly SanctionNotifier $notifier,
     ) {
     }
 
@@ -46,7 +47,7 @@ class SanctionScreeningService
         $topScore = $candidates !== [] ? $candidates[0]->score : 0.0;
         $result = $this->classifyWithListRules($candidates, $topScore);
 
-        return DB::transaction(function () use (
+        $screening = DB::transaction(function () use (
             $input, $trigger, $screenedBy, $customerId, $transactionId,
             $branchId, $counterId, $candidates, $topScore, $result
         ): SanctionScreening {
@@ -80,6 +81,14 @@ class SanctionScreeningService
 
             return $screening;
         });
+
+        // ส่งหลัง commit เท่านั้น — ถ้าส่งข้างใน transaction แล้วเกิด rollback
+        // จะได้ noti ที่ชี้ไปหา screening ที่ไม่มีอยู่จริง
+        if ($screening->isBlocked()) {
+            $this->notifier->transactionBlocked($screening);
+        }
+
+        return $screening;
     }
 
     /**
@@ -119,7 +128,7 @@ class SanctionScreeningService
             throw new InvalidArgumentException("ไม่รู้จักการตัดสินใจ \"{$decision}\"");
         }
 
-        return DB::transaction(function () use ($screening, $decision, $decidedBy, $reason): SanctionScreening {
+        DB::transaction(function () use ($screening, $decision, $decidedBy, $reason): void {
             $screening->update([
                 'decision' => $decision,
                 'decided_by' => $decidedBy,
@@ -130,9 +139,16 @@ class SanctionScreeningService
             if ($decision === SanctionScreening::DECISION_FALSE_POSITIVE && $screening->customer_id !== null) {
                 $this->recordClearances($screening, $decidedBy, $reason);
             }
-
-            return $screening->fresh();
         });
+
+        $fresh = $screening->fresh();
+
+        // ส่งหลัง commit เท่านั้น ด้วยเหตุผลเดียวกับใน screen()
+        // ส่วนกลางต้องเห็นทุกครั้งที่สาขากดผ่าน ไม่ใช่เฉพาะเคสหนัก
+        // ถ้าสาขาไหนอนุมัติบ่อยผิดปกติ จะเห็นได้จากรายงาน
+        $this->notifier->approvedDespiteMatch($fresh);
+
+        return $fresh;
     }
 
     /**
