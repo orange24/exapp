@@ -24,8 +24,12 @@ use App\Http\Controllers\Report\BotMonthlyReportController;
 use App\Http\Controllers\Report\DailyReportController;
 use App\Http\Controllers\Report\MySummaryReportController;
 use App\Http\Controllers\Report\ProfitLossReportController;
+use App\Http\Controllers\Report\SanctionCoverageGapReportController;
 use App\Http\Controllers\Report\SanctionDecisionReportController;
+use App\Http\Controllers\Report\SanctionListDeltaReportController;
+use App\Http\Controllers\Report\SanctionRescanReportController;
 use App\Http\Controllers\Report\SanctionScreeningLogController;
+use App\Http\Controllers\Report\SanctionSyncHealthReportController;
 use App\Http\Controllers\Report\StockMovementReportController;
 use App\Http\Controllers\Report\StockValuationReportController;
 use App\Http\Controllers\Report\TransferReportController;
@@ -268,6 +272,11 @@ Route::middleware(['auth', 'session.check'])->group(function () {
 
     Route::get('/reports/sanction-decisions', [SanctionDecisionReportController::class, 'index'])->name('reports.sanction-decisions');
     Route::post('/reports/sanction-decisions/export', [SanctionDecisionReportController::class, 'exportExcel'])->name('reports.sanction-decisions.export');
+
+    Route::get('/reports/sanction-rescan', [SanctionRescanReportController::class, 'index'])->name('reports.sanction-rescan');
+    Route::get('/reports/sanction-list-delta', [SanctionListDeltaReportController::class, 'index'])->name('reports.sanction-list-delta');
+    Route::get('/reports/sanction-sync-health', [SanctionSyncHealthReportController::class, 'index'])->name('reports.sanction-sync-health');
+    Route::get('/reports/sanction-coverage-gap', [SanctionCoverageGapReportController::class, 'index'])->name('reports.sanction-coverage-gap');
 
     // Notifications — generic notification centre (ใครจะเอาไปแจ้งเรื่องอื่นก็ใช้หน้านี้ได้)
     Route::get('/notifications', fn () => view('notifications.index'))->name('notifications.index');
