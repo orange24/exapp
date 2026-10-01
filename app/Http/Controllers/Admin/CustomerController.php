@@ -5,7 +5,10 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Customer;
 use App\Models\CustomerDocument;
+use App\Models\SanctionScreening;
 use App\Models\TransactionMaster;
+use App\Services\Sanction\Dto\ScreeningInput;
+use App\Services\Sanction\SanctionScreeningService;
 use Illuminate\Http\Request;
 
 class CustomerController extends Controller
@@ -91,7 +94,9 @@ class CustomerController extends Controller
             'kyc_status'      => 'nullable|in:pending,verified,rejected',
         ]);
 
-        Customer::create($validated);
+        $customer = Customer::create($validated);
+
+        $this->screenAgainstSanctionLists($customer);
 
         return redirect()->route('admin.customers.index')
             ->with('success', 'เพิ่มลูกค้าเรียบร้อยแล้ว (Customer created)');
@@ -131,7 +136,29 @@ class CustomerController extends Controller
 
         $customer->update($validated);
 
+        $this->screenAgainstSanctionLists($customer);
+
         return redirect()->route('admin.customers.index')
             ->with('success', 'แก้ไขข้อมูลลูกค้าเรียบร้อยแล้ว (Customer updated)');
+    }
+
+    /**
+     * ตรวจรายชื่อลูกค้ากับบัญชีรายชื่อ (sanction lists)
+     *
+     * ต่างจากจุดอื่นในฟีเจอร์นี้: ตรงนี้ "ไม่บล็อก" การบันทึกลูกค้า
+     * เพราะการบันทึกประวัติลูกค้ายังไม่ใช่การทำธุรกรรม ถ้าบล็อกที่นี่
+     * พนักงานจะเลี่ยงไม่สร้างประวัติลูกค้า ซึ่งจะทำให้ร่องรอยหลักฐาน
+     * ที่ฟีเจอร์นี้ต้องพึ่งพาหายไปทั้งหมด
+     *
+     * ถ้าเข้าข่าย ผลตรวจจะเข้าคิวให้สำนักงานใหญ่ตัดสินภายหลัง
+     */
+    private function screenAgainstSanctionLists(Customer $customer): void
+    {
+        app(SanctionScreeningService::class)->screen(
+            input: ScreeningInput::fromCustomer($customer),
+            trigger: SanctionScreening::TRIGGER_CUSTOMER_CREATE,
+            screenedBy: auth()->id(),
+            customerId: $customer->id,
+        );
     }
 }
