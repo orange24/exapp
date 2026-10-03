@@ -132,6 +132,19 @@ class SuperrichRateService
     /**
      * Create a rate batch from latest SuperRich rates + adjustments.
      */
+    /**
+     * ทศนิยมของเรต — ต้องตรงกับคอลัมน์ counter_rates.rate_buy/rate_sell
+     * ซึ่งเป็น DECIMAL(12,6) และกับ step="0.000001" ของหน้าตั้งราคาปกติ
+     *
+     * ยังต้องปัดอยู่ เพราะ float ให้เศษขยะ: 0.00127 + (-0.00005)
+     * = 0.00122000000000000016 แต่ต้องปัดที่ 6 ไม่ใช่ 4
+     *
+     * ที่ 4 ตำแหน่ง สกุลที่ค่าต่ำจะเพี้ยนแรง — VND 0.00122 กลายเป็น 0.0012
+     * คลาด 1.6% และค่านี้ไม่ได้อยู่แค่บนจอ มันถูกเขียนลง counter_rates
+     * แล้วเอาไปคิดเงินลูกค้าจริง
+     */
+    public const RATE_PRECISION = 6;
+
     public function createBatch(int $userId, array $counterIds): SuperrichRateBatch
     {
         $rates = $this->getLatestRates();
@@ -156,8 +169,8 @@ class SuperrichRateService
                 'base_sell' => $sr->rate_sell,
                 'adj_buy' => $adjBuy,
                 'adj_sell' => $adjSell,
-                'final_buy' => round($sr->rate_buy + $adjBuy, 4),
-                'final_sell' => round($sr->rate_sell + $adjSell, 4),
+                'final_buy' => round($sr->rate_buy + $adjBuy, self::RATE_PRECISION),
+                'final_sell' => round($sr->rate_sell + $adjSell, self::RATE_PRECISION),
             ];
         }
 

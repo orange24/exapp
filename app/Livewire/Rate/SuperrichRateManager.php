@@ -151,8 +151,11 @@ class SuperrichRateManager extends Component
             $adjSell = $adj ? (float) $adj->adj_rate_sell : 0;
             $sr->adj_buy = $adjBuy;
             $sr->adj_sell = $adjSell;
-            $sr->final_buy = round($sr->rate_buy + $adjBuy, 4);
-            $sr->final_sell = round($sr->rate_sell + $adjSell, 4);
+            // ใช้ค่าเดียวกับตอนสร้าง batch — ตารางพรีวิวนี้คือสิ่งที่ผู้อนุมัติเห็น
+            // ก่อนกดส่งไปเคาน์เตอร์ ถ้าปัดคนละตำแหน่งกัน เขาจะอนุมัติเลขหนึ่ง
+            // แล้วระบบส่งอีกเลขหนึ่งออกไป
+            $sr->final_buy = round($sr->rate_buy + $adjBuy, SuperrichRateService::RATE_PRECISION);
+            $sr->final_sell = round($sr->rate_sell + $adjSell, SuperrichRateService::RATE_PRECISION);
             return $sr;
         });
     }
