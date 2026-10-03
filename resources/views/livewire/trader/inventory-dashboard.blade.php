@@ -45,7 +45,7 @@
                                     <span class="text-gray-500">({{ $item['denom_label'] }})</span>
                                 </td>
                                 <td class="text-right py-2 px-1 font-mono text-gray-700">
-                                    {{ number_format($item['avg_cost'], 4) }}
+                                    {{ format_rate($item['avg_cost']) }}
                                 </td>
                                 <td class="text-right py-2 px-1 font-mono font-bold" style="color:#0e513a;">
                                     {{ number_format($item['balance'], 2) }}
@@ -97,7 +97,7 @@
                                     <span class="text-gray-500">({{ $item['denom_label'] }})</span>
                                 </td>
                                 <td class="text-right py-2 px-1 font-mono text-gray-700 font-bold">
-                                    {{ number_format($item['avg_cost'], 4) }}
+                                    {{ format_rate($item['avg_cost']) }}
                                 </td>
                                 <td class="text-right py-2 px-1 font-mono font-bold text-green-700">
                                     {{ number_format($item['balance'], 2) }}

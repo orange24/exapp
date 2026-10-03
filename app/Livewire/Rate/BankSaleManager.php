@@ -5,6 +5,7 @@ namespace App\Livewire\Rate;
 use App\Models\BankSale;
 use App\Models\Counter;
 use App\Models\CounterStock;
+use App\Services\SuperrichRateService;
 use App\Models\Currency;
 use App\Models\CurrencyDenomination;
 use App\Models\Customer;
@@ -176,11 +177,19 @@ class BankSaleManager extends Component
         return round(array_sum(array_column($this->rows, 'total_thb')), 2);
     }
 
-    /** เลือกธนบัตรแล้วเติมเรทเฉลี่ยให้เป็นค่าตั้งต้น — trader พิมพ์ทับด้วยเรทจริงได้ */
+    /**
+     * เลือกธนบัตรแล้วเติมเรทเฉลี่ยให้เป็นค่าตั้งต้น — trader พิมพ์ทับด้วยเรทจริงได้
+     *
+     * ปัดที่ 6 ตำแหน่งให้ตรงกับ counter_rates.rate_buy DECIMAL(12,6)
+     * ถ้าปัดที่ 4 สกุลที่ค่าต่ำจะเพี้ยนตั้งแต่ค่าตั้งต้น (VND 0.00122 -> 0.0012)
+     * และ trader ที่รับค่านี้ไปเลยจะบันทึกรายการด้วยเรทที่ผิด
+     */
     public function updatedRowDenominationId(): void
     {
         $rate = $this->avgBuyRates[$this->rowDenominationId] ?? 0;
-        $this->rowRate = $rate > 0 ? (string) round($rate, 4) : '';
+        $this->rowRate = $rate > 0
+            ? (string) round($rate, SuperrichRateService::RATE_PRECISION)
+            : '';
     }
 
     public function addRow(): void

@@ -123,7 +123,7 @@
                 <div class="md:col-span-2">
                     <label class="block text-xs font-medium text-gray-600 mb-1">เรทซื้อ</label>
                     {{-- เรทตั้งต้นมาจากค่าเฉลี่ยทุกสาขาที่ trader ดูแล (updatedRowDenominationId) แก้ทับได้ --}}
-                    <input type="number" step="0.0001" wire:model.blur="rowRate"
+                    <input type="number" step="0.000001" wire:model.blur="rowRate"
                            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="32.6500">
                 </div>
                 <div class="md:col-span-2">
@@ -219,10 +219,10 @@
                             <tr class="border-b border-green-100">
                                 <td class="px-3 py-2 font-medium">{{ $row['denomination_label'] }}</td>
                                 <td class="px-3 py-2 text-right font-mono">{{ number_format($qty, 2) }}</td>
-                                <td class="px-3 py-2 text-right font-mono">{{ $avg > 0 ? number_format($avg, 4) : '—' }}</td>
+                                <td class="px-3 py-2 text-right font-mono">{{ $avg > 0 ? format_rate($avg) : '—' }}</td>
                                 <td class="px-3 py-2 text-right font-mono">{{ number_format($row['amount'], 2) }}</td>
                                 <td class="px-3 py-2 text-right font-mono font-bold text-green-700">
-                                    {{ number_format($this->projectedAvgCost($qty, $avg, (float) $row['amount'], (float) $row['bank_rate']), 4) }}
+                                    {{ format_rate($this->projectedAvgCost($qty, $avg, (float) $row['amount'], (float) $row['bank_rate'])) }}
                                 </td>
                             </tr>
                             @endforeach

@@ -44,7 +44,7 @@
                         <td class="px-3 py-2 font-medium">{{ $d->currency_code }}</td>
                         <td class="px-3 py-2">{{ $d->denomination?->denom_label ?? '-' }}</td>
                         <td class="px-3 py-2 text-right font-mono">{{ number_format($d->quantity, 2) }}</td>
-                        <td class="px-3 py-2 text-right font-mono text-gray-500">{{ number_format($d->avg_cost, 4) }}</td>
+                        <td class="px-3 py-2 text-right font-mono text-gray-500">{{ format_rate($d->avg_cost) }}</td>
                         <td class="px-3 py-2 text-right font-mono font-medium">{{ number_format($value, 2) }}</td>
                     </tr>
                     @empty

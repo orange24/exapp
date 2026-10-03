@@ -43,7 +43,7 @@
             </div>
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">เรทขายธนาคาร</label>
-                <input type="number" step="0.0001" wire:model.blur="bankRate" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="32.6500">
+                <input type="number" step="0.000001" wire:model.blur="bankRate" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="32.6500">
                 @error('bankRate') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
             </div>
             <div>
@@ -103,7 +103,7 @@
                             <td class="px-3 py-2 text-right font-mono">{{ number_format($stock->quantity, 2) }}</td>
                             <td class="px-3 py-2 text-right font-mono {{ $stock->hold_amount > 0 ? 'text-orange-600' : 'text-gray-400' }}">{{ number_format($stock->hold_amount, 2) }}</td>
                             <td class="px-3 py-2 text-right font-mono font-bold {{ $stock->available > 0 ? 'text-green-700' : 'text-red-600' }}">{{ number_format($stock->available, 2) }}</td>
-                            <td class="px-3 py-2 text-right font-mono text-blue-700">{{ number_format($stock->avg_cost, 4) }}</td>
+                            <td class="px-3 py-2 text-right font-mono text-blue-700">{{ format_rate($stock->avg_cost) }}</td>
                             <td class="px-3 py-2 text-center">
                                 <x-number-input model="sourceAmounts.{{ $stock->counter_id }}" :value="$sourceAmounts[$stock->counter_id] ?? null"
                                        class="w-28 border border-blue-300 rounded px-2 py-1 text-sm"

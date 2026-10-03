@@ -310,7 +310,7 @@
                             <td class="px-4 py-2 text-right text-blue-600">{{ number_format($inv->transfer_in, 2) }}</td>
                             <td class="px-4 py-2 text-right text-pink-600">{{ number_format($inv->transfer_out, 2) }}</td>
                             <td class="px-4 py-2 text-right font-semibold">{{ number_format($inv->closing_balance, 2) }}</td>
-                            <td class="px-4 py-2 text-right">{{ $inv->avg_cost > 0 ? number_format($inv->avg_cost, 4) : '—' }}</td>
+                            <td class="px-4 py-2 text-right">{{ $inv->avg_cost > 0 ? format_rate($inv->avg_cost) : '—' }}</td>
                             <td class="px-4 py-2 text-right">{{ number_format($inv->total_value, 2) }}</td>
                         </tr>
                     @endforeach

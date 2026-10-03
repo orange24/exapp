@@ -138,7 +138,7 @@
                             <td class="px-3 py-2 text-right text-pink-600 font-medium">{{ $row['tfr_out'] > 0 ? number_format($row['tfr_out'], 2) : '' }}</td>
                             <td class="px-3 py-2 text-right font-medium {{ $row['adjust'] >= 0 ? 'text-yellow-600' : 'text-red-600' }}">{{ $row['adjust'] != 0 ? number_format($row['adjust'], 2) : '' }}</td>
                             <td class="px-3 py-2 text-right font-bold">{{ number_format($row['remaining'], 2) }}</td>
-                            <td class="px-3 py-2 text-right text-gray-500">{{ $row['avg_cost'] > 0 ? number_format($row['avg_cost'], 4) : '—' }}</td>
+                            <td class="px-3 py-2 text-right text-gray-500">{{ $row['avg_cost'] > 0 ? format_rate($row['avg_cost']) : '—' }}</td>
                             <td class="px-3 py-2 text-right font-medium">{{ number_format($row['thb_value'], 2) }}</td>
                         </tr>
                     @empty
