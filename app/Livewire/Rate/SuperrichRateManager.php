@@ -44,9 +44,11 @@ class SuperrichRateManager extends Component
         $this->adjustments = [];
         foreach ($denoms as $d) {
             $adj = $existing->get($d->id);
+            // (string) บน float ไม่ปลอดภัยที่นี่ — ค่าต่ำกว่า 1e-5 จะกลายเป็น
+            // "-1.0E-5" ในช่องกรอก ซึ่งเป็นช่วงที่ IDR/VND ใช้งานจริงพอดี
             $this->adjustments[$d->id] = [
-                'adj_rate_buy' => $adj ? (string) $adj->adj_rate_buy : '0',
-                'adj_rate_sell' => $adj ? (string) $adj->adj_rate_sell : '0',
+                'adj_rate_buy' => rate_input_value($adj?->adj_rate_buy),
+                'adj_rate_sell' => rate_input_value($adj?->adj_rate_sell),
             ];
         }
     }

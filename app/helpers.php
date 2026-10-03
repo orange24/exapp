@@ -22,6 +22,35 @@ if (! function_exists('format_rate')) {
     }
 }
 
+if (! function_exists('rate_input_value')) {
+    /**
+     * Format a rate for the `value` of an <input type="number">.
+     *
+     * Casting a float straight to string is not safe here: PHP switches to
+     * scientific notation below 1e-5, so an IDR adjustment of -0.00001 reaches
+     * the form as "-1.0E-5". The browser accepts that, but a counter clerk
+     * cannot read it, and it is the currencies with the smallest rates — the
+     * ones that need six decimals in the first place — that fall below the line.
+     *
+     * Unlike format_rate() this emits no thousands separator, because a comma
+     * makes the value invalid for a number input.
+     */
+    function rate_input_value(null|int|float|string $value): string
+    {
+        if ($value === null || $value === '') {
+            return '0';
+        }
+
+        $formatted = number_format((float) $value, 6, '.', '');
+
+        if (str_contains($formatted, '.')) {
+            $formatted = rtrim(rtrim($formatted, '0'), '.');
+        }
+
+        return $formatted === '' || $formatted === '-0' ? '0' : $formatted;
+    }
+}
+
 if (! function_exists('format_money')) {
     /**
      * Format a money value, dropping a trailing ".00" to save space on the

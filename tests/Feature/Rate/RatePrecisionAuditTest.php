@@ -158,6 +158,33 @@ class RatePrecisionAuditTest extends TestCase
         $this->assertSame([], $offenders, "ปัดเรตต้องใช้ 6 ตำแหน่งให้ตรงกับคอลัมน์:\n" . implode("\n", $offenders));
     }
 
+    // ───────── กลุ่ม 5: float -> string ที่พลิกเป็น scientific notation ─────────
+
+    public function test_no_rate_is_cast_straight_from_float_to_string(): void
+    {
+        $offenders = [];
+
+        foreach ($this->phpFiles() as $file) {
+            foreach (file($file) as $i => $line) {
+                // (string) $อะไรก็ตามที่เป็นเรต — ต่ำกว่า 1e-5 จะได้ "-1.0E-5"
+                // ต้องรองรับ nullsafe ด้วย: (string) $adj?->adj_rate_buy
+                if (! preg_match('/\(string\)\s*(\$[^,;)\s]+)/', $line, $m)) {
+                    continue;
+                }
+                if (! preg_match('/rate|adj|avg_cost|unit_price/i', $m[1])) {
+                    continue;
+                }
+                $offenders[] = $this->relative($file) . ':' . ($i + 1) . ' ' . trim($m[0]);
+            }
+        }
+
+        $this->assertSame(
+            [],
+            $offenders,
+            "ใช้ rate_input_value() แทน — PHP พลิกเป็น scientific notation ใต้ 1e-5:\n" . implode("\n", $offenders)
+        );
+    }
+
     /** @return array<int, string> */
     private function bladeFiles(): array
     {

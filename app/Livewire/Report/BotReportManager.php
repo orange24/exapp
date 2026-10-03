@@ -239,7 +239,9 @@ class BotReportManager extends Component
             'nationality' => $row->nationality,
             'purpose' => $row->purpose,
             'currency_code' => $row->currency_code,
-            'exchange_rate' => (string) $row->exchange_rate,
+            // ไม่ใช้ (string) ตรง ๆ — ถ้าวันหน้ามีคนเพิ่ม cast 'float' ให้คอลัมน์นี้
+            // เรตที่ต่ำกว่า 1e-5 จะกลายเป็น "1.0E-5" ในช่องกรอกทันทีโดยไม่มีอะไรฟ้อง
+            'exchange_rate' => rate_input_value($row->exchange_rate),
             'fx_amount' => (string) $row->fx_amount,
             'thb_amount' => (string) $row->thb_amount,
             'remark' => $row->remark ?? '',
