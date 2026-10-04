@@ -48,26 +48,31 @@ class MatchScorer
             return null;
         }
 
-        if ($customerTokens === $entryTokens) {
-            // ชื่อชิ้นเดียวไม่ใช่การระบุตัวบุคคล
-            //
-            // UN list เก็บชื่อเป็นชิ้น ๆ ("1. MOHAMMAD 2. AMAN 3. AKHUND") และเราเก็บ
-            // ทุกชิ้นเป็นชื่อที่ค้นได้ ถ้าปล่อยให้ชิ้นเดียวได้ 95 ลูกค้าชื่อ "Aman"
-            // จะขึ้นแถบแดงเต็ม ๆ ทั้งที่หลักฐานมีแค่ชื่อต้นที่คนใช้กันทั่วไป
-            //
-            // ยังต้องเตือนอยู่ (ส้ม) แต่ไม่ใช่ระดับเดียวกับชื่อเต็มที่ตรงทุกส่วน
-            // ไม่งั้นพนักงานจะชินกับแถบแดงจนกดผ่านวันที่เจอของจริง
-            if (count($entryTokens) < 2) {
-                return ['type' => 'name_fuzzy', 'score' => self::SCORE_SINGLE_TOKEN];
-            }
+        // ชื่อชิ้นเดียวไม่ใช่การระบุตัวบุคคล
+        //
+        // UN list เก็บชื่อเป็นชิ้น ๆ ("1. ABU 2. RUSDAN") และเราเก็บทุกชิ้น
+        // เป็นชื่อที่ค้นได้ เพื่อไม่ให้พลาดลูกค้าที่ถูกบันทึกชื่อไว้ไม่ครบ
+        //
+        // แต่ชิ้นเดียวเป็นหลักฐานที่อ่อนมาก ไม่ว่าจะตรงกันเป๊ะหรือไปโผล่อยู่
+        // ในชื่อที่ยาวกว่า — ตอน sync ข้อมูลจริงขึ้น production ลูกค้า 13 จาก 91 ราย
+        // ติดแถบแดง 85 คะแนนเพราะมีคำว่า "ABU" หรือ "AHMAD" อยู่ในชื่อเท่านั้น
+        //
+        // ยังเตือนอยู่ (ส้ม) ให้คนตรวจเคลียร์ครั้งเดียวแล้วจบ แต่ต้องไม่ใช่สีแดง
+        // ไม่งั้นพนักงานจะชินกับแถบแดงจนกดผ่านวันที่เจอของจริง
+        $entryIsNameFragment = count($entryTokens) < 2;
 
-            return ['type' => 'name_exact', 'score' => self::SCORE_NAME_EXACT];
+        if ($customerTokens === $entryTokens) {
+            return $entryIsNameFragment
+                ? ['type' => 'name_fuzzy', 'score' => self::SCORE_SINGLE_TOKEN]
+                : ['type' => 'name_exact', 'score' => self::SCORE_NAME_EXACT];
         }
 
         // token ของรายชื่อต้องห้ามอยู่ในชื่อลูกค้าครบทุกตัว
         // (เช่น ลูกค้ากรอก "AMRAN BIN MING" ส่วนลิสต์เก็บ "AMRAN MING")
         if (array_diff($entryTokens, $customerTokens) === []) {
-            return ['type' => 'token_containment', 'score' => self::SCORE_TOKEN_CONTAINMENT];
+            return $entryIsNameFragment
+                ? ['type' => 'name_fuzzy', 'score' => self::SCORE_SINGLE_TOKEN]
+                : ['type' => 'token_containment', 'score' => self::SCORE_TOKEN_CONTAINMENT];
         }
 
         $ratio = self::tokenSimilarity($customerTokens, $entryTokens);

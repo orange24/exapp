@@ -37,6 +37,27 @@ class MatchScorerTest extends TestCase
         $this->assertGreaterThanOrEqual(70.0, $result['score'], 'ยังต้องเตือนอยู่ ไม่ใช่ปล่อยผ่านเงียบ ๆ');
     }
 
+    public function test_a_name_fragment_inside_a_longer_name_is_not_a_red_alert(): void
+    {
+        // เคสจริงจาก production: UN list เก็บ "ABU RUSDAN" เป็นชิ้น ๆ เราจึงมีชื่อ
+        // ค้นได้ชื่อว่า "ABU" เดี่ยว ๆ ลูกค้า 13 จาก 91 รายติดแถบแดง 85 คะแนน
+        // เพราะมีคำว่า ABU หรือ AHMAD อยู่ในชื่อเท่านั้น
+        $result = MatchScorer::nameScore('ABU GHARFEH SAMI', 'ABU');
+
+        $this->assertNotSame('token_containment', $result['type']);
+        $this->assertLessThan(MatchScorer::SCORE_TOKEN_CONTAINMENT, $result['score']);
+        $this->assertGreaterThanOrEqual(70.0, $result['score'], 'ยังต้องเข้าคิวให้คนตรวจ ไม่ใช่เงียบหายไป');
+    }
+
+    public function test_a_real_two_part_name_inside_a_longer_name_still_scores_85(): void
+    {
+        // ต้องไม่เหมารวม — "AMRAN MING" ครบทั้งสองส่วนอยู่ในชื่อลูกค้า คือหลักฐานจริง
+        $this->assertSame(
+            ['type' => 'token_containment', 'score' => 85.0],
+            MatchScorer::nameScore('AMRAN BIN MING', 'AMRAN MING')
+        );
+    }
+
     public function test_a_full_two_part_name_still_scores_as_exact(): void
     {
         $this->assertSame(
