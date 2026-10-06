@@ -185,6 +185,17 @@
                            class="w-full border border-green-300 rounded px-2 py-1 text-sm font-semibold focus:ring-2 focus:ring-green-400 bg-white">
                 </div>
                 <div>
+                    {{--
+                        วันเกิดเป็นตัวแยกแยะที่แรงที่สุดเวลาชื่อไปตรงกับรายชื่อ
+                        บุคคลต้องห้าม — ชื่ออย่าง MOHAMED/AHMED พบได้ทั่วไป
+                        แต่ถ้ารู้วันเกิดด้วย ระบบจะตัดคนที่ไม่ใช่ออกได้เอง
+                        โดยพนักงานไม่ต้องขออนุมัติ
+                    --}}
+                    <label class="text-gray-500 text-xs">วันเกิด (ช่วยลดการขออนุมัติ)</label>
+                    <input type="date" wire:model.blur="ocrDob"
+                           class="w-full border border-green-300 rounded px-2 py-1 text-sm font-semibold focus:ring-2 focus:ring-green-400 bg-white">
+                </div>
+                <div>
                     <label class="text-gray-500 text-xs">Expiry</label>
                     <input type="text" wire:model.blur="ocrExpiry"
                            placeholder="วันหมดอายุ"

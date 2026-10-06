@@ -29,6 +29,19 @@ class MatchScorer
     /** Levenshtein ratio ต่ำกว่านี้ถือว่าคนละชื่อ */
     private const FUZZY_MIN_RATIO = 0.85;
 
+    /**
+     * ค่าข้อมูลระบุตัวตนของชื่อ (ผลรวม log(N/df) ของแต่ละคำ) ที่ถือว่า
+     * "สามัญมาก" และ "เจาะจงพอ" — วัดจากรายชื่อจริงของ ปปง.:
+     *   AHMED 4.3 · MOHAMMED 4.5 · ABU 5.5 · AMAN 7.2 · MOHAMED AHMED 8.4
+     *   ABU RUSDAN 12.7 · AMRAN MING 14.0 · IYAD NAZMI SALIH KHALIL 26.0
+     */
+    private const RARITY_COMMON = 5.0;
+    private const RARITY_DISTINCT = 12.0;
+    private const RARITY_FLOOR = 0.55;
+
+    /** เมื่อวันเกิดตรงกัน ความหายากของชื่อแทบไม่สำคัญอีกต่อไป */
+    private const RARITY_WHEN_DOB_MATCHES = 0.95;
+
     private const MODIFIER_NATIONALITY_MATCH = 1.10;
     private const MODIFIER_NATIONALITY_MISMATCH = 0.70;
     private const MODIFIER_DOB_MATCH = 1.20;
@@ -134,6 +147,29 @@ class MatchScorer
         return max(0.0, 1.0 - ($distance / $maxLen));
     }
 
+    /**
+     * แปลงค่าข้อมูลระบุตัวตนของชื่อ เป็นตัวคูณคะแนน
+     *
+     * ลูกค้าตะวันออกกลางแทบทุกคนมี MOHAMED หรือ AHMED อยู่ในชื่อ การตรงกันที่
+     * คำพวกนั้นจึงไม่ใช่หลักฐาน แต่ชื่ออย่าง ABU RUSDAN มีอยู่ชื่อเดียวในลิสต์
+     * ทั้งหมด — ตรงกันเมื่อไหร่คือเรื่องจริงจัง
+     */
+    public static function rarityFactor(float $information): float
+    {
+        if ($information >= self::RARITY_DISTINCT) {
+            return 1.0;
+        }
+
+        if ($information <= self::RARITY_COMMON) {
+            return self::RARITY_FLOOR;
+        }
+
+        $span = self::RARITY_DISTINCT - self::RARITY_COMMON;
+        $position = ($information - self::RARITY_COMMON) / $span;
+
+        return round(self::RARITY_FLOOR + $position * (1.0 - self::RARITY_FLOOR), 4);
+    }
+
     /** @return 'match'|'mismatch'|'unknown' */
     public static function compareNationality(?string $customer, ?string $entry): string
     {
@@ -178,8 +214,27 @@ class MatchScorer
      * @param 'match'|'mismatch'|'unknown' $nationality
      * @param 'match'|'mismatch'|'unknown' $dob
      */
-    public static function applyModifiers(float $baseScore, string $nationality, string $dob): float
-    {
+    /**
+     * @param 'match'|'mismatch'|'unknown' $nationality
+     * @param 'match'|'mismatch'|'unknown' $dob
+     * @param float $rarityFactor ตัวคูณจาก rarityFactor() — 1.0 คือไม่ลดเลย
+     *
+     * วันเกิดเป็นตัวกำหนดว่าความหายากของชื่อมีน้ำหนักแค่ไหน:
+     *
+     *   ไม่รู้วันเกิด  → ชื่อเป็นหลักฐานเดียวที่มี ความหายากจึงเป็นตัวตัดสิน
+     *   วันเกิดไม่ตรง → คนละคน กดทิ้งไม่ว่าชื่อจะหายากแค่ไหน
+     *   วันเกิดตรง    → หลักฐานแรงมาก ยกเลิกการลดจากความหายาก
+     *
+     * โหมดที่สามสำคัญที่สุดและมองข้ามง่ายที่สุด — ลูกค้าชื่อสามัญที่บังเอิญ
+     * เกิดวันเดียวกับคนในลิสต์เป๊ะ คือเคสที่ควรเป็นสีแดงที่สุด ถ้าปล่อยให้
+     * ตัวคูณความหายากกดอยู่ จะกลายเป็นกดเคสที่อันตรายที่สุดลงไปเป็นสีส้ม
+     */
+    public static function applyModifiers(
+        float $baseScore,
+        string $nationality,
+        string $dob,
+        float $rarityFactor = 1.0,
+    ): float {
         $score = $baseScore;
 
         $score *= match ($nationality) {
@@ -189,9 +244,9 @@ class MatchScorer
         };
 
         $score *= match ($dob) {
-            'match' => self::MODIFIER_DOB_MATCH,
-            'mismatch' => self::MODIFIER_DOB_MISMATCH,
-            default => 1.0,
+            'match' => max($rarityFactor, self::RARITY_WHEN_DOB_MATCHES) * self::MODIFIER_DOB_MATCH,
+            'mismatch' => $rarityFactor * self::MODIFIER_DOB_MISMATCH,
+            default => $rarityFactor,
         };
 
         return round(min($score, self::SCORE_CAP), 2);

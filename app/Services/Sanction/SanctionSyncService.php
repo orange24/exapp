@@ -26,6 +26,7 @@ class SanctionSyncService
 {
     public function __construct(
         private readonly SanctionNotifier $notifier,
+        private readonly NameRarityIndex $rarity,
     ) {
     }
 
@@ -130,6 +131,10 @@ class SanctionSyncService
         // ถ้าแจ้งทุกรอบ กระดิ่งจะมีแต่ "sync สำเร็จ ไม่มีอะไรเปลี่ยน" ทุกคืน
         // แล้วคนจะเลิกกดดู รวมถึงคืนที่มีชื่อเพิ่มเข้ามาจริง
         if ($fresh->hasEntryChanges()) {
+            // ความถี่ของคำเปลี่ยนไปเมื่อรายชื่อเปลี่ยน ต้องสร้างดัชนีใหม่ก่อน
+            // แจ้งเตือน เพราะ re-scan ที่ตามมาจะใช้ค่านี้ทันที
+            $this->rarity->rebuild();
+
             $this->notifier->listUpdated($fresh);
         }
 

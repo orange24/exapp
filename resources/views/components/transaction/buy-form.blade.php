@@ -701,6 +701,9 @@ new class extends Component
                 'score' => (float) $m->score,
                 'severity' => \App\Services\Sanction\MatchScorer::severity((float) $m->score),
                 'matched_on' => $m->matched_on,
+                // บอกผู้อนุมัติว่าทำไมคะแนนออกมาเท่านี้ — เห็นแค่ตัวเลขลอย ๆ
+                // ตัดสินใจไม่ได้ว่าควรเชื่อแค่ไหน
+                'why' => $this->explainMatch($m),
                 'list_label' => $m->entry->list_code === \App\Models\SanctionEntry::LIST_FREEZE_05_TH
                     ? 'FREEZE-05 Thailand list'
                     : ($m->entry->list_code === \App\Models\SanctionEntry::LIST_FREEZE_04_UN
@@ -879,6 +882,44 @@ new class extends Component
         $this->openSanctionApproval();
 
         return false;
+    }
+
+    /**
+     * อธิบายเป็นภาษาคนว่าทำไมการแมตช์ครั้งนี้ได้คะแนนเท่านี้
+     *
+     * คะแนน 72 กับ 95 ต่างกันด้วยเหตุผลที่คนอนุมัติต้องรู้ — ตรงที่ชื่อสามัญ
+     * โดยไม่มีวันเกิดยืนยัน ไม่เหมือนกับตรงทั้งชื่อและวันเกิด
+     *
+     * @return array<int, string>
+     */
+    private function explainMatch(\App\Models\SanctionScreeningMatch $m): array
+    {
+        $why = [];
+        $entry = $m->entry;
+
+        $rarity = app(\App\Services\Sanction\NameRarityIndex::class)->explain($m->matched_on);
+        if ($rarity['commonest'] !== null && $rarity['commonest']['count'] >= 10) {
+            $why[] = 'ชื่อ "' . $rarity['commonest']['token'] . '" พบใน '
+                . $rarity['commonest']['count'] . ' รายชื่อ — เป็นชื่อที่พบบ่อย';
+        } elseif ($rarity['information'] !== null && $rarity['factor'] >= 1.0) {
+            $why[] = 'ชื่อนี้เจาะจง พบไม่บ่อยในรายชื่อ';
+        }
+
+        $dob = \App\Services\Sanction\MatchScorer::compareDob($this->ocrDob ?: null, $entry?->date_of_birth);
+        $why[] = match ($dob) {
+            'match' => 'วันเกิดตรงกัน',
+            'mismatch' => 'วันเกิดไม่ตรงกัน',
+            default => trim((string) $this->ocrDob) === ''
+                ? 'ยังไม่ได้กรอกวันเกิดลูกค้า — กรอกแล้วระบบอาจตัดรายการนี้ออกเองได้'
+                : 'รายชื่อนี้ไม่มีวันเกิดในฐานข้อมูล ปปง.',
+        };
+
+        $nat = \App\Services\Sanction\MatchScorer::compareNationality($this->ocrNationality ?: null, $entry?->nationality);
+        if ($nat !== 'unknown') {
+            $why[] = $nat === 'match' ? 'สัญชาติตรงกัน' : 'สัญชาติไม่ตรงกัน';
+        }
+
+        return $why;
     }
 
     public function render()

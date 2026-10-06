@@ -56,6 +56,16 @@
 
                             <div class="text-xs text-gray-700 mt-1">ตรงที่: {{ $m['matched_on'] }}</div>
 
+                            {{-- เหตุผลของคะแนน — คนอนุมัติต้องรู้ว่าหลักฐานแข็งแค่ไหน
+                                 ไม่ใช่เห็นแค่ตัวเลขแล้วเดาเอง --}}
+                            @if (!empty($m['why']))
+                                <ul class="text-xs text-gray-600 mt-1 list-disc list-inside">
+                                    @foreach ($m['why'] as $reason)
+                                        <li>{{ $reason }}</li>
+                                    @endforeach
+                                </ul>
+                            @endif
+
                             {{-- แสดงเทียบกันเป็นคู่ — คนตัดสินใจต้องเห็นว่าต่างกันตรงไหน --}}
                             <div class="grid grid-cols-2 gap-2 mt-2 text-xs">
                                 <div class="bg-gray-50 rounded p-2">

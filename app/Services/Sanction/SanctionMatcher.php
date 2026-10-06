@@ -10,6 +10,11 @@ use App\Services\Sanction\Dto\ScreeningInput;
 
 class SanctionMatcher
 {
+    public function __construct(
+        private readonly NameRarityIndex $rarity,
+    ) {
+    }
+
     /** ดึง candidate ชื่อมาคำนวณ Levenshtein ได้ไม่เกินนี้ต่อการตรวจหนึ่งครั้ง */
     private const MAX_NAME_CANDIDATES = 50;
 
@@ -131,10 +136,13 @@ class SanctionMatcher
                 continue;
             }
 
+            // ถ่วงน้ำหนักด้วยความหายากของ "ชื่อที่ไปตรง" ไม่ใช่ชื่อเต็มของ entry
+            // เพราะสิ่งที่เป็นหลักฐานคือคำที่ตรงกันจริง ๆ
             $score = MatchScorer::applyModifiers(
                 $base['score'],
                 MatchScorer::compareNationality($input->nationality, $entry->nationality),
                 MatchScorer::compareDob($input->dob, $entry->date_of_birth),
+                $this->rarity->factorFor($row->name_raw),
             );
 
             if ($score <= 0.0) {
