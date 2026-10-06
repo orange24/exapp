@@ -28,14 +28,24 @@ set -e
 # Always deploy under the dedicated "exapp" gcloud configuration — isolates
 # this project's account/project from any other gcloud project on this
 # machine, so you never need to manually gcloud config set anything.
-gcloud config configurations activate exapp >/dev/null 2>&1 || {
-  echo "ERROR: gcloud configuration 'exapp' not found. Run:"
+# ล็อก configuration ไว้กับ process นี้เท่านั้น
+#
+# เดิมใช้ `gcloud config configurations activate exapp` ซึ่งเปลี่ยนสถานะระดับเครื่อง
+# มีผลสองทาง และผิดทั้งคู่:
+#   - deploy ใช้เวลาหลายนาที ถ้าระหว่างนั้นมีใครสลับ config คำสั่งที่เหลือในสคริปต์
+#     จะวิ่งไปโปรเจกต์อื่นกลางคัน (เกิดขึ้นจริง: prod deploy ไปโผล่ prj-ecommerce-prod)
+#   - สคริปต์ไปกระชาก config ของ terminal อื่นที่กำลังทำงานอยู่ด้วย
+#
+# ตัวแปรนี้มีผลเฉพาะ process ลูกของสคริปต์ ใครสลับ config ข้างนอกก็ไม่กระทบ
+export CLOUDSDK_ACTIVE_CONFIG_NAME=exapp
+
+if ! gcloud config configurations describe exapp >/dev/null 2>&1; then
+  echo "ERROR: ไม่พบ gcloud configuration ชื่อ exapp — สร้างก่อนด้วย:"
   echo "  gcloud config configurations create exapp"
-  echo "  gcloud config configurations activate exapp"
   echo "  gcloud config set account watcharaster@gmail.com"
   echo "  gcloud config set project exchange-app-496416"
   exit 1
-}
+fi
 
 # --- Configuration ---
 PROJECT_ID=$(gcloud config get-value project 2>/dev/null)
@@ -46,6 +56,19 @@ IMAGE="$REGION-docker.pkg.dev/$PROJECT_ID/$REPO_NAME/$SERVICE_NAME"
 
 if [ -z "$PROJECT_ID" ]; then
   echo "ERROR: No GCP project set. Run: gcloud config set project YOUR_PROJECT_ID"
+  exit 1
+fi
+
+# --- ยามกันปลายทางผิด ---
+# ตรวจทั้งโปรเจกต์และบัญชี ยอมหยุดดีกว่า deploy ผิดที่
+EXPECTED_PROJECT="exchange-app-496416"
+EXPECTED_ACCOUNT="watcharaster@gmail.com"
+ACTIVE_ACCOUNT=$(gcloud config get-value account 2>/dev/null)
+if [ "$PROJECT_ID" != "$EXPECTED_PROJECT" ] || [ "$ACTIVE_ACCOUNT" != "$EXPECTED_ACCOUNT" ]; then
+  echo ""
+  echo "ERROR: ปลายทางไม่ถูกต้อง — ยกเลิก deploy"
+  echo "  โปรเจกต์ คาดหวัง: $EXPECTED_PROJECT  ได้จริง: $PROJECT_ID"
+  echo "  บัญชี    คาดหวัง: $EXPECTED_ACCOUNT  ได้จริง: $ACTIVE_ACCOUNT"
   exit 1
 fi
 
