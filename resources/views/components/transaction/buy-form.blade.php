@@ -897,7 +897,7 @@ new class extends Component
         $why = [];
         $entry = $m->entry;
 
-        $rarity = app(\App\Services\Sanction\NameRarityIndex::class)->explain($m->matched_on);
+        $rarity = app(\App\Services\Sanction\NameRarityIndex::class)->explain($m->matched_name);
         if ($rarity['commonest'] !== null && $rarity['commonest']['count'] >= 10) {
             $why[] = 'ชื่อ "' . $rarity['commonest']['token'] . '" พบใน '
                 . $rarity['commonest']['count'] . ' รายชื่อ — เป็นชื่อที่พบบ่อย';

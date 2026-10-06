@@ -76,6 +76,7 @@ class SanctionScreeningService
                     'match_type' => $candidate->matchType,
                     'score' => $candidate->score,
                     'matched_on' => $candidate->matchedOn,
+                    'matched_name' => $candidate->matchedName,
                 ]);
             }
 

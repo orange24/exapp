@@ -154,6 +154,7 @@ class SanctionMatcher
                 matchType: $base['type'],
                 score: $score,
                 matchedOn: "ชื่อ \"{$row->name_raw}\"",
+                    matchedName: $row->name_raw,
                 listCode: $entry->list_code,
             );
         }

@@ -14,7 +14,7 @@ class SanctionScreeningMatch extends Model
     public const TYPE_SOUNDEX = 'soundex';
 
     protected $fillable = [
-        'screening_id', 'sanction_entry_id', 'match_type', 'score', 'matched_on',
+        'screening_id', 'sanction_entry_id', 'match_type', 'score', 'matched_on', 'matched_name',
     ];
 
     protected function casts(): array
