@@ -35,6 +35,19 @@ class NameRarityIndex
     private ?int $totalNames = null;
 
     /**
+     * มีรายชื่อให้นับแล้วแต่ยังไม่มีดัชนี
+     *
+     * เกิดได้สองทาง: deploy ใหม่ที่ฐานข้อมูลมีรายชื่ออยู่ก่อน หรือดัชนีถูกล้างทิ้ง
+     * ทั้งสองกรณี sync ต้องสร้างดัชนีเอง ไม่ใช่รอให้ ปปง. แก้ประกาศก่อน —
+     * ระหว่างที่ดัชนีว่าง ระบบจะไม่ลดคะแนนเลย ปลอดภัยแต่ฟีเจอร์ไม่ทำงาน
+     */
+    public function isStale(): bool
+    {
+        return ! SanctionNameToken::query()->exists()
+            && SanctionEntryName::query()->exists();
+    }
+
+    /**
      * คำนวณความถี่ใหม่ทั้งหมดจาก sanction_entry_names
      *
      * @return int จำนวนคำที่ไม่ซ้ำ

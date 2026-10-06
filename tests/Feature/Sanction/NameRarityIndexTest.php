@@ -104,4 +104,27 @@ class NameRarityIndexTest extends TestCase
 
         $this->assertLessThan(1.0, $index->factorFor('MOHAMED'));
     }
+
+    public function test_index_reports_itself_stale_when_names_exist_but_no_tokens_do(): void
+    {
+        $this->seedNames(['MOHAMED ALI', 'AHMED HASSAN']);
+
+        // deploy ใหม่มีรายชื่ออยู่แล้วแต่ยังไม่เคยสร้างดัชนี — sync ต้องรู้ว่าต้องสร้าง
+        // ไม่ใช่รอให้รายชื่อเปลี่ยนก่อน ไม่งั้นฟีเจอร์หลับไปจนกว่า ปปง. จะแก้ประกาศ
+        $this->assertTrue(app(NameRarityIndex::class)->isStale());
+    }
+
+    public function test_index_is_not_stale_once_built(): void
+    {
+        $this->seedNames(['MOHAMED ALI', 'AHMED HASSAN']);
+        app(NameRarityIndex::class)->rebuild();
+
+        $this->assertFalse(app(NameRarityIndex::class)->isStale());
+    }
+
+    public function test_index_is_not_stale_when_there_are_no_names_to_index(): void
+    {
+        // ไม่มีรายชื่อเลย ดัชนีว่างเป็นเรื่องถูกต้อง อย่าให้ sync วน rebuild เปล่า ๆ
+        $this->assertFalse(app(NameRarityIndex::class)->isStale());
+    }
 }
