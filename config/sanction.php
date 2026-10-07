@@ -25,6 +25,16 @@ return [
     ],
 
     /*
+    | ปลายทางที่หน้าเว็บใช้สั่งอัปเดตรายชื่อเอง
+    | sync กินเวลาเกิน timeout ของคำขอ HTTP จึงต้องสั่งผ่าน Cloud Run Job
+    */
+    'trigger' => [
+        'project' => env('GOOGLE_CLOUD_PROJECT', ''),
+        'region' => env('SANCTION_SYNC_JOB_REGION', 'asia-southeast1'),
+        'job' => env('SANCTION_SYNC_JOB', 'exapp-sanctions-sync'),
+    ],
+
+    /*
     | Sanity check — ตัวกันตายของระบบทั้งก้อน
     | วันที่ ปปง. เปลี่ยน layout หน้าเว็บ parser จะอ่านได้ไม่กี่แถว
     | ถ้าเขียนทับตามที่ parse ได้ รายชื่อจะหายเกือบหมดในคืนเดียว

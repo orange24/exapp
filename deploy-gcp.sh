@@ -103,6 +103,9 @@ gcloud run deploy "$SERVICE_NAME" \
   --set-env-vars "APP_DEBUG=false" \
   --set-env-vars "APP_URL=https://exapp.softernity.com" \
   --set-env-vars "DB_CONNECTION=mysql" \
+  --set-env-vars "GOOGLE_CLOUD_PROJECT=$PROJECT_ID" \
+  --set-env-vars "SANCTION_SYNC_JOB=exapp-sanctions-sync" \
+  --set-env-vars "SANCTION_SYNC_JOB_REGION=$REGION" \
   --set-env-vars "DB_HOST=163.44.198.71" \
   --set-env-vars "DB_PORT=3306" \
   --set-env-vars "DB_DATABASE=cp338215_exapp" \

@@ -286,5 +286,11 @@ Route::middleware(['auth', 'session.check'])->group(function () {
 
     // Sanction screening — คิวให้ admin เคลียร์ false positive เป็นชุด
     Route::get('/sanctions/review', fn () => view('sanction.review'))->name('sanctions.review')->middleware('permission:module7,read');
+
+    // อัปเดตรายชื่อ ปปง. ด้วยมือ — ?action=update เริ่มงาน
+    // ต้องมีสิทธิ์ write เพราะมันไปยิงเซิร์ฟเวอร์หน่วยงานราชการและเขียนทับรายชื่อ
+    Route::get('/sanctions/sync', \App\Http\Controllers\Sanction\SyncController::class)
+        ->name('sanctions.sync')
+        ->middleware('permission:module7,write');
 });
 

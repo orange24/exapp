@@ -75,8 +75,26 @@ class SanctionMenuSeeder extends Seeder
             ]
         );
 
+        // หน้าสั่งอัปเดตรายชื่อให้เฉพาะคนที่มี module7/write (superadmin, admin)
+        // branch_manager กับ staff เห็นแล้วกดไม่ได้ จะกลายเป็นลิงก์ที่เด้ง 403
+        $sync = Menu::firstOrCreate(
+            ['key' => 'sanctions.sync'],
+            [
+                'label_th' => 'อัปเดตรายชื่อ ปปง.',
+                'label_en' => 'Update AMLO List',
+                'route' => 'sanctions.sync',
+                'icon' => 'arrow-path',
+                'parent_id' => $parent->id,
+                'order' => 2,
+            ]
+        );
+
         $this->attach(self::REVIEW_ROLES, [$parent, $review]);
+        $this->attach(self::SYNC_ROLES, [$sync]);
     }
+
+    /** เฉพาะ role ที่ถือ module7/write จริง ตาม SanctionPermissionSeeder */
+    private const SYNC_ROLES = ['superadmin', 'admin'];
 
     public function seedReportMenus(): void
     {

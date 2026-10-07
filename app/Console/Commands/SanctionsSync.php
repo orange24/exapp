@@ -19,7 +19,8 @@ class SanctionsSync extends Command
     protected $signature = 'sanctions:sync
                             {--list=all : freeze_05_th | freeze_04_un | all}
                             {--force : ข้าม sanity check (ใช้เมื่อ ปปง. เพิกถอนรายชื่อครั้งใหญ่จริง)}
-                            {--dry-run : รันถึงเฟส validate แล้วรายงานผล ไม่เขียน DB}';
+                            {--dry-run : รันถึงเฟส validate แล้วรายงานผล ไม่เขียน DB}
+                            {--forced-by= : id ผู้ใช้ที่กดสั่งเอง เว้นว่างถ้าระบบรันเอง}';
 
     protected $description = 'ดึงรายชื่อบุคคลที่ถูกกำหนดจากเว็บสาธารณะ ปปง. เข้าฐานข้อมูล';
 
@@ -55,7 +56,7 @@ class SanctionsSync extends Command
             $run = $service->sync(
                 source: $source,
                 force: (bool) $this->option('force'),
-                forcedBy: null,
+                forcedBy: $this->option('forced-by') ? (int) $this->option('forced-by') : null,
             );
 
             $this->reportRun($run);
