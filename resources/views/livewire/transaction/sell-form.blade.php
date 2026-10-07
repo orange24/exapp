@@ -1,4 +1,20 @@
-<div class="p-4" x-data="buyForm()">
+<div class="p-4" wire:poll.1500ms="pollCardReader" x-data="buyForm()">
+{{-- เครื่องอ่านบัตรประชาชน — เสียบบัตรแล้วข้อมูลมาเอง ไม่มีปุ่มให้กด
+     ไฟดวงนี้จึงเป็นสิ่งเดียวที่บอกพนักงานว่า "ไม่มีอะไรเกิดขึ้น" แปลว่าอะไร --}}
+@if ($cardReaderHealth !== 'none')
+    <div class="mb-3 flex items-center gap-2 text-xs" wire:key="card-reader-status">
+        @if ($cardReaderHealth === 'ready')
+            <span class="inline-block w-2.5 h-2.5 rounded-full bg-green-500"></span>
+            <span class="text-gray-600">เครื่องอ่านบัตรพร้อม — เสียบบัตรประชาชนได้เลย</span>
+        @elseif ($cardReaderHealth === 'error')
+            <span class="inline-block w-2.5 h-2.5 rounded-full bg-red-500"></span>
+            <span class="text-red-700">เครื่องอ่านบัตรมีปัญหา — กรอกข้อมูลเองไปก่อน</span>
+        @else
+            <span class="inline-block w-2.5 h-2.5 rounded-full bg-gray-400"></span>
+            <span class="text-gray-500">ไม่ได้ยินจากเครื่องอ่านบัตร — โปรแกรมอาจไม่ได้เปิด</span>
+        @endif
+    </div>
+@endif
 
 {{-- Sanction screening — แถบเตือน + ช่องขออนุมัติจากผู้จัดการ --}}
 <x-sanction.alert :screening="$sanctionScreening" :matches="$sanctionMatches" />

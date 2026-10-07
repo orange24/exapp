@@ -1,0 +1,66 @@
+name: build card agent
+
+# cgo ข้าม platform ไม่ได้ — ตัวอ่านบัตรเรียก winscard.dll บน Windows
+# และ PCSC framework บน macOS จึงต้อง build บนเครื่องของแต่ละระบบจริง ๆ
+# ที่นี่ build Windows เพราะไม่มีเครื่อง Windows ในมือ ส่วน macOS build เอง
+on:
+  push:
+    tags: ['card-agent-v*']
+    paths: ['agent/**', '.github/workflows/card-agent.yml']
+  pull_request:
+    paths: ['agent/**']
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache-dependency-path: agent/go.sum
+
+      # ตัวอ่านฮาร์ดแวร์ต้องมี libpcsclite ถึงจะคอมไพล์ได้ แม้จะไม่มีเครื่องอ่านจริง
+      - run: sudo apt-get update && sudo apt-get install -y libpcsclite-dev
+      - run: go test ./... -v
+        working-directory: agent
+
+  build-windows:
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache-dependency-path: agent/go.sum
+
+      - name: build
+        working-directory: agent
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#card-agent-}"
+          [ "$GITHUB_REF_TYPE" = "tag" ] || VERSION="dev-${GITHUB_SHA::7}"
+          go build -ldflags "-s -w -X main.version=$VERSION" \
+            -o exapp-card-agent.exe ./cmd/exapp-card-agent
+          ./exapp-card-agent.exe -version
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: exapp-card-agent-windows
+          path: agent/exapp-card-agent.exe
+
+  release:
+    needs: build-windows
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: exapp-card-agent-windows
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: exapp-card-agent.exe

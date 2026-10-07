@@ -292,5 +292,11 @@ Route::middleware(['auth', 'session.check'])->group(function () {
     Route::get('/sanctions/sync', \App\Http\Controllers\Sanction\SyncController::class)
         ->name('sanctions.sync')
         ->middleware('permission:module7,write');
+
+    // เครื่องอ่านบัตรประชาชนที่เคาน์เตอร์ — ออก/เพิกถอน token ประจำเครื่อง
+    // ใช้สิทธิ์ module1 (ผู้ใช้/ระบบ) เพราะนี่คือการจัดการอุปกรณ์ ไม่ใช่งานตรวจรายชื่อ
+    Route::get('/admin/card-readers', fn () => view('card-reader.devices'))
+        ->name('card-readers.index')
+        ->middleware('permission:module1,write');
 });
 

@@ -28,6 +28,7 @@ return $app
             'session.check' => \App\Http\Middleware\CheckSessionTerminated::class,
             'admin'         => \App\Http\Middleware\EnsureUserIsAdmin::class,
             'permission'    => \App\Http\Middleware\EnsurePermission::class,
+            'card-reader'   => \App\Http\Middleware\AuthenticateCardReader::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

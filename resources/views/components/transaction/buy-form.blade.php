@@ -366,7 +366,7 @@ new class extends Component
         }
 
         $customer = Customer::updateOrCreate(
-            ['id_type' => 'passport', 'id_number' => $this->ocrPassportNo],
+            ['id_type' => $this->ocrIdType, 'id_number' => $this->ocrPassportNo],
             array_merge([
                 'name_en'          => $this->custName ?: trim($firstName . ' ' . $lastName),
                 'first_name'       => $firstName,
@@ -466,7 +466,7 @@ new class extends Component
         }
 
         $customer = Customer::updateOrCreate(
-            ['id_type' => 'passport', 'id_number' => $this->ocrPassportNo],
+            ['id_type' => $this->ocrIdType, 'id_number' => $this->ocrPassportNo],
             array_merge([
                 'name_en'          => $this->custName ?: trim($firstName . ' ' . $lastName),
                 'first_name'       => $firstName,
@@ -510,10 +510,59 @@ new class extends Component
         $this->ocrNationality   = '';
         $this->ocrDob           = '';
         $this->ocrPassportNo    = '';
+        $this->ocrIdType        = 'passport';
         $this->ocrExpiry        = '';
         $this->passportSearch   = '';
         $this->customerSuggestions = [];
         $this->showSuggestions  = false;
+    }
+
+    /** ชนิดเอกสารของลูกค้าที่กำลังกรอก — บัตรประชาชนไทยไม่ใช่พาสปอร์ต */
+    public string $ocrIdType = 'passport';
+
+    /** ready | error | offline | none — ไฟสถานะเครื่องอ่านบัตรมุมจอ */
+    public string $cardReaderHealth = 'none';
+
+    /**
+     * หน้าเว็บถามทุก 1.5 วินาทีว่าเคาน์เตอร์นี้มีบัตรใหม่ไหม
+     *
+     * ที่ต้องถามเอาเองเพราะทิศ "เบราว์เซอร์รับจากเครื่องในพื้นที่" ใช้ไม่ได้ —
+     * หน้า HTTPS เรียก http://127.0.0.1 ไม่ได้ Chrome บล็อกตั้งแต่ต้นทาง
+     */
+    public function pollCardReader(): void
+    {
+        if (! $this->counterId) {
+            return;
+        }
+
+        $inbox = app(\App\Services\CardReader\CounterInbox::class);
+        $this->cardReaderHealth = $inbox->health((int) $this->counterId);
+
+        $card = $inbox->consume((int) $this->counterId);
+
+        if ($card !== null) {
+            $this->fillFromIdCard($card);
+        }
+    }
+
+    /** @param array<string, mixed> $card */
+    private function fillFromIdCard(array $card): void
+    {
+        $this->ocrIdType     = 'national_id';
+        $this->ocrPassportNo = (string) ($card['citizen_id'] ?? '');
+        $this->ocrFirstName  = (string) ($card['first_name_en'] ?? '');
+        $this->ocrLastName   = (string) ($card['last_name_en'] ?? '');
+        $this->ocrDob        = (string) ($card['date_of_birth'] ?? '');
+        $this->ocrExpiry     = (string) ($card['expire_date'] ?? '');
+
+        // บัตรประชาชนไทยออกให้คนสัญชาติไทยเท่านั้น ไม่ต้องเดา
+        $this->ocrNationality = 'THA';
+
+        // ชื่อไทยคือสิ่งที่ตรงกับรายชื่อ ปปง. ฝั่งไทย ใช้เป็นชื่อหลักถ้ามี
+        $this->custName = trim((string) ($card['name_th'] ?? ''))
+            ?: trim($this->ocrFirstName . ' ' . $this->ocrLastName);
+
+        $this->runSanctionScreening(\App\Models\SanctionScreening::TRIGGER_TRANSACTION);
     }
 
     // Called from JS after OCR completes
@@ -659,7 +708,7 @@ new class extends Component
 
         return new \App\Services\Sanction\Dto\ScreeningInput(
             name: trim($name) !== '' ? trim($name) : null,
-            idType: trim((string) $this->ocrPassportNo) !== '' ? 'passport' : null,
+            idType: trim((string) $this->ocrPassportNo) !== '' ? $this->ocrIdType : null,
             idNumber: trim((string) $this->ocrPassportNo) !== '' ? trim((string) $this->ocrPassportNo) : null,
             nationality: trim((string) $this->ocrNationality) !== '' ? trim((string) $this->ocrNationality) : null,
             dob: trim((string) $this->ocrDob) !== '' ? trim((string) $this->ocrDob) : null,
