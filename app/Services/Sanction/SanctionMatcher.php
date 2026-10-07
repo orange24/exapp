@@ -143,6 +143,7 @@ class SanctionMatcher
                 MatchScorer::compareNationality($input->nationality, $entry->nationality),
                 MatchScorer::compareDob($input->dob, $entry->date_of_birth),
                 $this->rarity->factorFor($row->name_raw),
+                $base['type'],
             );
 
             if ($score <= 0.0) {

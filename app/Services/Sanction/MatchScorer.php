@@ -2,6 +2,7 @@
 
 namespace App\Services\Sanction;
 
+use App\Models\SanctionScreeningMatch;
 use App\Models\Setting;
 
 /**
@@ -234,6 +235,7 @@ class MatchScorer
         string $nationality,
         string $dob,
         float $rarityFactor = 1.0,
+        ?string $matchType = null,
     ): float {
         $score = $baseScore;
 
@@ -248,6 +250,22 @@ class MatchScorer
             'mismatch' => $rarityFactor * self::MODIFIER_DOB_MISMATCH,
             default => $rarityFactor,
         };
+
+        // วันเกิดไม่ตรงตัดชื่อที่ตรงเป๊ะลงไปต่ำกว่าเกณฑ์เตือน แล้วเงียบสนิท
+        // แต่วันเกิดมาจากมือพนักงาน ไม่ได้มาจากชิปบัตร — พิมพ์ผิดหลักเดียว
+        // คนที่ติดรายชื่อจริงจะผ่านเคาน์เตอร์ไปโดยไม่มีสัญญาณอะไรเลย
+        //
+        // ยังออกจากแถบแดงตามเจตนาเดิม แต่ไม่หายไปทั้งใบ ให้ค้างเป็นส้มให้คน
+        // ดูครั้งเดียวแล้วเคลียร์จบ
+        //
+        // เฉพาะชื่อที่ตรงเป๊ะหรือตรงครบทุกคำ ชื่อชิ้นเดียวและชื่อคล้ายไม่เข้าข่าย
+        // ไม่งั้นพื้นนี้จะกลายเป็นแหล่งผลิต false positive ชุดใหม่แทน
+        if ($dob === 'mismatch' && in_array($matchType, [
+            SanctionScreeningMatch::TYPE_NAME_EXACT,
+            SanctionScreeningMatch::TYPE_TOKEN_CONTAINMENT,
+        ], true)) {
+            $score = max($score, self::potentialThreshold());
+        }
 
         return round(min($score, self::SCORE_CAP), 2);
     }

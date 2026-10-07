@@ -6,6 +6,7 @@ use App\Models\SanctionEntry;
 use App\Models\SanctionEntryIdentifier;
 use App\Models\SanctionEntryName;
 use App\Services\Sanction\Dto\ScreeningInput;
+use App\Services\Sanction\MatchScorer;
 use App\Services\Sanction\NameNormalizer;
 use App\Services\Sanction\SanctionMatcher;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -204,7 +205,7 @@ class SanctionMatcherTest extends TestCase
         $this->assertGreaterThan(0.0, $candidates[0]->score);
     }
 
-    public function test_mismatching_dob_drops_score_below_threshold(): void
+    public function test_mismatching_dob_drops_an_exact_name_match_out_of_red_but_not_out_of_sight(): void
     {
         $this->makeEntry('AMRAN MING', nationality: 'TH', dob: '18-12-1981');
 
@@ -214,7 +215,11 @@ class SanctionMatcherTest extends TestCase
             dob: '1995-01-01',
         ));
 
-        $this->assertLessThan(70.0, $candidates[0]->score);
+        // เดิมเทสนี้ล็อกไว้ว่าต้องต่ำกว่า 70 คือเงียบสนิท
+        // แต่วันเกิดมาจากมือพนักงาน พิมพ์ผิดหลักเดียวชื่อที่ตรงเป๊ะจะหายไปทั้งใบ
+        // จึงตั้งพื้นไว้ที่เกณฑ์เตือน: ออกจากแถบแดงตามเจตนาเดิม แต่ยังมีคนเห็น
+        $this->assertLessThan(MatchScorer::redThreshold(), $candidates[0]->score);
+        $this->assertSame('orange', MatchScorer::severity($candidates[0]->score));
     }
 
     public function test_delisted_entries_are_not_matched(): void
