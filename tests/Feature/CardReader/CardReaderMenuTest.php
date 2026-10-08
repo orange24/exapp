@@ -55,4 +55,23 @@ class CardReaderMenuTest extends TestCase
             );
         }
     }
+
+    public function test_seeding_the_menu_clears_the_cached_menu_tree(): void
+    {
+        $admin = User::where('email', 'like', '%')->whereHas('role', fn ($q) => $q->where('name', 'admin'))->firstOrFail();
+
+        // อุ่น cache ด้วยสถานะก่อนมีเมนู แล้วค่อย seed ทับ
+        \Illuminate\Support\Facades\Cache::forget("menu_tree_role_{$admin->role_id}");
+        Menu::where('key', 'card-readers.index')->first()?->roles()->detach();
+        Menu::where('key', 'card-readers.index')->delete();
+
+        $before = $admin->getAccessibleMenus();
+        $this->assertFalse($before->contains('key', 'card-readers.index'));
+
+        $this->seed(\Database\Seeders\CardReaderMenuSeeder::class);
+
+        // ถ้า seeder ไม่ล้าง cache เมนูใหม่จะไม่โผล่อีกชั่วโมงหนึ่ง
+        // ซึ่งดูเหมือนเมนูเสีย แล้วคนจะไปไล่หาสาเหตุผิดที่
+        $this->assertTrue($admin->getAccessibleMenus()->contains('key', 'card-readers.index'));
+    }
 }

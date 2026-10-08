@@ -54,5 +54,7 @@ class CardReaderMenuSeeder extends Seeder
         foreach ($roles as $role) {
             $role->menus()->syncWithoutDetaching([$parent->id, $menu->id]);
         }
+
+        Menu::flushAccessCache();
     }
 }

@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Cache;
 
 class Menu extends Model
 {
@@ -68,5 +69,21 @@ class Menu extends Model
     public function hasRoute(): bool
     {
         return !empty($this->route);
+    }
+
+    /**
+     * ล้าง cache เมนูของทุก role
+     *
+     * getAccessibleMenus() จำผลไว้ชั่วโมงหนึ่งต่อ role การเพิ่มเมนูลงฐานข้อมูล
+     * ไม่ได้ไปแตะ cache นั้น เมนูใหม่จึงไม่โผล่จนกว่าจะครบชั่วโมง — ซึ่งดูเหมือน
+     * เมนูเสียมากกว่าดูเหมือนรอ cache แล้วคนจะไปไล่หาสาเหตุผิดที่
+     *
+     * seeder ที่แตะเมนูหรือสิทธิ์ของ role ต้องเรียกตัวนี้ปิดท้ายเสมอ
+     */
+    public static function flushAccessCache(): void
+    {
+        foreach (Role::pluck('id') as $roleId) {
+            Cache::forget("menu_tree_role_{$roleId}");
+        }
     }
 }

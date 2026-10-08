@@ -141,5 +141,7 @@ class SanctionMenuSeeder extends Seeder
             // syncWithoutDetaching กัน unique key ของ menu_role ชนตอนรันซ้ำ
             fn (Role $role) => $role->menus()->syncWithoutDetaching($menuIds)
         );
+
+        Menu::flushAccessCache();
     }
 }
