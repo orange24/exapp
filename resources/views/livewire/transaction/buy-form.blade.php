@@ -822,6 +822,25 @@ function buyForm() {
          *
          * รหัสประเทศจากบรรทัดสองเชื่อถือได้มากกว่า เพราะบรรทัดนั้น OCR อ่านแม่นกว่า
          */
+        /*
+         * ตัดเศษอักขระเติมเต็มที่ท้ายชื่อ แล้วเก็บส่วนที่เป็นชื่อจริงไว้
+         *
+         * เดิมเจอตัวซ้ำสามตัวแล้วลบทั้งก้อน ซึ่งทำให้ "WATCHARACCC" กลายเป็นว่าง
+         * ทั้งที่ชื่อจริงอยู่ครบ — ตัดที่จุดซ้ำแล้วเหลือ "WATCHARA" ถูกต้องกว่า
+         *
+         * ที่เหลือสั้นกว่าสองตัวถือว่ากู้ไม่ได้ ปล่อยว่างให้พนักงานพิมพ์เอง
+         * ขยะที่ถูกเติมลงไปจะถูกบันทึกเป็นชื่อลูกค้าแล้วเอาไปเทียบรายชื่อ ปปง.
+         * โดยไม่มีใครทันสังเกต
+         */
+        trimMrzNoise(value) {
+            const run = value.replace(/\s+/g, ' ').match(/(.)\1{2,}/);
+            let out = run ? value.substring(0, run.index) : value;
+
+            out = out.replace(/[^A-Z ]+$/, '').replace(/\s+/g, ' ').trim();
+
+            return out.length >= 2 ? out : '';
+        },
+
         parseMrzNames(lines, line2, nationality) {
             const out = { firstName: '', lastName: '' };
 
@@ -836,6 +855,15 @@ function buyForm() {
             }
 
             if (namePart === null) namePart = line1.substring(5);
+
+            /*
+             * ช่องชื่อกว้าง 39 ตัวตามมาตรฐาน (ตำแหน่ง 5 ถึง 43) เติมให้เต็มก่อนเสมอ
+             *
+             * ถ้าไม่เติม แล้ว OCR อ่านหางมาสั้น ๆ ตัวอักษรในชื่อจริงจะถูกนับเป็น
+             * อักขระเติมเต็ม — 'A' ใน WATCHARA โผล่สามครั้งในหางสั้น ๆ แล้วชื่อ
+             * กลายเป็น WATCHAR
+             */
+            namePart = (namePart + '<'.repeat(39)).substring(0, 39);
 
             /*
              * หา "ชุด" ของอักขระเติมเต็ม ไม่ใช่ตัวเดียว
@@ -884,12 +912,8 @@ function buyForm() {
                 out.firstName = parts.slice(1).join(' ');
             }
 
-            // ชื่อที่ยังมีตัวเดิมซ้ำกันสามตัวขึ้นไปคือเศษของอักขระเติมเต็มที่ดัดไม่ออก
-            // ปล่อยว่างดีกว่าเติมขยะ เพราะมันจะถูกบันทึกเป็นชื่อลูกค้าแล้วเอาไป
-            // เทียบกับรายชื่อ ปปง. โดยไม่มีใครทันสังเกต
-            const junk = v => /(.)\1{2,}/.test(v.replace(/\s/g, ''));
-            if (junk(out.lastName)) out.lastName = '';
-            if (junk(out.firstName)) out.firstName = '';
+            out.lastName = this.trimMrzNoise(out.lastName);
+            out.firstName = this.trimMrzNoise(out.firstName);
 
             return out;
         },

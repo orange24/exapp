@@ -124,4 +124,25 @@ class MrzParsingTest extends TestCase
         $this->assertSame('KITTIKUM', $r['lastName']);
         $this->assertSame('WATCHARA', $r['firstName']);
     }
+
+    public function test_the_name_survives_the_first_filler_after_the_document_type(): void
+    {
+        // ตัวนี้เคยเป็นสาเหตุที่นามสกุลกับชื่อสลับที่ เพราะตัวหาจุดเริ่มชื่อ
+        // ไปเจอ '<' ตัวแรกในหางของบรรทัดแทนที่จะเป็นตัวหลัง P
+        $r = $this->parse(str_replace('P<THA', 'PCTHA', self::LINE1), self::LINE2);
+
+        $this->assertSame('KITTIKUM', $r['lastName']);
+        $this->assertSame('WATCHARA', $r['firstName']);
+    }
+
+    public function test_a_long_noisy_tail_does_not_bleed_into_the_given_name(): void
+    {
+        // หางที่ OCR อ่านเป็นตัวอักษรคนละตัวไปเรื่อย ๆ ไม่มีตัวไหนซ้ำพอจะเป็นรูปแบบ
+        $noisy = preg_replace('/<+$/', 'CSKLCSKLCSKLCSKLCSKL', self::LINE1);
+
+        $r = $this->parse($noisy, self::LINE2);
+
+        $this->assertSame('KITTIKUM', $r['lastName']);
+        $this->assertSame('WATCHARA', $r['firstName']);
+    }
 }
