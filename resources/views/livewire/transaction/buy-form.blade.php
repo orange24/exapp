@@ -516,8 +516,15 @@ function buyForm() {
         step: 'camera',
         ocrLoading: false,
         callLw(method, ...args) {
-            const el = document.querySelector('[wire\\:id]');
-            if (!el) { console.error('No Livewire element found'); return; }
+            // ต้องหาคอมโพเนนต์ของฟอร์มนี้ ไม่ใช่ตัวแรกที่เจอในหน้า
+            //
+            // เดิมใช้ document.querySelector ซึ่งคืนกระดิ่งแจ้งเตือนบน header
+            // เพราะมันถูกวาดก่อน @yield('content') ผลคือ OCR ไปเรียก
+            // receiveOcrData บนกระดิ่งแล้วได้ 500 ทุกครั้ง
+            //
+            // $el คือ root ของคอมโพเนนต์นี้เอง ซึ่งเป็นตัวที่ Livewire ใส่ wire:id ให้
+            const el = this.$el.closest('[wire\\:id]');
+            if (!el) { console.error('ไม่พบคอมโพเนนต์ Livewire ของฟอร์มนี้'); return; }
             const id = el.getAttribute('wire:id');
             Livewire.find(id)[method](...args);
         },
