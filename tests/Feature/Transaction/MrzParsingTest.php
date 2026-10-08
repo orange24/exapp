@@ -105,4 +105,23 @@ class MrzParsingTest extends TestCase
         $this->assertSame('', $r['lastName']);
         $this->assertSame('', $r['firstName']);
     }
+
+    public function test_the_name_survives_the_filler_being_misread_as_several_different_letters(): void
+    {
+        // ของจริงที่เคาน์เตอร์: OCR อ่าน '<' เป็น C, S และ L ปนกันในใบเดียว
+        // ได้ชื่อออกมาเป็น "CCSCLC KITTIKUMCSWATCHARA" เพราะตัวคั่นระหว่าง
+        // นามสกุลกับชื่อถูกอ่านเป็น "CS" ซึ่งไม่ใช่ตัวเดียวซ้ำกัน
+        $pool = ['C', 'S', 'L'];
+        $i = 0;
+        $mixed = '';
+
+        foreach (str_split(self::LINE1) as $ch) {
+            $mixed .= $ch === '<' ? $pool[$i++ % 3] : $ch;
+        }
+
+        $r = $this->parse($mixed, self::LINE2);
+
+        $this->assertSame('KITTIKUM', $r['lastName']);
+        $this->assertSame('WATCHARA', $r['firstName']);
+    }
 }

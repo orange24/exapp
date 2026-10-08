@@ -759,18 +759,39 @@ function buyForm() {
 
             if (namePart === null) namePart = line1.substring(5);
 
-            // หาอักขระเติมเต็ม: หางของบรรทัดเป็นตัวเดียวซ้ำกันยาว ๆ เสมอ
-            // OCR อ่าน '<' เป็น C, L, K ได้ แต่มันจะอ่านผิดเป็นตัวเดิมตลอดทั้งหาง
-            const tail = namePart.match(/(.)\1{2,}$/);
-            const filler = tail ? tail[1] : '<';
+            /*
+             * หา "ชุด" ของอักขระเติมเต็ม ไม่ใช่ตัวเดียว
+             *
+             * ของจริงที่เจอ: OCR อ่าน '<' เป็น C, S และ L ปนกันในใบเดียวกัน
+             * การสมมติว่าเป็นตัวเดียวทำให้หาตัวคั่น '<<' ระหว่างนามสกุลกับชื่อไม่เจอ
+             * (มันถูกอ่านเป็น "CS") แล้วชื่อกับนามสกุลติดกันเป็นก้อนเดียว
+             *
+             * ท้ายบรรทัดยาว 15 ตัวสุดท้ายเป็นส่วนเติมเต็มแทบแน่นอน เพราะชื่อคน
+             * ไม่ยาวพอจะกินพื้นที่ 39 ตัวของช่องชื่อ ตัวที่โผล่ซ้ำตรงนั้นคือตัวเติมเต็ม
+             */
+            const tailZone = namePart.slice(-15);
+            const freq = {};
+            for (const ch of tailZone) freq[ch] = (freq[ch] ?? 0) + 1;
 
-            // แทนเฉพาะที่ซ้ำกันตั้งแต่สองตัวขึ้นไป — ตัวเดี่ยวอาจเป็นตัวอักษรจริงในชื่อ
-            // ถ้าแทนหมด WATCHARA จะกลายเป็น WAT HARA เมื่อ OCR อ่าน '<' เป็น 'C'
-            // ส่วนตัวคั่นระหว่างนามสกุลกับชื่อเป็น '<<' อยู่แล้ว จึงไม่เสียอะไร
-            let cleaned = namePart;
-            if (filler !== '<') {
-                const run = new RegExp('\\' + filler + '{2,}', 'g');
-                cleaned = cleaned.replace(run, m => '<'.repeat(m.length));
+            const fillers = new Set(
+                Object.entries(freq).filter(([, n]) => n >= 3).map(([ch]) => ch),
+            );
+            fillers.add('<');
+
+            /*
+             * แทนเฉพาะที่ติดกันตั้งแต่สองตัวขึ้นไป ตัวเดี่ยวปล่อยไว้
+             *
+             * WATCHARA มี C อยู่ตัวเดียวโดด ๆ ถ้าแทนทุกตัวจะกลายเป็น WAT HARA
+             * ส่วนตัวคั่นในมาตรฐานเป็นสองตัวติดกันเสมอ จึงไม่เสียอะไร
+             */
+            let cleaned = '';
+            for (let i = 0; i < namePart.length; ) {
+                let j = i;
+                while (j < namePart.length && fillers.has(namePart[j])) j++;
+
+                const run = j - i;
+                cleaned += run >= 2 ? '<'.repeat(run) : namePart.substring(i, Math.max(j, i + 1));
+                i = Math.max(j, i + 1);
             }
 
             cleaned = cleaned.replace(/<+$/, '');
