@@ -28,6 +28,9 @@ class Inbox extends Component
     /** ข้อความบอกความคืบหน้าการอ่านชิปพาสปอร์ต ว่างเมื่อไม่มีอะไรกำลังอ่าน */
     public string $chipStatus = '';
 
+    /** waiting | reading | failed | '' — เลือกว่าจะแสดงตัวหมุนหรือไม่ */
+    public string $chipState = '';
+
     public function mount(): void
     {
         $this->counterId = (int) session('working_counter_id', 0);
@@ -42,7 +45,7 @@ class Inbox extends Component
         $inbox = app(CounterInbox::class);
         $this->health = $inbox->health($this->counterId);
 
-        $this->chipStatus = $this->describeChip();
+        [$this->chipState, $this->chipStatus] = $this->describeChip();
 
         $card = $inbox->consume($this->counterId);
 
@@ -56,19 +59,20 @@ class Inbox extends Component
      * การอ่านชิปใช้เวลาสองสามวินาที ถ้าไม่บอกอะไรเลยพนักงานจะคิดว่าค้าง
      * แล้วยกพาสปอร์ตออกกลางคัน ซึ่งทำให้อ่านไม่จบจริง ๆ
      */
-    private function describeChip(): string
+    /** @return array{0: string, 1: string} สถานะ และข้อความ */
+    private function describeChip(): array
     {
         $request = app(PassportChipRequests::class)->current($this->counterId);
 
         if ($request === null) {
-            return '';
+            return ['', ''];
         }
 
         return match ($request->status) {
-            'pending' => 'แตะพาสปอร์ตที่แท่นเพื่ออ่านชิป (ไม่บังคับ)',
-            'reading' => $request->progress ?: 'กำลังอ่านชิป...',
-            'failed' => 'อ่านชิปไม่สำเร็จ: ' . ($request->error ?: 'ไม่ทราบสาเหตุ'),
-            default => '',
+            'pending' => ['waiting', 'แตะพาสปอร์ตที่แท่นเพื่ออ่านชิป (ไม่บังคับ)'],
+            'reading' => ['reading', $request->progress ?: 'กำลังอ่านบัตร อย่าเพิ่งยกพาสปอร์ตออก'],
+            'failed' => ['failed', 'อ่านชิปไม่สำเร็จ: ' . ($request->error ?: 'ไม่ทราบสาเหตุ')],
+            default => ['', ''],
         };
     }
 

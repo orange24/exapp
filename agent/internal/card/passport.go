@@ -77,19 +77,22 @@ func (p *progressReporter) Status(s gmrtdreader.Status) {
 
 // describeStep แปลขั้นตอนของไลบรารีเป็นข้อความที่พนักงานเข้าใจ
 func describeStep(step string) string {
+	// ทุกข้อความย้ำว่าอย่ายกเล่มออก เพราะทุกขั้นยังต้องการให้เล่มอยู่บนแท่น
+	const hold = " อย่าเพิ่งยกพาสปอร์ตออก"
+
 	switch {
 	case strings.Contains(step, "PACE"), strings.Contains(step, "BAC"):
-		return "กำลังเปิดชิป..."
+		return "กำลังเปิดชิป" + hold
 	case strings.Contains(step, "DG02"), strings.Contains(step, "DG07"):
-		return "กำลังอ่านรูปถ่าย..."
+		return "กำลังอ่านรูปถ่าย" + hold
 	case strings.Contains(step, "DG"), strings.Contains(step, "EF."):
-		return "กำลังอ่านข้อมูล..."
+		return "กำลังอ่านข้อมูล" + hold
 	case strings.Contains(step, "Passive"), strings.Contains(step, "Verif"):
-		return "กำลังตรวจลายเซ็นของประเทศผู้ออก..."
+		return "กำลังตรวจลายเซ็นของประเทศผู้ออก" + hold
 	case strings.Contains(step, "Finished"):
 		return "อ่านชิปเสร็จแล้ว"
 	default:
-		return "กำลังอ่านชิป..."
+		return "กำลังอ่านบัตร" + hold
 	}
 }
 

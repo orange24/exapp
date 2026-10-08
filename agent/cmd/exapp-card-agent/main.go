@@ -280,7 +280,13 @@ func readPassport(ctx context.Context, api *client.Client, reader *card.Contactl
 			continue
 		}
 
-		_ = api.PassportProgress(ctx, req.ID, "กำลังเปิดชิป...")
+		/*
+		 * บอกทันทีที่สัมผัสได้ ก่อนเริ่มคุยกับชิปด้วยซ้ำ
+		 *
+		 * การอ่านใช้เวลาสองสามวินาที ถ้าหน้าจอยังเงียบอยู่ พนักงานจะคิดว่า
+		 * แตะไม่ติดแล้วยกเล่มออกไปลองใหม่ ซึ่งทำให้การอ่านที่กำลังไปได้ดีล้มจริง ๆ
+		 */
+		_ = api.PassportProgress(ctx, req.ID, "กำลังอ่านบัตร อย่าเพิ่งยกพาสปอร์ตออก")
 
 		data, err := reader.Read(
 			card.Key{DocumentNo: req.DocumentNo, DateOfBirth: req.DateOfBirth, ExpiryDate: req.ExpiryDate},

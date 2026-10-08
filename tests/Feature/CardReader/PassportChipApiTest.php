@@ -224,4 +224,42 @@ class PassportChipApiTest extends TestCase
         // และต้องปิดคำขอนั้นทิ้ง ไม่ให้พนักงานรอการแตะที่ไม่มีวันสำเร็จ
         $this->assertSame(CardReaderPassportRequest::STATUS_FAILED, $request->refresh()->status);
     }
+
+    public function test_the_counter_is_told_a_card_is_being_read_before_anything_is_decoded(): void
+    {
+        $request = $this->openRequest();
+
+        // agent ส่งข้อความนี้ทันทีที่สัมผัสได้ ก่อนเริ่มคุยกับชิปด้วยซ้ำ
+        // ถ้าหน้าจอยังเงียบ พนักงานจะคิดว่าแตะไม่ติดแล้วยกเล่มออกไปลองใหม่
+        // ซึ่งทำให้การอ่านที่กำลังไปได้ดีล้มจริง ๆ
+        $this->withToken($this->token)
+            ->postJson(route('api.card-reader.passport-progress'), [
+                'request_id' => $request->id,
+                'progress' => 'กำลังอ่านบัตร อย่าเพิ่งยกพาสปอร์ตออก',
+            ])
+            ->assertOk();
+
+        session(['working_counter_id' => $this->counter->id]);
+
+        $inbox = \Livewire\Livewire::actingAs($this->adminUser)
+            ->test('card-reader.inbox')
+            ->call('poll');
+
+        $inbox->assertSet('chipState', 'reading');
+        $inbox->assertSet('chipStatus', 'กำลังอ่านบัตร อย่าเพิ่งยกพาสปอร์ตออก');
+    }
+
+    public function test_a_counter_waiting_for_a_tap_is_not_shown_a_spinner(): void
+    {
+        $this->openRequest();
+
+        // ตัวหมุนต้องหมายถึง "กำลังอ่านอยู่จริง" เท่านั้น ไม่ใช่ "กำลังรอ"
+        // ไม่งั้นมันจะหมุนค้างอยู่สองนาทีโดยไม่มีอะไรเกิดขึ้น
+        session(['working_counter_id' => $this->counter->id]);
+
+        \Livewire\Livewire::actingAs($this->adminUser)
+            ->test('card-reader.inbox')
+            ->call('poll')
+            ->assertSet('chipState', 'waiting');
+    }
 }
