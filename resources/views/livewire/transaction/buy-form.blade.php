@@ -275,22 +275,10 @@
                             <img :src="croppedImage" style="width:100%; border-radius:8px; max-height:200px; object-fit:contain; background:#000;">
                         </div>
                     </template>
-                    <div style="display:flex; gap:10px;">
-                        <button @click="step='crop'; initCropper();" type="button"
-                                style="flex:1; padding:10px; background:#444; color:#ccc; font-weight:600; border:none; border-radius:8px; cursor:pointer;">
-                            Crop ใหม่
-                        </button>
-                        <button @click="confirmCapture()" type="button"
-                                style="flex:1; padding:10px; background:#2563eb; color:#fff; font-weight:700; border:none; border-radius:8px; cursor:pointer;">
-                            ยืนยัน
-                        </button>
-                    </div>
-                </div>
-
                 {{-- ผลการสแกน — เดิมสำเร็จแล้วเงียบสนิท พนักงานแยกไม่ออกว่า
                      "อ่านได้แล้ว" กับ "ยังไม่ได้ทำอะไร" ต่างกันตรงไหน --}}
                 <template x-if="ocrResult && !ocrLoading">
-                    <div style="margin-top:10px; padding:10px 12px; border-radius:8px;"
+                    <div style="margin:10px 0 12px; padding:10px 12px; border-radius:8px;"
                          :style="ocrAllChecksPassed()
                             ? 'background:#064e3b; border:1px solid #10b981;'
                             : 'background:#78350f; border:1px solid #f59e0b;'">
@@ -325,19 +313,21 @@
                                 <td style="text-align:right;" x-html="ocrMark(ocrResult.checks.expiry)"></td>
                             </tr>
                         </table>
-
-                        <div style="margin-top:8px; display:flex; gap:8px;">
-                            <button type="button" @click="closeCamera()"
-                                    style="flex:1; padding:8px; border-radius:6px; background:#10b981; color:#042f2e; font-weight:700;">
-                                ใช้ข้อมูลนี้
-                            </button>
-                            <button type="button" @click="ocrResult=null; step='crop'; $nextTick(() => initCropper());"
-                                    style="padding:8px 14px; border-radius:6px; background:#374151; color:#e5e7eb;">
-                                ครอปใหม่
-                            </button>
-                        </div>
                     </div>
                 </template>
+
+                    <div style="display:flex; gap:10px;">
+                        <button @click="step='crop'; initCropper();" type="button"
+                                style="flex:1; padding:10px; background:#444; color:#ccc; font-weight:600; border:none; border-radius:8px; cursor:pointer;">
+                            Crop ใหม่
+                        </button>
+                        <button @click="confirmCapture()" type="button"
+                                style="flex:1; padding:10px; background:#2563eb; color:#fff; font-weight:700; border:none; border-radius:8px; cursor:pointer;">
+                            ยืนยัน
+                        </button>
+                    </div>
+                </div>
+
 
                 <div x-show="ocrLoading" style="margin-top:10px; padding:8px 12px; background:#1e3a5f; border-radius:8px; text-align:center;">
                     <span style="color:#facc15; font-weight:600;" x-text="ocrError || 'กำลังประมวลผล OCR...'"></span>
@@ -677,9 +667,7 @@ function buyForm() {
                         document.head.appendChild(s);
                     });
                 }
-                const { data } = await Tesseract.recognize(imageData, 'eng', {
-                    logger: m => { if (m.status === 'recognizing text') this.ocrError = 'กำลังอ่าน... ' + Math.round(m.progress * 100) + '%'; }
-                });
+                const { data } = await this.recognizeMrz(imageData);
                 const parsed = this.parseMRZ(data.text);
                 if (parsed.passportNo) {
                     this.callLw('receiveOcrData', parsed);
@@ -730,105 +718,159 @@ function buyForm() {
             return got === null ? null : got === expected;
         },
 
+        /*
+         * อ่าน MRZ โดยบอก Tesseract ว่ากำลังอ่านอะไรอยู่
+         *
+         * เดิมเรียก Tesseract.recognize(img, 'eng') เฉย ๆ ซึ่งใช้โมเดลที่ฝึกมา
+         * อ่านข้อความร้อยแก้ว มันไม่เคยคาดหวังตัว '<' เลยเลือกตัวอักษรหน้าตา
+         * ใกล้เคียงแทน — ได้ C, L, K ปนกันจนชื่อกลายเป็นขยะ
+         *
+         * whitelist บังคับให้เลือกได้เฉพาะอักขระที่มีจริงใน MRZ
+         * psm 6 บอกว่าเป็นบล็อกข้อความสองบรรทัด ไม่ใช่หน้าเอกสารที่ต้องวิเคราะห์เลย์เอาต์
+         */
+        async recognizeMrz(imageData) {
+            const worker = await Tesseract.createWorker('eng', 1, {
+                logger: m => {
+                    if (m.status === 'recognizing text') {
+                        this.ocrError = 'กำลังอ่าน... ' + Math.round(m.progress * 100) + '%';
+                    }
+                },
+            });
+
+            try {
+                await worker.setParameters({
+                    tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<',
+                    tessedit_pageseg_mode: '6',
+                });
+
+                return await worker.recognize(imageData);
+            } finally {
+                await worker.terminate();
+            }
+        },
+
+        /*
+         * ตำแหน่งที่มาตรฐานกำหนดว่าต้องเป็นตัวเลขล้วน ให้ดัดตัวอักษรที่หน้าตาคล้ายกลับเป็นเลข
+         *
+         * OCR อ่าน 0 เป็น O และ 8 เป็น B ได้ง่ายมาก และ whitelist ช่วยไม่ได้
+         * เพราะตัวอักษรก็เป็นอักขระที่ถูกต้องใน MRZ เหมือนกัน แต่ ICAO กำหนดไว้ว่า
+         * ช่องวันเกิดและวันหมดอายุเป็นตัวเลขล้วนเสมอ จึงดัดได้อย่างปลอดภัย
+         *
+         * ดัดแล้วเลขตรวจสอบจะบอกเองว่าดัดถูกหรือไม่
+         */
+        mrzDigitsOnly(s) {
+            const map = { O: '0', Q: '0', D: '0', I: '1', L: '1', Z: '2', S: '5', B: '8', G: '6', T: '7', A: '4' };
+
+            return s.split('').map(c => map[c] ?? c).join('');
+        },
+
         parseMRZ(text) {
             const result = { firstName: '', lastName: '', nationality: '', dob: '', expiry: '', passportNo: '', checks: {} };
-            console.log('OCR raw text:', text);
 
-            // Step 1: Work with RAW text first — find P< line before heavy cleaning
-            // OCR often reads < as various chars, so look for P followed by country code pattern
-            const rawLines = text.split('\n').map(l => l.trim()).filter(l => l.length > 10);
-
-            // Try to find P< line from raw text (before cleaning destroys it)
-            let rawLine1 = null;
-            for (const rl of rawLines) {
-                const upper = rl.toUpperCase().replace(/\s+/g, '');
-                // Match: starts with P, then has recognizable name pattern
-                if (/^P.{0,2}(RUS|USA|GBR|FRA|DEU|JPN|CHN|KOR|THA|IND|AUS|CAN|SGP|MYS|VNM|IDN|PHL|TWN|HKG|NZL|ARE|SAU|QAT|OMN|BHR|KWT|JOR|TUR|ISR|ZAF|PAK|BRN|MAC|RUB|MEX|BRA|ARG|ITA|ESP|NLD|SWE|NOR|DNK|CHE|[A-Z]{3})/.test(upper)) {
-                    rawLine1 = upper;
-                    break;
-                }
-            }
-
-            // Step 2: Clean all lines for line 2 (numbers)
-            let cleaned = text.toUpperCase()
-                .replace(/[«»‹›\u00AB\u00BB\u2039\u203A\{\}\[\]\|~`\\]/g, '<');
-
-            const lines = cleaned.split('\n')
+            const lines = text.toUpperCase()
+                .replace(/[«»‹›«»‹›\{\}\[\]\|~`\\]/g, '<')
+                .split('\n')
                 .map(l => l.replace(/\s+/g, ''))
+                .filter(l => l.length >= 25);
+
+            // บรรทัดสองคือบรรทัดที่มีตัวเลขหนาแน่น — OCR อ่านได้แม่นกว่าและมีเลขตรวจสอบ
+            // กำกับทุกช่อง จึงใช้เป็นหลักยึด แล้วค่อยไปหาชื่อจากบรรทัดหนึ่ง
+            const line2 = lines
                 .map(l => l.replace(/[^A-Z0-9<]/g, '<'))
-                .filter(l => l.length >= 20);
+                .filter(l => (l.match(/\d/g) || []).length >= 12)
+                .sort((a, b) => (b.match(/\d/g) || []).length - (a.match(/\d/g) || []).length)[0];
 
-            console.log('Cleaned lines:', lines);
-
-            // Find line 2 (starts with digits — passport number)
-            let line2 = lines.find(l => /^\d{2,}/.test(l) && l.length >= 28);
-            if (!line2) line2 = lines.find(l => /\d{6,}/.test(l));
-
-            // Find line 1: use rawLine1 if found, otherwise try cleaned lines
-            let line1 = null;
-            if (rawLine1) {
-                line1 = rawLine1.replace(/[^A-Z0-9<]/g, '<');
-            } else {
-                line1 = lines.find(l => /^P</.test(l) || /^P[A-Z]{3}/.test(l));
-                if (!line1) line1 = lines.find(l => l.includes('<<') && /[A-Z]{4,}/.test(l));
-            }
-
-            console.log('MRZ L1:', line1);
-            console.log('MRZ L2:', line2);
-
-            // Parse line 1 (name + nationality)
-            if (line1) {
-                const l1 = (line1 + '<'.repeat(44)).substring(0, 44);
-                if (l1.match(/^P/)) {
-                    // Find country code (positions 2-5)
-                    const countryMatch = l1.substring(2, 5).replace(/</g, '');
-                    if (countryMatch.length >= 2) result.nationality = countryMatch;
-
-                    // Find name: everything after P<COUNTRY until end
-                    const nameStart = l1.startsWith('P<') ? 5 : (l1.indexOf('<') > 0 ? l1.indexOf('<') + 1 : 5);
-                    const namePart = l1.substring(nameStart);
-                    const sep = namePart.indexOf('<<');
-                    if (sep !== -1) {
-                        result.lastName = namePart.substring(0, sep).replace(/</g, ' ').trim();
-                        result.firstName = namePart.substring(sep + 2).replace(/</g, ' ').trim();
-                    } else {
-                        // No << found, try single < as separator
-                        const parts = namePart.split('<').filter(p => p.length > 0);
-                        if (parts.length >= 2) {
-                            result.lastName = parts[0];
-                            result.firstName = parts.slice(1).join(' ');
-                        } else if (parts.length === 1) {
-                            result.lastName = parts[0];
-                        }
-                    }
-                }
-            }
-
-            // Parse line 2 (passport no, DOB, expiry)
             if (line2) {
                 const l2 = (line2 + '<'.repeat(44)).substring(0, 44);
-                result.passportNo = l2.substring(0, 9).replace(/</g, '').replace(/[^A-Z0-9]/g, '');
-                if (!result.nationality) result.nationality = l2.substring(10, 13).replace(/</g, '');
 
-                const dob = l2.substring(13, 19), exp = l2.substring(21, 27);
+                result.passportNo = l2.substring(0, 9).replace(/</g, '');
+                result.nationality = l2.substring(10, 13).replace(/[^A-Z]/g, '');
+
+                const dob = this.mrzDigitsOnly(l2.substring(13, 19));
+                const exp = this.mrzDigitsOnly(l2.substring(21, 27));
+
                 if (/^\d{6}$/.test(dob)) {
-                    const yy = parseInt(dob.substring(0,2));
-                    result.dob = (yy <= parseInt(new Date().getFullYear().toString().substring(2)) ? '20':'19') + dob.substring(0,2) + '-' + dob.substring(2,4) + '-' + dob.substring(4,6);
-                }
-                if (/^\d{6}$/.test(exp)) {
-                    result.expiry = '20' + exp.substring(0,2) + '-' + exp.substring(2,4) + '-' + exp.substring(4,6);
+                    const yy = parseInt(dob.substring(0, 2), 10);
+                    const thisYy = parseInt(String(new Date().getFullYear()).substring(2), 10);
+                    result.dob = (yy <= thisYy ? '20' : '19') + dob.substring(0, 2) + '-' + dob.substring(2, 4) + '-' + dob.substring(4, 6);
                 }
 
-                // เลขตรวจสอบอยู่ถัดจากแต่ละช่องตามมาตรฐาน ไม่ใช่ท้ายบรรทัด
+                if (/^\d{6}$/.test(exp)) {
+                    result.expiry = '20' + exp.substring(0, 2) + '-' + exp.substring(2, 4) + '-' + exp.substring(4, 6);
+                }
+
                 result.checks = {
-                    passportNo: this.mrzFieldOk(l2.substring(0, 9), l2.charAt(9)),
-                    dob: this.mrzFieldOk(dob, l2.charAt(19)),
-                    expiry: this.mrzFieldOk(exp, l2.charAt(27)),
+                    passportNo: this.mrzFieldOk(l2.substring(0, 9), this.mrzDigitsOnly(l2.charAt(9))),
+                    dob: this.mrzFieldOk(dob, this.mrzDigitsOnly(l2.charAt(19))),
+                    expiry: this.mrzFieldOk(exp, this.mrzDigitsOnly(l2.charAt(27))),
                 };
             }
 
-            console.log('Parsed result:', result);
+            const names = this.parseMrzNames(lines, line2, result.nationality);
+            result.lastName = names.lastName;
+            result.firstName = names.firstName;
+
             return result;
+        },
+
+        /*
+         * แกะชื่อจากบรรทัดหนึ่ง โดยยึดรหัสประเทศที่ได้จากบรรทัดสอง
+         *
+         * เดิมยึดจากตำแหน่งคงที่ แล้วพังทันทีที่ OCR อ่าน '<' ตัวแรกเป็นตัวอักษร
+         * เพราะตัวหา nameStart ไปเจอ '<' ตัวแรกในหางของบรรทัดแทน ได้ชื่อเป็นขยะ
+         * และสลับนามสกุลกับชื่อ
+         *
+         * รหัสประเทศจากบรรทัดสองเชื่อถือได้มากกว่า เพราะบรรทัดนั้น OCR อ่านแม่นกว่า
+         */
+        parseMrzNames(lines, line2, nationality) {
+            const out = { firstName: '', lastName: '' };
+
+            const line1 = lines.find(l => l !== line2 && /^P/.test(l)) || lines.find(l => l !== line2);
+            if (!line1) return out;
+
+            let namePart = null;
+
+            if (nationality && nationality.length === 3) {
+                const at = line1.indexOf(nationality);
+                if (at > 0) namePart = line1.substring(at + 3);
+            }
+
+            if (namePart === null) namePart = line1.substring(5);
+
+            // หาอักขระเติมเต็ม: หางของบรรทัดเป็นตัวเดียวซ้ำกันยาว ๆ เสมอ
+            // OCR อ่าน '<' เป็น C, L, K ได้ แต่มันจะอ่านผิดเป็นตัวเดิมตลอดทั้งหาง
+            const tail = namePart.match(/(.)\1{2,}$/);
+            const filler = tail ? tail[1] : '<';
+
+            // แทนเฉพาะที่ซ้ำกันตั้งแต่สองตัวขึ้นไป — ตัวเดี่ยวอาจเป็นตัวอักษรจริงในชื่อ
+            // ถ้าแทนหมด WATCHARA จะกลายเป็น WAT HARA เมื่อ OCR อ่าน '<' เป็น 'C'
+            // ส่วนตัวคั่นระหว่างนามสกุลกับชื่อเป็น '<<' อยู่แล้ว จึงไม่เสียอะไร
+            let cleaned = namePart;
+            if (filler !== '<') {
+                const run = new RegExp('\\' + filler + '{2,}', 'g');
+                cleaned = cleaned.replace(run, m => '<'.repeat(m.length));
+            }
+
+            cleaned = cleaned.replace(/<+$/, '');
+
+            const sep = cleaned.indexOf('<<');
+            if (sep !== -1) {
+                out.lastName = cleaned.substring(0, sep).replace(/</g, ' ').trim();
+                out.firstName = cleaned.substring(sep + 2).replace(/</g, ' ').trim();
+            } else {
+                const parts = cleaned.split('<').filter(p => p.length > 0);
+                out.lastName = parts[0] ?? '';
+                out.firstName = parts.slice(1).join(' ');
+            }
+
+            // ชื่อที่ยังมีตัวเดิมซ้ำกันสามตัวขึ้นไปคือเศษของอักขระเติมเต็มที่ดัดไม่ออก
+            // ปล่อยว่างดีกว่าเติมขยะ เพราะมันจะถูกบันทึกเป็นชื่อลูกค้าแล้วเอาไป
+            // เทียบกับรายชื่อ ปปง. โดยไม่มีใครทันสังเกต
+            const junk = v => /(.)\1{2,}/.test(v.replace(/\s/g, ''));
+            if (junk(out.lastName)) out.lastName = '';
+            if (junk(out.firstName)) out.firstName = '';
+
+            return out;
         },
 
         confirmCapture() {
