@@ -44,14 +44,21 @@ class CardReaderController extends Controller
          * และการเพิกถอนเครื่อง
          */
         $pending = app(PassportChipRequests::class)->forAgent($device->counter_id);
+        $key = $pending?->key();
+
+        if ($pending !== null && $key === null) {
+            // กุญแจอ่านไม่ออกก็ส่งให้ agent ไม่ได้ ปิดคำขอทิ้งแทนที่จะให้
+            // พนักงานรอการแตะที่ไม่มีวันสำเร็จ
+            app(PassportChipRequests::class)->markFailed($pending, 'กุญแจเสียหาย กรุณาถ่ายรูปพาสปอร์ตใหม่');
+        }
 
         return response()->json([
             'ok' => true,
-            'passport_request' => $pending === null ? null : [
+            'passport_request' => $key === null ? null : [
                 'id' => $pending->id,
-                'document_no' => $pending->mrz['document_no'],
-                'date_of_birth' => $pending->mrz['date_of_birth'],
-                'expiry_date' => $pending->mrz['expiry_date'],
+                'document_no' => $key['document_no'],
+                'date_of_birth' => $key['date_of_birth'],
+                'expiry_date' => $key['expiry_date'],
             ],
         ]);
     }

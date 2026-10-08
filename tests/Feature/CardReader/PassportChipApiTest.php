@@ -204,4 +204,24 @@ class PassportChipApiTest extends TestCase
         $this->assertStringNotContainsString('AC2784283', $raw);
         $this->assertStringNotContainsString('830625', $raw);
     }
+
+    public function test_a_key_that_cannot_be_decrypted_does_not_take_down_the_heartbeat(): void
+    {
+        $request = $this->openRequest();
+
+        // เกิดได้เมื่อ APP_KEY เปลี่ยน หรือแถวถูกคัดลอกข้ามสภาพแวดล้อม
+        // ถ้า exception หลุดออกไป ไฟสถานะและการอ่านบัตรประชาชนของเคาน์เตอร์นั้น
+        // จะตายตามไปด้วย ทั้งที่ไม่เกี่ยวกันเลย
+        \DB::table('card_reader_passport_requests')
+            ->where('id', $request->id)
+            ->update(['mrz' => 'ข้อมูลที่ถอดรหัสไม่ออก']);
+
+        $this->withToken($this->token)
+            ->postJson(route('api.card-reader.heartbeat'), ['status' => 'ready'])
+            ->assertOk()
+            ->assertJsonPath('passport_request', null);
+
+        // และต้องปิดคำขอนั้นทิ้ง ไม่ให้พนักงานรอการแตะที่ไม่มีวันสำเร็จ
+        $this->assertSame(CardReaderPassportRequest::STATUS_FAILED, $request->refresh()->status);
+    }
 }

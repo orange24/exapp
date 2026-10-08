@@ -4,6 +4,7 @@ namespace App\Services\CardReader;
 
 use App\Models\CardReaderDevice;
 use App\Models\CardReaderRead;
+use Illuminate\Support\Facades\Log;
 
 /**
  * กล่องรับบัตรของเคาน์เตอร์หนึ่ง ๆ
@@ -32,7 +33,23 @@ class CounterInbox
             return null;
         }
 
-        $payload = $read->payload;
+        try {
+            $payload = $read->payload;
+        } catch (\Throwable $e) {
+            /*
+             * ถอดรหัสไม่ออก — ลบทิ้งแล้วทำเหมือนไม่มีบัตรเข้ามา
+             *
+             * เกิดได้เมื่อ APP_KEY เปลี่ยน หรือมีสภาพแวดล้อมสองชุดใช้ฐานข้อมูล
+             * เดียวกันแต่คนละกุญแจ ถ้าปล่อยให้ exception หลุดออกไป หน้าซื้อ/ขาย
+             * ทั้งหน้าจะพังด้วย 500 ทั้งที่พนักงานแค่เปิดหน้าไว้เฉย ๆ
+             */
+            Log::warning('ข้อมูลบัตรในกล่องรับถอดรหัสไม่ออก ลบทิ้ง', ['read_id' => $read->id]);
+
+            $read->delete();
+
+            return null;
+        }
+
         $payload['kind'] = $read->kind;
 
         // ลบทิ้งทันทีที่ส่งมอบ ไม่ใช่แค่ทำเครื่องหมายว่าใช้แล้ว

@@ -40,6 +40,32 @@ class CardReaderPassportRequest extends Model
         return $query->liveFor($counterId)->where('status', self::STATUS_PENDING);
     }
 
+    /**
+     * กุญแจที่ใช้ได้จริง — null เมื่อถอดรหัสไม่ออก
+     *
+     * ถอดไม่ออกเกิดได้เมื่อ APP_KEY เปลี่ยน หรือแถวถูกคัดลอกข้ามสภาพแวดล้อม
+     * ถ้าปล่อยให้ exception หลุดออกไป สัญญาณชีพจะล้มทั้งคำขอ แล้วไฟสถานะกับ
+     * การอ่านบัตรประชาชนของเคาน์เตอร์นั้นจะตายตามไปด้วย ทั้งที่ไม่เกี่ยวกัน
+     *
+     * @return array{document_no: string, date_of_birth: string, expiry_date: string}|null
+     */
+    public function key(): ?array
+    {
+        try {
+            $mrz = $this->mrz;
+        } catch (\Throwable $e) {
+            return null;
+        }
+
+        foreach (['document_no', 'date_of_birth', 'expiry_date'] as $field) {
+            if (empty($mrz[$field])) {
+                return null;
+            }
+        }
+
+        return $mrz;
+    }
+
     public function isFinished(): bool
     {
         return in_array($this->status, [self::STATUS_DONE, self::STATUS_FAILED], true);

@@ -224,4 +224,19 @@ class CounterFormFillTest extends TestCase
         // ข้อมูลประชาชนต้องไม่นอนค้างรอใครมา prune — ไม่มีอะไรเรียก prune ให้
         $this->assertSame(0, CardReaderRead::count());
     }
+
+    public function test_a_card_that_cannot_be_decrypted_does_not_take_down_the_counter(): void
+    {
+        $this->device();
+        $read = $this->insertCard();
+
+        // เกิดได้เมื่อ APP_KEY เปลี่ยน หรือมีสภาพแวดล้อมสองชุดใช้ฐานข้อมูลเดียวกัน
+        // แต่คนละกุญแจ — พนักงานที่แค่เปิดหน้าซื้อไว้ต้องไม่เจอ 500
+        \DB::table('card_reader_reads')->where('id', $read->id)->update(['payload' => 'ถอดรหัสไม่ออก']);
+
+        $this->assertNull(app(CounterInbox::class)->consume($this->counter->id));
+
+        // และต้องลบทิ้ง ไม่ให้ค้างแล้วพังซ้ำทุก 1.5 วินาที
+        $this->assertSame(0, CardReaderRead::count());
+    }
 }
