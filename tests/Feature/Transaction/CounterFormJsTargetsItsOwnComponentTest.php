@@ -64,4 +64,37 @@ class CounterFormJsTargetsItsOwnComponentTest extends TestCase
         // แต่คำอธิบายข้างบนจะเลิกเป็นจริง — ให้เทสตัวนี้บอกเราเอง
         $this->assertLessThan($content, $bell, 'กระดิ่งไม่ได้อยู่ก่อน content แล้ว — ทบทวนคำอธิบายในเทสนี้');
     }
+
+    public function test_no_counter_form_polls_itself(): void
+    {
+        foreach ($this->counterForms() as $path) {
+            $source = file_get_contents($path);
+
+            // ฟอร์มมีหน้าต่างครอปที่ Cropper.js ฉีด DOM ของตัวเองเข้าไป
+            // ทุกครั้งที่ฟอร์ม re-render Livewire จะลบโหนดนั้นทิ้งเพราะ
+            // เซิร์ฟเวอร์ไม่รู้จัก — วัดจากของจริงแล้วกรอบครอปอยู่ได้ 1.5 วินาที
+            // พอดีกับจังหวะ poll แล้วหายไป พนักงานเห็นรูปแต่ลากกรอบไม่ได้
+            $this->assertStringNotContainsString(
+                'wire:poll',
+                $source,
+                basename($path) . ' ห้าม poll ตัวเอง — ให้ card-reader.inbox เฝ้าแล้วส่ง event มาแทน',
+            );
+        }
+    }
+
+    public function test_the_inbox_component_is_the_one_that_polls(): void
+    {
+        $this->assertStringContainsString(
+            'wire:poll',
+            file_get_contents(resource_path('views/livewire/card-reader/inbox.blade.php')),
+        );
+
+        foreach ($this->counterForms() as $path) {
+            $this->assertStringContainsString(
+                'livewire:card-reader.inbox',
+                file_get_contents($path),
+                basename($path) . ' ต้องวางคอมโพเนนต์ที่เฝ้ากล่องรับบัตรไว้',
+            );
+        }
+    }
 }

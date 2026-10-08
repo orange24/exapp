@@ -68,14 +68,31 @@ class CounterFormFillTest extends TestCase
         ]);
     }
 
+    /** @return array<string, string> */
+    private function cardPayload(array $overrides = []): array
+    {
+        return array_merge([
+            'citizen_id' => '5960500028101',
+            'name_th' => 'นายสมชาย ใจดี',
+            'first_name_en' => 'SOMCHAI',
+            'last_name_en' => 'JAIDEE',
+            'date_of_birth' => '1981-12-18',
+        ], $overrides);
+    }
+
     public function test_inserting_a_card_fills_the_buy_form(): void
     {
         $this->device();
         $this->insertCard();
 
         Livewire::actingAs($this->staffUser)
+            ->test('card-reader.inbox')
+            ->call('poll')
+            ->assertDispatched('card-read');
+
+        Livewire::actingAs($this->staffUser)
             ->test('transaction.buy-form')
-            ->call('pollCardReader')
+            ->dispatch('card-read', card: $this->cardPayload())
             ->assertSet('ocrPassportNo', '5960500028101')
             ->assertSet('ocrIdType', 'national_id')
             ->assertSet('ocrDob', '1981-12-18')
@@ -90,7 +107,7 @@ class CounterFormFillTest extends TestCase
 
         Livewire::actingAs($this->staffUser)
             ->test('transaction.sell-form')
-            ->call('pollCardReader')
+            ->dispatch('card-read', card: $this->cardPayload())
             ->assertSet('ocrPassportNo', '5960500028101')
             ->assertSet('ocrIdType', 'national_id');
     }
@@ -148,17 +165,17 @@ class CounterFormFillTest extends TestCase
         ]);
 
         Livewire::actingAs($this->staffUser)
-            ->test('transaction.buy-form')
-            ->call('pollCardReader')
-            ->assertSet('cardReaderHealth', 'offline');
+            ->test('card-reader.inbox')
+            ->call('poll')
+            ->assertSet('health', 'offline');
     }
 
     public function test_a_counter_with_no_reader_installed_shows_no_light_at_all(): void
     {
         Livewire::actingAs($this->staffUser)
-            ->test('transaction.buy-form')
-            ->call('pollCardReader')
-            ->assertSet('cardReaderHealth', 'none');
+            ->test('card-reader.inbox')
+            ->call('poll')
+            ->assertSet('health', 'none');
     }
 
     public function test_a_revoked_reader_stops_driving_the_light(): void
@@ -186,12 +203,11 @@ class CounterFormFillTest extends TestCase
 
         $page = Livewire::actingAs($this->staffUser)
             ->test('transaction.buy-form')
-            ->call('pollCardReader');
+            ->dispatch('card-read', card: $this->cardPayload());
 
         $after = \App\Models\SanctionScreening::count();
 
-        $this->insertCard();
-        $page->call('pollCardReader');
+        $page->dispatch('card-read', card: $this->cardPayload());
 
         // การสแกนแต่ละครั้งสร้างรายการตรวจรายชื่อหนึ่งแถว ถ้ายิงซ้ำได้
         // ประวัติของลูกค้าคนเดียวจะกลายเป็นสิบแถวในนาทีเดียว

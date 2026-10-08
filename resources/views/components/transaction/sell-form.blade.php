@@ -578,29 +578,19 @@ new class extends Component
     /** ชนิดเอกสารของลูกค้าที่กำลังกรอก — บัตรประชาชนไทยไม่ใช่พาสปอร์ต */
     public string $ocrIdType = 'passport';
 
-    /** ready | error | offline | none — ไฟสถานะเครื่องอ่านบัตรมุมจอ */
-    public string $cardReaderHealth = 'none';
-
     /**
-     * หน้าเว็บถามทุก 1.5 วินาทีว่าเคาน์เตอร์นี้มีบัตรใหม่ไหม
+     * เสียบบัตรแล้วคอมโพเนนต์ card-reader.inbox ส่งข้อมูลมาให้
      *
-     * ที่ต้องถามเอาเองเพราะทิศ "เบราว์เซอร์รับจากเครื่องในพื้นที่" ใช้ไม่ได้ —
-     * หน้า HTTPS เรียก http://127.0.0.1 ไม่ได้ Chrome บล็อกตั้งแต่ต้นทาง
+     * การเฝ้ากล่องรับอยู่ที่คอมโพเนนต์นั้น ไม่ใช่ที่นี่ — ฟอร์มนี้มีหน้าต่างครอป
+     * รูปพาสปอร์ตที่ Cropper.js ฉีด DOM ของตัวเองเข้าไป ถ้าฟอร์ม re-render
+     * ทุกวินาทีครึ่ง Livewire จะลบกรอบครอปทิ้งเพราะเซิร์ฟเวอร์ไม่รู้จักมัน
+     *
+     * @param array<string, mixed> $card
      */
-    public function pollCardReader(): void
+    #[\Livewire\Attributes\On('card-read')]
+    public function onCardRead(array $card): void
     {
-        if (! $this->counterId) {
-            return;
-        }
-
-        $inbox = app(\App\Services\CardReader\CounterInbox::class);
-        $this->cardReaderHealth = $inbox->health((int) $this->counterId);
-
-        $card = $inbox->consume((int) $this->counterId);
-
-        if ($card !== null) {
-            $this->fillFromIdCard($card);
-        }
+        $this->fillFromIdCard($card);
     }
 
     /** @param array<string, mixed> $card */
