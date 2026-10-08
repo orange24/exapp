@@ -13,4 +13,6 @@ Route::middleware('auth:sanctum')->group(function () {
 Route::middleware('card-reader')->prefix('card-reader')->group(function () {
     Route::post('/heartbeat', [CardReaderController::class, 'heartbeat'])->name('api.card-reader.heartbeat');
     Route::post('/read', [CardReaderController::class, 'read'])->name('api.card-reader.read');
+    Route::post('/passport-progress', [CardReaderController::class, 'passportProgress'])->name('api.card-reader.passport-progress');
+    Route::post('/passport', [CardReaderController::class, 'passport'])->name('api.card-reader.passport');
 });

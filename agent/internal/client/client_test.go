@@ -46,7 +46,7 @@ func TestA401MeansStopForeverNotRetry(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	err := New(srv.URL, "crd_revoked", "1.0.0").Heartbeat(context.Background(), "ready", "")
+	_, err := New(srv.URL, "crd_revoked", "1.0.0").Heartbeat(context.Background(), "ready", "")
 
 	// เครื่องที่ถูกเพิกถอนต้องหยุด ไม่ใช่วนยิงเซิร์ฟเวอร์ต่อไปเรื่อย ๆ
 	if !errors.Is(err, ErrRevoked) {
@@ -60,7 +60,7 @@ func TestAServerErrorIsReportedNotSwallowed(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	if err := New(srv.URL, "t", "1.0.0").Heartbeat(context.Background(), "ready", ""); err == nil {
+	if _, err := New(srv.URL, "t", "1.0.0").Heartbeat(context.Background(), "ready", ""); err == nil {
 		t.Fatal("ควร error แต่เงียบ")
 	}
 }
@@ -116,7 +116,7 @@ func TestAServerRejectionIsNotRetried(t *testing.T) {
 	defer srv.Close()
 
 	// 401 คือคำตอบจริงจากเซิร์ฟเวอร์ ไม่ใช่ connection ตาย ยิงซ้ำไปก็เท่านั้น
-	_ = New(srv.URL, "crd_revoked", "1.0.0").Heartbeat(context.Background(), "ready", "")
+	_, _ = New(srv.URL, "crd_revoked", "1.0.0").Heartbeat(context.Background(), "ready", "")
 
 	if h.hits != 1 {
 		t.Fatalf("ไม่ควรลองใหม่ ได้ %d ครั้ง", h.hits)
@@ -131,4 +131,78 @@ type countingHandler struct {
 func (c *countingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	c.hits++
 	w.WriteHeader(c.status)
+}
+
+func TestTheHeartbeatBringsBackAKeyWaitingAtTheCounter(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true,"passport_request":{"id":7,"document_no":"AC2784283","date_of_birth":"830625","expiry_date":"311031"}}`))
+	}))
+	defer srv.Close()
+
+	// กุญแจเดินทางกลับมากับสัญญาณชีพ ไม่ใช่ช่องทางใหม่ — เบราว์เซอร์ส่งตรงมาหา
+	// agent ไม่ได้ ทิศเดียวที่ใช้ได้คือเรายิงออกไปถาม
+	req, err := New(srv.URL, "t", "1.0.0").Heartbeat(context.Background(), "ready", "")
+	if err != nil {
+		t.Fatalf("ไม่ควร error: %v", err)
+	}
+
+	if req == nil {
+		t.Fatal("ควรได้กุญแจกลับมา")
+	}
+
+	if req.ID != 7 || req.DocumentNo != "AC2784283" || req.DateOfBirth != "830625" {
+		t.Fatalf("กุญแจไม่ครบ: %+v", req)
+	}
+}
+
+func TestAHeartbeatWithNoKeyWaitingReturnsNothing(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true,"passport_request":null}`))
+	}))
+	defer srv.Close()
+
+	req, err := New(srv.URL, "t", "1.0.0").Heartbeat(context.Background(), "ready", "")
+	if err != nil {
+		t.Fatalf("ไม่ควร error: %v", err)
+	}
+
+	if req != nil {
+		t.Fatalf("ไม่ควรได้กุญแจ ได้ %+v", req)
+	}
+}
+
+func TestChipDataIsSentAsFlatFields(t *testing.T) {
+	var got map[string]any
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&got)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	err := New(srv.URL, "t", "1.0.0").SendPassport(context.Background(), 7, card.Passport{
+		DocumentNo:   "AC2784283",
+		Surname:      "KITTIKUM",
+		NationalID:   "3500900234628",
+		Authenticity: "verified",
+	})
+	if err != nil {
+		t.Fatalf("ไม่ควร error: %v", err)
+	}
+
+	// เซิร์ฟเวอร์ validate ทีละช่อง ถ้าส่งเป็นก้อนซ้อนจะตกทั้งใบ
+	for k, want := range map[string]any{
+		"request_id":   float64(7),
+		"ok":           true,
+		"document_no":  "AC2784283",
+		"surname":      "KITTIKUM",
+		"national_id":  "3500900234628",
+		"authenticity": "verified",
+	} {
+		if got[k] != want {
+			t.Fatalf("ช่อง %s: อยากได้ %v ได้ %v", k, want, got[k])
+		}
+	}
 }

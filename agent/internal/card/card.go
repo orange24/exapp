@@ -174,3 +174,17 @@ func ValidCitizenID(id string) bool {
 
 	return (11-(sum%11))%10 == int(id[12]-'0')
 }
+
+// ContactlessSlot คืนชื่อช่องไร้สัมผัส — พาสปอร์ตใช้ NFC ไม่ใช่ชิปสัมผัส
+//
+// แยกจาก SelectReaders เพราะสองช่องทำงานคนละหน้าที่และคนละเงื่อนไข:
+// ช่องสัมผัสอ่านทันทีที่เสียบบัตร ส่วนช่องนี้อ่านเฉพาะตอนมีกุญแจรออยู่
+func ContactlessSlot(all []string) string {
+	for _, name := range all {
+		if strings.Contains(strings.ToUpper(name), "PICC") {
+			return name
+		}
+	}
+
+	return ""
+}

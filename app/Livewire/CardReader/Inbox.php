@@ -3,6 +3,7 @@
 namespace App\Livewire\CardReader;
 
 use App\Services\CardReader\CounterInbox;
+use App\Services\CardReader\PassportChipRequests;
 use Livewire\Component;
 
 /**
@@ -24,6 +25,9 @@ class Inbox extends Component
     /** ready | error | offline | none */
     public string $health = 'none';
 
+    /** ข้อความบอกความคืบหน้าการอ่านชิปพาสปอร์ต ว่างเมื่อไม่มีอะไรกำลังอ่าน */
+    public string $chipStatus = '';
+
     public function mount(): void
     {
         $this->counterId = (int) session('working_counter_id', 0);
@@ -38,12 +42,34 @@ class Inbox extends Component
         $inbox = app(CounterInbox::class);
         $this->health = $inbox->health($this->counterId);
 
+        $this->chipStatus = $this->describeChip();
+
         $card = $inbox->consume($this->counterId);
 
         if ($card !== null) {
             // ส่งให้ฟอร์มที่เปิดอยู่เติมข้อมูลเอง คอมโพเนนต์นี้ไม่รู้จักฟอร์ม
             $this->dispatch('card-read', card: $card);
         }
+    }
+
+    /**
+     * การอ่านชิปใช้เวลาสองสามวินาที ถ้าไม่บอกอะไรเลยพนักงานจะคิดว่าค้าง
+     * แล้วยกพาสปอร์ตออกกลางคัน ซึ่งทำให้อ่านไม่จบจริง ๆ
+     */
+    private function describeChip(): string
+    {
+        $request = app(PassportChipRequests::class)->current($this->counterId);
+
+        if ($request === null) {
+            return '';
+        }
+
+        return match ($request->status) {
+            'pending' => 'แตะพาสปอร์ตที่แท่นเพื่ออ่านชิป (ไม่บังคับ)',
+            'reading' => $request->progress ?: 'กำลังอ่านชิป...',
+            'failed' => 'อ่านชิปไม่สำเร็จ: ' . ($request->error ?: 'ไม่ทราบสาเหตุ'),
+            default => '',
+        };
     }
 
     public function render()

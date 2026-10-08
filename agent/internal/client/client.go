@@ -72,6 +72,10 @@ func staleConnection(err error) bool {
 }
 
 func (c *Client) post(ctx context.Context, path string, body any) error {
+	return c.postJSON(ctx, path, body, nil)
+}
+
+func (c *Client) postJSON(ctx context.Context, path string, body any, into any) error {
 	raw, err := json.Marshal(body)
 	if err != nil {
 		return err
@@ -113,15 +117,77 @@ func (c *Client) post(ctx context.Context, path string, body any) error {
 		return fmt.Errorf("%s ตอบ %d", path, resp.StatusCode)
 	}
 
-	return nil
+	if into == nil {
+		return nil
+	}
+
+	return json.NewDecoder(resp.Body).Decode(into)
 }
 
-// Heartbeat บอกเซิร์ฟเวอร์ว่ายังอยู่ — ขับไฟสถานะที่หน้าเคาน์เตอร์
-func (c *Client) Heartbeat(ctx context.Context, status, errMessage string) error {
-	return c.post(ctx, "/api/card-reader/heartbeat", map[string]string{
+// PassportRequest คือกุญแจเปิดชิปที่เซิร์ฟเวอร์ฝากกลับมากับสัญญาณชีพ
+type PassportRequest struct {
+	ID          int64  `json:"id"`
+	DocumentNo  string `json:"document_no"`
+	DateOfBirth string `json:"date_of_birth"`
+	ExpiryDate  string `json:"expiry_date"`
+}
+
+/*
+Heartbeat บอกเซิร์ฟเวอร์ว่ายังอยู่ แล้วรับกุญแจเปิดชิปกลับมาถ้ามี
+
+เป็นช่องทางสองทางโดยตั้งใจ — ทิศเดียวที่ใช้ได้คือ agent ยิงออกไป การรวม
+สองเรื่องไว้ในคำขอเดียวแปลว่ามีที่เดียวที่ต้องดูแลเรื่อง retry และ timeout
+*/
+func (c *Client) Heartbeat(ctx context.Context, status, errMessage string) (*PassportRequest, error) {
+	var out struct {
+		PassportRequest *PassportRequest `json:"passport_request"`
+	}
+
+	err := c.postJSON(ctx, "/api/card-reader/heartbeat", map[string]string{
 		"status":  status,
 		"error":   errMessage,
 		"version": c.version,
+	}, &out)
+
+	return out.PassportRequest, err
+}
+
+// PassportProgress รายงานว่าอ่านชิปไปถึงขั้นไหน
+func (c *Client) PassportProgress(ctx context.Context, requestID int64, progress string) error {
+	return c.post(ctx, "/api/card-reader/passport-progress", map[string]any{
+		"request_id": requestID,
+		"progress":   progress,
+	})
+}
+
+// SendPassport ส่งผลการอ่านชิป
+func (c *Client) SendPassport(ctx context.Context, requestID int64, p card.Passport) error {
+	body := map[string]any{"request_id": requestID, "ok": true}
+
+	raw, err := json.Marshal(p)
+	if err != nil {
+		return err
+	}
+
+	var fields map[string]any
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return err
+	}
+
+	for k, v := range fields {
+		body[k] = v
+	}
+
+	return c.post(ctx, "/api/card-reader/passport", body)
+}
+
+// FailPassport บอกว่าอ่านไม่สำเร็จเพราะอะไร
+func (c *Client) FailPassport(ctx context.Context, requestID int64, reason string) error {
+	return c.post(ctx, "/api/card-reader/passport", map[string]any{
+		"request_id":   requestID,
+		"ok":           false,
+		"error":        reason,
+		"authenticity": "failed",
 	})
 }
 

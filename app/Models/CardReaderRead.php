@@ -7,11 +7,14 @@ use Illuminate\Database\Eloquent\Model;
 
 class CardReaderRead extends Model
 {
+    public const KIND_NATIONAL_ID = 'national_id';
+    public const KIND_PASSPORT = 'passport';
+
     /** ไม่มีใครมารับภายในเวลานี้ถือว่าไม่มีใครต้องการ แล้วลบทิ้ง */
     public const LIFETIME_SECONDS = 120;
 
     protected $fillable = [
-        'counter_id', 'device_id', 'payload', 'read_at', 'consumed_at', 'expires_at',
+        'counter_id', 'device_id', 'kind', 'payload', 'read_at', 'consumed_at', 'expires_at',
     ];
 
     protected function casts(): array

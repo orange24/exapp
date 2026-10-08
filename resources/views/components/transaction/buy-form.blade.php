@@ -532,7 +532,57 @@ new class extends Component
     #[\Livewire\Attributes\On('card-read')]
     public function onCardRead(array $card): void
     {
+        if (($card['kind'] ?? '') === 'passport') {
+            $this->fillFromPassportChip($card);
+
+            return;
+        }
+
         $this->fillFromIdCard($card);
+    }
+
+    /**
+     * ขอให้ agent อ่านชิปพาสปอร์ต โดยส่งกุญแจที่ได้จาก OCR ไปฝากไว้
+     *
+     * ชิปล็อกอยู่ ต้องมีเลขพาสปอร์ต + วันเกิด + วันหมดอายุ ถึงจะเปิดได้
+     * (ICAO 9303) ค่าทั้งสามมาจากบรรทัดที่สองของ MRZ ซึ่งมีเลขตรวจสอบกำกับ
+     * ฝั่ง JS จึงเรียกเมธอดนี้เฉพาะตอนเลขตรวจสอบผ่านแล้วเท่านั้น
+     */
+    public function requestPassportChip(string $documentNo, string $dob, string $expiry): void
+    {
+        if (! $this->counterId) {
+            return;
+        }
+
+        app(\App\Services\CardReader\PassportChipRequests::class)->open(
+            (int) $this->counterId,
+            ['document_no' => $documentNo, 'date_of_birth' => $dob, 'expiry_date' => $expiry],
+            \Illuminate\Support\Facades\Auth::id(),
+        );
+    }
+
+    /** ชื่อ วันเกิด และรูปจากชิป เชื่อถือได้กว่าทุกอย่างที่ OCR ให้ */
+    public string $chipPhoto = '';
+    public string $chipAuthenticity = '';
+
+    /** @param array<string, mixed> $card */
+    private function fillFromPassportChip(array $card): void
+    {
+        $this->ocrIdType = 'passport';
+        $this->ocrPassportNo = (string) ($card['document_no'] ?? '');
+        $this->ocrFirstName = (string) ($card['given_names'] ?? '');
+        $this->ocrLastName = (string) ($card['surname'] ?? '');
+        $this->ocrNationality = (string) ($card['nationality'] ?? '');
+        $this->ocrDob = (string) ($card['date_of_birth'] ?? '');
+        $this->ocrExpiry = (string) ($card['expiry_date'] ?? '');
+        $this->custName = trim($this->ocrFirstName . ' ' . $this->ocrLastName);
+
+        $this->chipAuthenticity = (string) ($card['authenticity'] ?? '');
+        $this->chipPhoto = ! empty($card['photo_base64']) && ($card['photo_mime'] ?? '') === 'image/jpeg'
+            ? 'data:image/jpeg;base64,' . $card['photo_base64']
+            : '';
+
+        $this->runSanctionScreening(\App\Models\SanctionScreening::TRIGGER_TRANSACTION);
     }
 
     /** @param array<string, mixed> $card */

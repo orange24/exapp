@@ -29,6 +29,9 @@ const (
 	// กรอบเวลาที่ยอมให้การรอบัตรค้างได้ก่อนวนมาเช็กสัญญาณปิดโปรแกรม
 	// ไม่ใช่จังหวะการถาม — การรอนี้บล็อกจริงจนกว่าจะมีบัตรเสียบ
 	cardWaitWindow = 5 * time.Second
+
+	// นานพอให้พนักงานหยิบพาสปอร์ตมาแตะ แต่ไม่นานจนกุญแจที่เซิร์ฟเวอร์หมดอายุก่อน
+	passportTapWindow = 100 * time.Second
 )
 
 func main() {
@@ -136,7 +139,10 @@ func run(cfg *config.Config) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	go heartbeatLoop(ctx, api, reader)
+	keys := make(chan *client.PassportRequest, 1)
+
+	go heartbeatLoop(ctx, api, reader, keys)
+	go passportLoop(ctx, api, reader, keys)
 
 	watcher, err := reader.Watch()
 	if err != nil {
@@ -172,7 +178,7 @@ func run(cfg *config.Config) error {
 		data, err := reader.Read(name)
 		if err != nil {
 			log.Printf("อ่านบัตรไม่สำเร็จ: %v", err)
-			_ = api.Heartbeat(ctx, "error", err.Error())
+			_, _ = api.Heartbeat(ctx, "error", err.Error())
 
 			time.Sleep(time.Second)
 
@@ -193,7 +199,7 @@ func run(cfg *config.Config) error {
 	}
 }
 
-func heartbeatLoop(ctx context.Context, api *client.Client, reader *card.Reader) {
+func heartbeatLoop(ctx context.Context, api *client.Client, reader *card.Reader, keys chan<- *client.PassportRequest) {
 	ticker := time.NewTicker(heartbeatEvery)
 	defer ticker.Stop()
 
@@ -204,8 +210,18 @@ func heartbeatLoop(ctx context.Context, api *client.Client, reader *card.Reader)
 			status, message = "no_reader", "ไม่พบเครื่องอ่านบัตรที่เสียบอยู่"
 		}
 
-		if err := api.Heartbeat(ctx, status, message); err != nil {
+		req, err := api.Heartbeat(ctx, status, message)
+		if err != nil {
 			log.Printf("ส่งสัญญาณชีพไม่สำเร็จ: %v", err)
+		}
+
+		if req != nil {
+			// ไม่บล็อกถ้าตัวอ่านพาสปอร์ตยังทำงานอยู่ — กุญแจใบถัดไปจะมากับ
+			// สัญญาณชีพรอบหน้าอยู่แล้ว
+			select {
+			case keys <- req:
+			default:
+			}
 		}
 
 		select {
@@ -216,9 +232,85 @@ func heartbeatLoop(ctx context.Context, api *client.Client, reader *card.Reader)
 	}
 }
 
+/*
+passportLoop เฝ้าช่องไร้สัมผัส เฉพาะตอนมีกุญแจรออยู่
+
+ไม่เฝ้าตลอดเวลาโดยตั้งใจ — บัตรรถไฟฟ้าหรือบัตรเครดิตที่วางใกล้แท่นจะทำให้
+เกิดการพยายามอ่านที่ล้มเหลวไม่หยุด และไฟสถานะจะกะพริบแดงทั้งวัน
+*/
+func passportLoop(ctx context.Context, api *client.Client, reader *card.Reader, keys <-chan *client.PassportRequest) {
+	for {
+		var req *client.PassportRequest
+
+		select {
+		case <-ctx.Done():
+			return
+		case req = <-keys:
+		}
+
+		contactless := reader.Contactless()
+		if contactless == nil {
+			_ = api.FailPassport(ctx, req.ID, "เครื่องอ่านนี้ไม่มีช่องไร้สัมผัส")
+
+			continue
+		}
+
+		readPassport(ctx, api, contactless, req)
+	}
+}
+
+func readPassport(ctx context.Context, api *client.Client, reader *card.ContactlessReader, req *client.PassportRequest) {
+	log.Printf("รอแตะพาสปอร์ต (คำขอ #%d)", req.ID)
+
+	deadline := time.Now().Add(passportTapWindow)
+
+	for time.Now().Before(deadline) {
+		if ctx.Err() != nil {
+			return
+		}
+
+		tapped, err := reader.WaitForTap(2 * time.Second)
+		if err != nil {
+			log.Printf("เฝ้าช่องไร้สัมผัสไม่สำเร็จ: %v", err)
+
+			continue
+		}
+
+		if !tapped {
+			continue
+		}
+
+		_ = api.PassportProgress(ctx, req.ID, "กำลังเปิดชิป...")
+
+		data, err := reader.Read(
+			card.Key{DocumentNo: req.DocumentNo, DateOfBirth: req.DateOfBirth, ExpiryDate: req.ExpiryDate},
+			func(step string) { _ = api.PassportProgress(ctx, req.ID, step) },
+		)
+		if err != nil {
+			log.Printf("อ่านชิปไม่สำเร็จ: %v", err)
+			_ = api.FailPassport(ctx, req.ID, err.Error())
+
+			return
+		}
+
+		if err := api.SendPassport(ctx, req.ID, data); err != nil {
+			log.Printf("ส่งข้อมูลจากชิปไม่สำเร็จ: %v", err)
+
+			return
+		}
+
+		log.Printf("ส่งข้อมูลจากชิปขึ้นระบบแล้ว")
+
+		return
+	}
+
+	// หมดเวลารอ — ลูกค้าอาจไม่ยอมให้แตะ หรือเล่มไม่มีชิป ทำรายการต่อด้วย OCR ได้
+	_ = api.FailPassport(ctx, req.ID, "หมดเวลารอ — ไม่มีการแตะพาสปอร์ต")
+}
+
 func reportFatal(api *client.Client, cause error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	_ = api.Heartbeat(ctx, "no_reader", cause.Error())
+	_, _ = api.Heartbeat(ctx, "no_reader", cause.Error())
 }

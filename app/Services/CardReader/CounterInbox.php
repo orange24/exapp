@@ -33,6 +33,7 @@ class CounterInbox
         }
 
         $payload = $read->payload;
+        $payload['kind'] = $read->kind;
 
         // ลบทิ้งทันทีที่ส่งมอบ ไม่ใช่แค่ทำเครื่องหมายว่าใช้แล้ว
         //

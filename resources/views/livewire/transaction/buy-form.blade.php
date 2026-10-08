@@ -1,6 +1,41 @@
 <div class="p-4" x-data="buyForm()" x-ref="lwRoot">
 <livewire:card-reader.inbox />
 
+{{-- ข้อมูลจากชิปพาสปอร์ต — เชื่อถือได้กว่า OCR ทุกประการ
+     รูปนี้มาจากชิป ไม่ใช่รูปที่พิมพ์บนหน้ากระดาษซึ่งอาจถูกเปลี่ยน --}}
+@if ($chipAuthenticity !== '')
+    <div class="mb-3 p-3 rounded border flex items-start gap-3
+        @if ($chipAuthenticity === 'verified') bg-green-50 border-green-300
+        @elseif ($chipAuthenticity === 'failed') bg-red-50 border-red-400
+        @else bg-gray-50 border-gray-300 @endif">
+
+        @if ($chipPhoto !== '')
+            <img src="{{ $chipPhoto }}" alt="รูปจากชิปพาสปอร์ต"
+                 style="width:72px; height:96px; object-fit:cover; border-radius:4px; flex-shrink:0;">
+        @endif
+
+        <div class="text-sm">
+            @if ($chipAuthenticity === 'verified')
+                <div class="font-semibold text-green-800">ยืนยันจากชิปแล้ว — ลายเซ็นของประเทศผู้ออกถูกต้อง</div>
+                <div class="text-green-700 text-xs mt-1">ข้อมูลด้านล่างมาจากชิป ไม่ใช่จากการอ่านรูป</div>
+            @elseif ($chipAuthenticity === 'failed')
+                <div class="font-semibold text-red-800">ลายเซ็นของชิปไม่ผ่านการตรวจ — ข้อมูลอาจถูกแก้ไข</div>
+                <div class="text-red-700 text-xs mt-1">ต้องให้ผู้จัดการอนุมัติก่อนทำรายการ</div>
+            @else
+                <div class="font-semibold text-gray-700">อ่านชิปได้ แต่ยืนยันประเทศผู้ออกไม่ได้</div>
+                <div class="text-gray-600 text-xs mt-1">
+                    ระบบไม่มีใบรับรองของประเทศนี้ ไม่ได้แปลว่าพาสปอร์ตมีปัญหา
+                </div>
+            @endif
+
+            @if ($chipPhoto === '')
+                <div class="text-xs text-gray-500 mt-1">รูปจากชิปอยู่ในรูปแบบที่แสดงไม่ได้</div>
+            @endif
+        </div>
+    </div>
+@endif
+
+
 {{-- Sanction screening — แถบเตือน + ช่องขออนุมัติจากผู้จัดการ --}}
 <x-sanction.alert :screening="$sanctionScreening" :matches="$sanctionMatches" />
 
@@ -674,6 +709,7 @@ function buyForm() {
                     this.callLw('receivePassportImage', this.capturedImage);
                     this.ocrError = '';
                     this.ocrResult = parsed;
+                    this.askForChip(parsed);
                 } else {
                     this.ocrError = 'ไม่พบข้อมูล MRZ — ลอง Crop เฉพาะแถบตัวอักษรด้านล่าง passport';
                 }
@@ -762,6 +798,23 @@ function buyForm() {
             const map = { O: '0', Q: '0', D: '0', I: '1', L: '1', Z: '2', S: '5', B: '8', G: '6', T: '7', A: '4' };
 
             return s.split('').map(c => map[c] ?? c).join('');
+        },
+
+        /*
+         * ขอให้ agent เปิดชิป โดยส่งกุญแจที่เพิ่งอ่านได้ไปฝากไว้ที่เซิร์ฟเวอร์
+         *
+         * ส่งเฉพาะตอนเลขตรวจสอบผ่านครบ เพราะกุญแจที่ผิดแม้ตัวเดียวจะเปิดชิปไม่ได้
+         * แล้วพนักงานจะเห็นแค่ "อ่านชิปไม่สำเร็จ" โดยไม่รู้ว่าสาเหตุอยู่ที่การถ่ายรูป
+         */
+        askForChip(parsed) {
+            const c = parsed.checks || {};
+            const ready = c.passportNo === true && c.dob === true && c.expiry === true;
+
+            if (!ready || !parsed.passportNo) return;
+
+            const yymmdd = iso => iso ? iso.substring(2).split('-').join('') : '';
+
+            this.callLw('requestPassportChip', parsed.passportNo, yymmdd(parsed.dob), yymmdd(parsed.expiry));
         },
 
         parseMRZ(text) {
