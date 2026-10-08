@@ -30,6 +30,7 @@ class MrzParsingTest extends TestCase
           grab(/mrzCheckDigit\(value\) \{[\s\S]*?\n        \},/),
           grab(/mrzFieldOk\(value, expected\) \{[\s\S]*?\n        \},/),
           grab(/mrzDigitsOnly\(s\) \{[\s\S]*?\n        \},/),
+          grab(/trimMrzNoise\(value\) \{[\s\S]*?\n        \},/),
           grab(/parseMRZ\(text\) \{[\s\S]*?\n        \},/),
           grab(/parseMrzNames\(lines, line2, nationality\) \{[\s\S]*?\n        \},/),
         ].join(',\n') + '})');
