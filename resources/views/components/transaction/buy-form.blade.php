@@ -554,6 +554,9 @@ new class extends Component
             return;
         }
 
+        // ข้อความผิดพลาดของรอบก่อนไม่เกี่ยวกับรอบใหม่ ค้างไว้ก็มีแต่ทำให้สับสน
+        $this->chipError = '';
+
         app(\App\Services\CardReader\PassportChipRequests::class)->open(
             (int) $this->counterId,
             ['document_no' => $documentNo, 'date_of_birth' => $dob, 'expiry_date' => $expiry],
@@ -568,6 +571,12 @@ new class extends Component
     public function onChipFailed(string $reason): void
     {
         $this->chipError = $reason;
+    }
+
+    #[\Livewire\Attributes\On('chip-cleared')]
+    public function onChipCleared(): void
+    {
+        $this->chipError = '';
     }
 
     /**

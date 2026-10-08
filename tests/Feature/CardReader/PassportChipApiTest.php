@@ -315,4 +315,22 @@ class PassportChipApiTest extends TestCase
             ->call('poll')
             ->assertNotDispatched('chip-failed');
     }
+
+    public function test_a_stale_failure_message_is_cleared_once_the_request_is_gone(): void
+    {
+        $request = $this->openRequest();
+        app(PassportChipRequests::class)->markFailed($request, 'พัง');
+
+        session(['working_counter_id' => $this->counter->id]);
+
+        $inbox = \Livewire\Livewire::actingAs($this->adminUser)
+            ->test('card-reader.inbox')
+            ->call('poll')
+            ->assertDispatched('chip-failed');
+
+        // คำขอหมดอายุแล้ว ข้อความที่ค้างบนฟอร์มไม่ตรงกับอะไรอีก
+        $request->update(['expires_at' => now()->subSecond()]);
+
+        $inbox->call('poll')->assertDispatched('chip-cleared');
+    }
 }

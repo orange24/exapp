@@ -52,6 +52,12 @@ class Inbox extends Component
 
         $request = app(PassportChipRequests::class)->current($this->counterId);
 
+        if ($request === null && $this->announcedFailure !== 0) {
+            // คำขอหมดอายุหรือถูกแทนที่แล้ว ข้อความที่ค้างอยู่บนฟอร์มไม่ตรงกับอะไรอีก
+            $this->announcedFailure = 0;
+            $this->dispatch('chip-cleared');
+        }
+
         if ($this->chipState === 'failed' && $request !== null && $this->announcedFailure !== $request->id) {
             // ฟอร์มเป็นที่เดียวที่รู้ค่าที่พนักงานกรอกอยู่ จึงเป็นที่เดียวที่เสนอให้
             // แก้แล้วลองใหม่ได้ คอมโพเนนต์นี้ไม่รู้จักฟอร์ม จึงบอกผ่าน event
