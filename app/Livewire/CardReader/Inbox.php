@@ -31,6 +31,9 @@ class Inbox extends Component
     /** waiting | reading | failed | '' — เลือกว่าจะแสดงตัวหมุนหรือไม่ */
     public string $chipState = '';
 
+    /** คำขอที่แจ้งฟอร์มไปแล้ว กันไม่ให้แจ้งซ้ำทุกวินาทีครึ่ง */
+    public int $announcedFailure = 0;
+
     public function mount(): void
     {
         $this->counterId = (int) session('working_counter_id', 0);
@@ -46,6 +49,15 @@ class Inbox extends Component
         $this->health = $inbox->health($this->counterId);
 
         [$this->chipState, $this->chipStatus] = $this->describeChip();
+
+        $request = app(PassportChipRequests::class)->current($this->counterId);
+
+        if ($this->chipState === 'failed' && $request !== null && $this->announcedFailure !== $request->id) {
+            // ฟอร์มเป็นที่เดียวที่รู้ค่าที่พนักงานกรอกอยู่ จึงเป็นที่เดียวที่เสนอให้
+            // แก้แล้วลองใหม่ได้ คอมโพเนนต์นี้ไม่รู้จักฟอร์ม จึงบอกผ่าน event
+            $this->announcedFailure = $request->id;
+            $this->dispatch('chip-failed', reason: (string) $request->error);
+        }
 
         $card = $inbox->consume($this->counterId);
 

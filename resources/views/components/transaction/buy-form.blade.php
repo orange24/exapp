@@ -561,6 +561,45 @@ new class extends Component
         );
     }
 
+    /** เหตุผลที่อ่านชิปไม่สำเร็จ ว่างเมื่อไม่มีปัญหา */
+    public string $chipError = '';
+
+    #[\Livewire\Attributes\On('chip-failed')]
+    public function onChipFailed(string $reason): void
+    {
+        $this->chipError = $reason;
+    }
+
+    /**
+     * อ่านชิปใหม่ด้วยค่าที่พนักงานแก้เอง
+     *
+     * กุญแจเปิดชิปสร้างจากเลขพาสปอร์ต วันเกิด และวันหมดอายุ ถ้า OCR อ่านผิด
+     * แม้ตัวเดียวชิปจะไม่ยอมเปิด สามช่องนั้นแก้ได้อยู่แล้วบนฟอร์ม ปุ่มนี้จึงเอา
+     * ค่าที่เห็นอยู่ตรงหน้าไปลองใหม่ แทนที่จะบังคับให้ถ่ายรูปใหม่ทั้งใบ
+     */
+    public function retryPassportChip(): void
+    {
+        $this->chipError = '';
+
+        $yymmdd = function (string $iso): string {
+            $d = \DateTime::createFromFormat('Y-m-d', trim($iso));
+
+            return $d === false ? '' : $d->format('ymd');
+        };
+
+        $dob = $yymmdd($this->ocrDob);
+        $expiry = $yymmdd($this->ocrExpiry);
+        $no = trim($this->ocrPassportNo);
+
+        if ($no === '' || $dob === '' || $expiry === '') {
+            $this->chipError = 'ต้องมีเลขพาสปอร์ต วันเกิด และวันหมดอายุ ครบทั้งสามช่องก่อนจึงจะอ่านชิปได้';
+
+            return;
+        }
+
+        $this->requestPassportChip($no, $dob, $expiry);
+    }
+
     /** ชื่อ วันเกิด และรูปจากชิป เชื่อถือได้กว่าทุกอย่างที่ OCR ให้ */
     public string $chipPhoto = '';
     public string $chipAuthenticity = '';
@@ -577,6 +616,7 @@ new class extends Component
         $this->ocrExpiry = (string) ($card['expiry_date'] ?? '');
         $this->custName = trim($this->ocrFirstName . ' ' . $this->ocrLastName);
 
+        $this->chipError = '';
         $this->chipAuthenticity = (string) ($card['authenticity'] ?? '');
         $this->chipPhoto = ! empty($card['photo_base64']) && ($card['photo_mime'] ?? '') === 'image/jpeg'
             ? 'data:image/jpeg;base64,' . $card['photo_base64']

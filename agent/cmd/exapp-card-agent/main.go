@@ -293,8 +293,9 @@ func readPassport(ctx context.Context, api *client.Client, reader *card.Contactl
 			func(step string) { _ = api.PassportProgress(ctx, req.ID, step) },
 		)
 		if err != nil {
+			// log เก็บต้นฉบับไว้ให้ไล่ปัญหา ส่วนที่ส่งขึ้นไปต้องสั้นและบอกว่าทำอะไรต่อ
 			log.Printf("อ่านชิปไม่สำเร็จ: %v", err)
-			_ = api.FailPassport(ctx, req.ID, err.Error())
+			_ = api.FailPassport(ctx, req.ID, card.DescribeFailure(err))
 
 			return
 		}

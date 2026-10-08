@@ -88,7 +88,7 @@ class CardReaderController extends Controller
         $data = $request->validate([
             'request_id' => 'required|integer',
             'ok' => 'required|boolean',
-            'error' => 'nullable|string|max:255',
+            'error' => 'nullable|string',
             'document_no' => 'nullable|string|max:20',
             'surname' => 'nullable|string|max:120',
             'given_names' => 'nullable|string|max:120',
@@ -113,7 +113,16 @@ class CardReaderController extends Controller
         }
 
         if (! $data['ok']) {
-            $chip->markFailed($pending, $data['error'] ?: 'อ่านชิปไม่สำเร็จ');
+            /*
+             * ตัดให้พอดีแทนที่จะปฏิเสธ
+             *
+             * เดิมจำกัด 255 ตัวอักษร แล้วข้อความจากไลบรารียาว 281 ตัว คำขอจึงถูก
+             * ปฏิเสธด้วย 422 ความล้มเหลวไม่เคยไปถึงเซิร์ฟเวอร์ และหน้าจอค้างอยู่ที่
+             * "กำลังเปิดชิป..." ตลอดกาล
+             *
+             * รายงานความล้มเหลวต้องไม่หายไปเพราะเหตุผลยาวเกิน
+             */
+            $chip->markFailed($pending, mb_substr($data['error'] ?: 'อ่านชิปไม่สำเร็จ', 0, 250));
 
             return response()->json(['ok' => true]);
         }

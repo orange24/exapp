@@ -262,4 +262,57 @@ class PassportChipApiTest extends TestCase
             ->call('poll')
             ->assertSet('chipState', 'waiting');
     }
+
+    public function test_a_verbose_failure_reason_is_trimmed_rather_than_rejected(): void
+    {
+        $request = $this->openRequest();
+
+        // ข้อความจากไลบรารียาว 281 ตัวอักษร เกินขีด 255 เดิม คำขอจึงถูกปฏิเสธ
+        // ด้วย 422 ความล้มเหลวไม่เคยไปถึงเซิร์ฟเวอร์ และหน้าจอค้างอยู่ที่
+        // "กำลังเปิดชิป..." ตลอดกาล
+        $this->withToken($this->token)
+            ->postJson(route('api.card-reader.passport'), [
+                'request_id' => $request->id,
+                'ok' => false,
+                'error' => str_repeat('ก', 400),
+                'authenticity' => 'failed',
+            ])
+            ->assertOk();
+
+        $request->refresh();
+
+        $this->assertSame(CardReaderPassportRequest::STATUS_FAILED, $request->status);
+        $this->assertLessThanOrEqual(250, mb_strlen((string) $request->error));
+    }
+
+    public function test_the_form_is_offered_a_retry_when_the_chip_read_fails(): void
+    {
+        $request = $this->openRequest();
+        app(PassportChipRequests::class)->markFailed($request, 'ข้อมูลที่ใช้เปิดชิปไม่ตรงกับเล่มนี้');
+
+        session(['working_counter_id' => $this->counter->id]);
+
+        // ฟอร์มเป็นที่เดียวที่รู้ค่าที่พนักงานกรอกอยู่ จึงเป็นที่เดียวที่เสนอให้ลองใหม่ได้
+        \Livewire\Livewire::actingAs($this->adminUser)
+            ->test('card-reader.inbox')
+            ->call('poll')
+            ->assertDispatched('chip-failed');
+    }
+
+    public function test_the_same_failure_is_not_announced_over_and_over(): void
+    {
+        $request = $this->openRequest();
+        app(PassportChipRequests::class)->markFailed($request, 'พัง');
+
+        session(['working_counter_id' => $this->counter->id]);
+
+        // หน้าเว็บถามทุกวินาทีครึ่ง ถ้าแจ้งซ้ำทุกครั้ง ข้อความที่พนักงานปิดไปแล้ว
+        // จะเด้งกลับมาไม่หยุด
+        \Livewire\Livewire::actingAs($this->adminUser)
+            ->test('card-reader.inbox')
+            ->call('poll')
+            ->assertDispatched('chip-failed')
+            ->call('poll')
+            ->assertNotDispatched('chip-failed');
+    }
 }

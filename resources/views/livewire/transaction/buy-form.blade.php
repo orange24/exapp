@@ -1,6 +1,25 @@
 <div class="p-4" x-data="buyForm()" x-ref="lwRoot">
 <livewire:card-reader.inbox />
 
+{{-- อ่านชิปไม่สำเร็จ — กุญแจสร้างจากสามช่องที่แก้ได้บนฟอร์ม
+     ให้แก้แล้วลองใหม่ ดีกว่าบังคับให้ถ่ายรูปใหม่ทั้งใบ --}}
+@if ($chipError !== '')
+    <div class="mb-3 p-3 rounded border bg-amber-50 border-amber-400">
+        <div class="text-sm font-semibold text-amber-900">อ่านชิปพาสปอร์ตไม่สำเร็จ</div>
+        <div class="text-sm text-amber-800 mt-1">{{ $chipError }}</div>
+        <div class="text-xs text-amber-700 mt-2">
+            แก้ค่าในช่อง Passport No / วันเกิด / Expiry ด้านล่างให้ตรงกับเล่มจริง แล้วกดปุ่มนี้
+        </div>
+        <button type="button" wire:click="retryPassportChip"
+                wire:loading.attr="disabled"
+                class="mt-2 px-4 py-1.5 rounded text-white text-sm font-medium"
+                style="background-color:#0e513a">
+            อ่านชิปอีกครั้ง
+        </button>
+        <span class="text-xs text-gray-500 ml-2">ทำรายการต่อโดยไม่อ่านชิปก็ได้</span>
+    </div>
+@endif
+
 {{-- ข้อมูลจากชิปพาสปอร์ต — เชื่อถือได้กว่า OCR ทุกประการ
      รูปนี้มาจากชิป ไม่ใช่รูปที่พิมพ์บนหน้ากระดาษซึ่งอาจถูกเปลี่ยน --}}
 @if ($chipAuthenticity !== '')
