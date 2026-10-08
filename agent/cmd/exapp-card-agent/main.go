@@ -25,10 +25,10 @@ var version = "dev"
 
 const (
 	heartbeatEvery = 30 * time.Second
-	cardWaitWindow = 5 * time.Second
 
-	// กันการอ่านซ้ำตอนบัตรยังเสียบค้างอยู่ หรือหน้าสัมผัสขยับจนหลุดแล้วติดใหม่
-	sameCardCooldown = 10 * time.Second
+	// กรอบเวลาที่ยอมให้การรอบัตรค้างได้ก่อนวนมาเช็กสัญญาณปิดโปรแกรม
+	// ไม่ใช่จังหวะการถาม — การรอนี้บล็อกจริงจนกว่าจะมีบัตรเสียบ
+	cardWaitWindow = 5 * time.Second
 )
 
 func main() {
@@ -138,10 +138,14 @@ func run(cfg *config.Config) error {
 
 	go heartbeatLoop(ctx, api, reader)
 
-	log.Printf("exapp-card-agent %s — เฝ้าช่องเสียบบัตรอยู่", version)
+	watcher, err := reader.Watch()
+	if err != nil {
+		reportFatal(api, err)
 
-	var lastID string
-	var lastAt time.Time
+		return err
+	}
+
+	log.Printf("exapp-card-agent %s — เฝ้าช่องเสียบบัตรอยู่", version)
 
 	for {
 		select {
@@ -152,8 +156,16 @@ func run(cfg *config.Config) error {
 		default:
 		}
 
-		name, err := reader.WaitForCard(cardWaitWindow)
-		if err != nil || name == "" {
+		// อ่านเฉพาะจังหวะที่บัตรถูกเสียบเข้าไป บัตรที่ค้างอยู่จะเงียบ
+		// จนกว่าจะถูกดึงออกแล้วเสียบใหม่
+		name, err := watcher.WaitForInsertion(cardWaitWindow)
+		if err != nil {
+			log.Printf("เฝ้าช่องเสียบบัตรไม่สำเร็จ: %v", err)
+
+			continue
+		}
+
+		if name == "" {
 			continue
 		}
 
@@ -167,11 +179,6 @@ func run(cfg *config.Config) error {
 			continue
 		}
 
-		// บัตรใบเดิมที่ยังเสียบค้างอยู่ไม่ต้องส่งซ้ำทุกห้าวินาที
-		if data.CitizenID == lastID && time.Since(lastAt) < sameCardCooldown {
-			continue
-		}
-
 		if err := api.SendCard(ctx, data); err != nil {
 			if errors.Is(err, client.ErrRevoked) {
 				return fmt.Errorf("เครื่องนี้ถูกเพิกถอนจากระบบแล้ว — ติดต่อผู้ดูแลเพื่อขอ token ใหม่")
@@ -182,7 +189,6 @@ func run(cfg *config.Config) error {
 			continue
 		}
 
-		lastID, lastAt = data.CitizenID, time.Now()
 		log.Printf("ส่งข้อมูลบัตรขึ้นระบบแล้ว")
 	}
 }

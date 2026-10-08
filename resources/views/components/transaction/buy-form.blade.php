@@ -548,8 +548,19 @@ new class extends Component
     /** @param array<string, mixed> $card */
     private function fillFromIdCard(array $card): void
     {
+        $citizenId = (string) ($card['citizen_id'] ?? '');
+
+        // คนเดิมที่อยู่ในฟอร์มอยู่แล้วไม่ต้องสแกนซ้ำ
+        //
+        // การสแกนแต่ละครั้งสร้างรายการตรวจรายชื่อหนึ่งแถว ถ้าปล่อยให้ยิงซ้ำ
+        // ประวัติการตรวจของลูกค้าคนเดียวจะกลายเป็นสิบแถวในนาทีเดียว
+        // แล้วรายงานการตรวจรายชื่อจะอ่านไม่ได้ความ
+        if ($citizenId !== '' && $citizenId === $this->ocrPassportNo && $this->ocrIdType === 'national_id') {
+            return;
+        }
+
         $this->ocrIdType     = 'national_id';
-        $this->ocrPassportNo = (string) ($card['citizen_id'] ?? '');
+        $this->ocrPassportNo = $citizenId;
         $this->ocrFirstName  = (string) ($card['first_name_en'] ?? '');
         $this->ocrLastName   = (string) ($card['last_name_en'] ?? '');
         $this->ocrDob        = (string) ($card['date_of_birth'] ?? '');

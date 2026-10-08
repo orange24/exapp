@@ -178,4 +178,34 @@ class CounterFormFillTest extends TestCase
         $this->assertSame(1, app(CounterInbox::class)->prune());
         $this->assertSame([$fresh->id], CardReaderRead::pluck('id')->all());
     }
+
+    public function test_the_same_card_arriving_twice_does_not_screen_the_customer_twice(): void
+    {
+        $this->device();
+        $this->insertCard();
+
+        $page = Livewire::actingAs($this->staffUser)
+            ->test('transaction.buy-form')
+            ->call('pollCardReader');
+
+        $after = \App\Models\SanctionScreening::count();
+
+        $this->insertCard();
+        $page->call('pollCardReader');
+
+        // การสแกนแต่ละครั้งสร้างรายการตรวจรายชื่อหนึ่งแถว ถ้ายิงซ้ำได้
+        // ประวัติของลูกค้าคนเดียวจะกลายเป็นสิบแถวในนาทีเดียว
+        $this->assertSame($after, \App\Models\SanctionScreening::count());
+    }
+
+    public function test_a_consumed_card_is_deleted_not_merely_flagged(): void
+    {
+        $this->device();
+        $this->insertCard();
+
+        app(CounterInbox::class)->consume($this->counter->id);
+
+        // ข้อมูลประชาชนต้องไม่นอนค้างรอใครมา prune — ไม่มีอะไรเรียก prune ให้
+        $this->assertSame(0, CardReaderRead::count());
+    }
 }

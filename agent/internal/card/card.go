@@ -26,6 +26,25 @@ type Data struct {
 	PhotoBase64 string `json:"photo_jpeg_base64,omitempty"`
 }
 
+// InsertedReader คืนชื่อช่องที่ "เพิ่งมีบัตรเสียบเข้าไป" เทียบจากสถานะสองรอบ
+//
+// ต้องดูที่จังหวะเปลี่ยน ไม่ใช่ดูว่าตอนนี้มีบัตรอยู่ไหม — บัตรที่เสียบค้างไว้
+// มีสถานะ "มีบัตร" ตลอดเวลา ถ้าอ่านจากสถานะปัจจุบันจะอ่านซ้ำไม่หยุด
+// แล้วแต่ละรอบจะไปสร้างรายการตรวจรายชื่อใหม่ของลูกค้าคนเดิมทับกันเป็นสิบ
+func InsertedReader(names []string, before, after []bool) string {
+	for i, name := range names {
+		if i >= len(before) || i >= len(after) {
+			break
+		}
+
+		if after[i] && !before[i] {
+			return name
+		}
+	}
+
+	return ""
+}
+
 // SelectReaders เลือกช่องที่อาจมีบัตรประชาชนอยู่จริง
 //
 // เครื่องอ่านรุ่นสองหน้าอย่าง ACR1581 โผล่มาเป็นสามช่องแยกกัน:

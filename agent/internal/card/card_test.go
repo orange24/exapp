@@ -99,3 +99,44 @@ func TestSelectReadersReturnsNothingWhenOnlySamIsPresent(t *testing.T) {
 		t.Fatalf("มีแต่ช่อง SAM ต้องถือว่าไม่มีช่องให้ใช้ ได้ %v", got)
 	}
 }
+
+func TestInsertedReaderOnlyFiresOnTheMomentOfInsertion(t *testing.T) {
+	names := []string{"ICC"}
+
+	// เสียบเข้าไป -> อ่าน
+	if got := InsertedReader(names, []bool{false}, []bool{true}); got != "ICC" {
+		t.Fatalf("ตอนเสียบต้องคืนชื่อช่อง ได้ %q", got)
+	}
+
+	// เสียบค้างไว้ -> ต้องเงียบ ไม่งั้นจะอ่านซ้ำไม่หยุด
+	if got := InsertedReader(names, []bool{true}, []bool{true}); got != "" {
+		t.Fatalf("บัตรที่ค้างอยู่ต้องไม่ถูกอ่านซ้ำ ได้ %q", got)
+	}
+
+	// ดึงออก -> เงียบ
+	if got := InsertedReader(names, []bool{true}, []bool{false}); got != "" {
+		t.Fatalf("ตอนดึงออกต้องไม่อ่าน ได้ %q", got)
+	}
+
+	// ดึงออกแล้วเสียบใหม่ -> อ่านอีกครั้ง
+	if got := InsertedReader(names, []bool{false}, []bool{true}); got != "ICC" {
+		t.Fatalf("เสียบใหม่ต้องอ่านอีกครั้ง ได้ %q", got)
+	}
+}
+
+func TestInsertedReaderPicksTheSlotThatChanged(t *testing.T) {
+	names := []string{"SlotA", "SlotB"}
+
+	got := InsertedReader(names, []bool{true, false}, []bool{true, true})
+
+	if got != "SlotB" {
+		t.Fatalf("ต้องเลือกช่องที่เพิ่งเปลี่ยน ได้ %q", got)
+	}
+}
+
+func TestInsertedReaderSurvivesMismatchedLengths(t *testing.T) {
+	// เครื่องอ่านถูกถอดออกกลางคัน รายชื่อช่องกับสถานะอาจยาวไม่เท่ากัน
+	if got := InsertedReader([]string{"A", "B"}, []bool{false}, []bool{true}); got != "A" {
+		t.Fatalf("ไม่ควรพังและควรคืนช่องที่เทียบได้ ได้ %q", got)
+	}
+}

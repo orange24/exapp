@@ -59,18 +59,27 @@ func (r *Reader) AllReaders() ([]string, error) {
 	return r.ctx.ListReaders()
 }
 
-// WaitForCard รอจนมีบัตรถูกเสียบเข้าไป แล้วคืนชื่อเครื่องอ่านที่มีบัตร
+// Watcher เฝ้าจังหวะที่บัตรถูกเสียบเข้าไป
 //
-// ใช้ GetStatusChange ของ PC/SC ซึ่งเป็นการรอแบบที่ระบบปลุกให้
-// ไม่ใช่การวนถามทุกเสี้ยววินาที — ไม่งั้น CPU เครื่องสาขาจะร้อนทั้งวัน
-func (r *Reader) WaitForCard(timeout time.Duration) (string, error) {
+// เก็บสถานะรอบก่อนไว้แล้วส่งกลับเข้า GetStatusChange เป็น CurrentState
+// ซึ่งทำให้มันบล็อกรอจนกว่าจะมีอะไรเปลี่ยนจริง
+//
+// เดิมส่ง StateUnaware ทุกรอบ ซึ่ง PC/SC จะตอบกลับทันทีเสมอ วนลูปเปล่า
+// กินซีพียูทั้งวันบนเครื่องสาขายี่สิบเครื่อง
+type Watcher struct {
+	ctx    *scard.Context
+	names  []string
+	states []scard.ReaderState
+}
+
+func (r *Reader) Watch() (*Watcher, error) {
 	names, err := r.Readers()
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	if len(names) == 0 {
-		return "", fmt.Errorf("ไม่พบเครื่องอ่านบัตร")
+		return nil, fmt.Errorf("ไม่พบเครื่องอ่านบัตร")
 	}
 
 	states := make([]scard.ReaderState, len(names))
@@ -79,17 +88,36 @@ func (r *Reader) WaitForCard(timeout time.Duration) (string, error) {
 		states[i].CurrentState = scard.StateUnaware
 	}
 
-	if err := r.ctx.GetStatusChange(states, timeout); err != nil {
+	return &Watcher{ctx: r.ctx, names: names, states: states}, nil
+}
+
+// WaitForInsertion บล็อกจนมีบัตรถูกเสียบ คืนชื่อช่องนั้น
+// คืนค่าว่างเมื่อหมดเวลาหรือมีการเปลี่ยนแปลงที่ไม่ใช่การเสียบบัตร
+func (w *Watcher) WaitForInsertion(timeout time.Duration) (string, error) {
+	before := make([]bool, len(w.states))
+	for i := range w.states {
+		before[i] = w.states[i].CurrentState&scard.StatePresent != 0
+	}
+
+	err := w.ctx.GetStatusChange(w.states, timeout)
+	if err == scard.ErrTimeout {
+		return "", nil
+	}
+
+	if err != nil {
 		return "", err
 	}
 
-	for _, s := range states {
-		if s.EventState&scard.StatePresent != 0 {
-			return s.Reader, nil
-		}
+	after := make([]bool, len(w.states))
+	for i := range w.states {
+		after[i] = w.states[i].EventState&scard.StatePresent != 0
+
+		// ต้องตัดบิต StateChanged ออกก่อนส่งกลับ ไม่งั้นรอบถัดไปจะถูกมองว่า
+		// "เปลี่ยนแล้ว" ตลอดเวลา แล้วกลับไปวนเปล่าเหมือนเดิม
+		w.states[i].CurrentState = w.states[i].EventState &^ scard.StateChanged
 	}
 
-	return "", nil
+	return InsertedReader(w.names, before, after), nil
 }
 
 func transmit(c *scard.Card, cmd []byte) ([]byte, error) {
