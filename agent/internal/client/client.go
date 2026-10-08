@@ -9,9 +9,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"net"
 	"net/http"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/softernity/exapp-card-agent/internal/card"
@@ -28,12 +32,43 @@ type Client struct {
 }
 
 func New(baseURL, token, version string) *Client {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+
+	// ทิ้ง connection ที่ว่างเร็วกว่าที่ปลายทางจะทิ้ง
+	//
+	// Cloud Run ปิด connection ที่ไม่มีอะไรวิ่งหลังไม่กี่นาที ถ้าเราเก็บไว้นานกว่านั้น
+	// จะหยิบตัวที่ตายแล้วมาใช้แล้วเจอ connection reset by peer
+	// เจอจริงบนเครื่องสาขา: สัญญาณชีพล้มสองครั้งใน 3 ชั่วโมง
+	transport.IdleConnTimeout = 30 * time.Second
+
 	return &Client{
 		baseURL: strings.TrimRight(baseURL, "/"),
 		token:   token,
 		version: version,
-		http:    &http.Client{Timeout: 20 * time.Second},
+		http:    &http.Client{Timeout: 20 * time.Second, Transport: transport},
 	}
+}
+
+/*
+staleConnection บอกว่าคำขอล้มเพราะ connection ที่ตายแล้ว ไม่ใช่เพราะเซิร์ฟเวอร์ปฏิเสธ
+
+Go ลองใหม่ให้เองเฉพาะคำขอที่ซ้ำได้ปลอดภัย POST ไม่เข้าข่ายเพราะมันไม่รู้ว่า
+เซิร์ฟเวอร์ประมวลผลไปแล้วหรือยัง เราจึงต้องแยกเองว่าเคสไหนลองใหม่ได้
+
+เคสนี้ปลอดภัยที่จะลองใหม่ เพราะคำขอไม่เคยไปถึงเซิร์ฟเวอร์เลย
+*/
+func staleConnection(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	if errors.Is(err, syscall.ECONNRESET) || errors.Is(err, syscall.EPIPE) || errors.Is(err, io.EOF) {
+		return true
+	}
+
+	var netErr *net.OpError
+
+	return errors.As(err, &netErr)
 }
 
 func (c *Client) post(ctx context.Context, path string, body any) error {
@@ -52,6 +87,18 @@ func (c *Client) post(ctx context.Context, path string, body any) error {
 	req.Header.Set("Authorization", "Bearer "+c.token)
 
 	resp, err := c.http.Do(req)
+
+	if staleConnection(err) {
+		// สร้างคำขอใหม่ทั้งใบ — ตัวเดิมอ่าน body ไปแล้วใช้ซ้ำไม่ได้
+		retry, buildErr := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, bytes.NewReader(raw))
+		if buildErr != nil {
+			return err
+		}
+
+		retry.Header = req.Header.Clone()
+		resp, err = c.http.Do(retry)
+	}
+
 	if err != nil {
 		return err
 	}
