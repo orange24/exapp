@@ -24,7 +24,17 @@ import (
 var version = "dev"
 
 const (
-	heartbeatEvery = 30 * time.Second
+	/*
+	 * สองวินาที ไม่ใช่สามสิบ
+	 *
+	 * สัญญาณชีพเป็นทางเดียวที่กุญแจเปิดชิปเดินทางมาถึง agent ได้ ที่สามสิบวินาที
+	 * พนักงานถ่ายรูปเสร็จแล้วแตะทันที แต่ agent ยังไม่รู้เรื่อง การแตะจึงเงียบสนิท
+	 * แล้วพนักงานจะคิดว่าเครื่องเสีย
+	 *
+	 * ยี่สิบสาขา = สิบคำขอต่อวินาที ซึ่ง Cloud Run รับสบาย และไม่ได้ทำให้ instance
+	 * ตื่นมากกว่าเดิมเพราะสามสิบวินาทีก็ตื่นอยู่แล้ว แลกมาด้วยไฟสถานะที่ไวขึ้นด้วย
+	 */
+	heartbeatEvery = 2 * time.Second
 
 	// กรอบเวลาที่ยอมให้การรอบัตรค้างได้ก่อนวนมาเช็กสัญญาณปิดโปรแกรม
 	// ไม่ใช่จังหวะการถาม — การรอนี้บล็อกจริงจนกว่าจะมีบัตรเสียบ
@@ -260,7 +270,7 @@ func passportLoop(ctx context.Context, api *client.Client, reader *card.Reader, 
 }
 
 func readPassport(ctx context.Context, api *client.Client, reader *card.ContactlessReader, req *client.PassportRequest) {
-	log.Printf("รอแตะพาสปอร์ต (คำขอ #%d)", req.ID)
+	log.Printf("ได้กุญแจแล้ว — วางพาสปอร์ตบนแท่นได้เลย (คำขอ #%d)", req.ID)
 
 	deadline := time.Now().Add(passportTapWindow)
 
