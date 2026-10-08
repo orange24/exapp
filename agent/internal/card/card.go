@@ -26,6 +26,45 @@ type Data struct {
 	PhotoBase64 string `json:"photo_jpeg_base64,omitempty"`
 }
 
+// SelectReaders เลือกช่องที่อาจมีบัตรประชาชนอยู่จริง
+//
+// เครื่องอ่านรุ่นสองหน้าอย่าง ACR1581 โผล่มาเป็นสามช่องแยกกัน:
+//
+//	ACS ACR1581 1S Dual Reader SAM   โมดูลความปลอดภัยในตัวเครื่อง
+//	ACS ACR1581 1S Dual Reader ICC   ช่องเสียบสัมผัส  <- บัตรประชาชนไทยอยู่ตรงนี้
+//	ACS ACR1581 1S Dual Reader PICC  ช่องไร้สัมผัส
+//
+// ช่อง SAM รายงานว่า "มีการ์ดอยู่" ตลอดเวลาเพราะโมดูลติดมากับเครื่อง
+// ถ้าไม่คัดออก ตัวเฝ้าจะคว้าช่องนั้นทุกครั้งแล้วอ่านไม่ออก ไฟขึ้นแดงค้าง
+// ส่วนบัตรจริงในช่องสัมผัสจะไม่มีวันถูกอ่านเลย
+//
+// บัตรประชาชนไทยเป็นชิปสัมผัส จึงเลือกช่องสัมผัสก่อนถ้ามี
+// เครื่องที่มีช่องเดียวจะไม่เข้าเงื่อนไขนี้ และใช้ช่องที่เหลือตามปกติ
+func SelectReaders(all []string) []string {
+	var usable, contact []string
+
+	for _, name := range all {
+		upper := strings.ToUpper(name)
+
+		if strings.Contains(upper, "SAM") {
+			continue
+		}
+
+		usable = append(usable, name)
+
+		// ต้องตัด PICC ออกก่อน ไม่งั้นมันจะเข้าเงื่อนไข ICC ด้วยเพราะเป็นคำซ้อนกัน
+		if !strings.Contains(upper, "PICC") && strings.Contains(upper, "ICC") {
+			contact = append(contact, name)
+		}
+	}
+
+	if len(contact) > 0 {
+		return contact
+	}
+
+	return usable
+}
+
 // DecodeTIS620 แปลงข้อความจากชิปเป็น UTF-8
 //
 // ชิปเก็บภาษาไทยเป็น TIS-620 ไม่ใช่ UTF-8 ถ้าอ่านดิบ ๆ จะได้ตัวอักษรขยะ

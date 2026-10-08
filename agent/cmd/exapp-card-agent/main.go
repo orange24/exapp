@@ -36,10 +36,16 @@ func main() {
 	server := flag.String("server", "", "ที่อยู่ exapp เช่น https://exapp.softernity.com")
 	token := flag.String("token", "", "token ประจำเครื่องจากหน้าผู้ดูแลระบบ")
 	showVersion := flag.Bool("version", false, "แสดงรุ่น")
+	listReaders := flag.Bool("list-readers", false, "แสดงเครื่องอ่านที่เสียบอยู่ แล้วออก")
 	flag.Parse()
 
 	if *showVersion {
 		fmt.Println(version)
+		return
+	}
+
+	if *listReaders {
+		runListReaders()
 		return
 	}
 
@@ -56,6 +62,50 @@ func main() {
 
 	if err := run(cfg); err != nil {
 		log.Fatal(err)
+	}
+}
+
+// runListReaders ช่วยวินิจฉัยตอนติดตั้งครั้งแรก
+//
+// ถ้าไม่ขึ้นชื่อเครื่องอ่าน ปัญหาอยู่ที่สาย ไดรเวอร์ หรือ PC/SC ไม่ใช่ที่ token
+// หรือเน็ต — แยกสองเรื่องนี้ออกจากกันได้ก่อนจะไปไล่ผิดทาง
+func runListReaders() {
+	r, err := card.NewReader()
+	if err != nil {
+		fmt.Printf("ต่อกับบริการ PC/SC ไม่ได้: %v\n", err)
+		os.Exit(1)
+	}
+	defer r.Close()
+
+	all, err := r.AllReaders()
+	if err != nil {
+		fmt.Printf("อ่านรายชื่อเครื่องไม่ได้: %v\n", err)
+		os.Exit(1)
+	}
+
+	if len(all) == 0 {
+		fmt.Println("ไม่พบเครื่องอ่านบัตร — ตรวจสายและไดรเวอร์")
+		os.Exit(1)
+	}
+
+	usable := map[string]bool{}
+	for _, n := range card.SelectReaders(all) {
+		usable[n] = true
+	}
+
+	fmt.Printf("ระบบเห็นช่องทั้งหมด %d ช่อง:\n", len(all))
+	for _, n := range all {
+		mark := "ข้าม"
+		if usable[n] {
+			mark = "ใช้ช่องนี้"
+		}
+
+		fmt.Printf("  [%-10s] %s\n", mark, n)
+	}
+
+	if len(usable) == 0 {
+		fmt.Println("\nไม่มีช่องที่ใช้ได้ — เห็นแต่ช่อง SAM ซึ่งไม่ใช่ช่องเสียบบัตรประชาชน")
+		os.Exit(1)
 	}
 }
 

@@ -62,3 +62,40 @@ func TestDecodeTIS620(t *testing.T) {
 		t.Fatalf("อยากได้ \"นาย\" ได้ %q", got)
 	}
 }
+
+func TestSelectReadersSkipsTheSamSlot(t *testing.T) {
+	// ช่อง SAM รายงานว่ามีการ์ดอยู่ตลอด ถ้าไม่คัดออก ตัวเฝ้าจะคว้าช่องนั้น
+	// ทุกครั้งแล้วอ่านไม่ออก ส่วนบัตรจริงจะไม่มีวันถูกอ่าน
+	got := SelectReaders([]string{
+		"ACS ACR1581 1S Dual Reader SAM",
+		"ACS ACR1581 1S Dual Reader ICC",
+		"ACS ACR1581 1S Dual Reader PICC",
+	})
+
+	if len(got) != 1 || got[0] != "ACS ACR1581 1S Dual Reader ICC" {
+		t.Fatalf("ควรเหลือช่องสัมผัสช่องเดียว ได้ %v", got)
+	}
+}
+
+func TestSelectReadersDoesNotMistakePiccForIcc(t *testing.T) {
+	// PICC มีคำว่า ICC ซ้อนอยู่ ถ้าเทียบไม่ระวังจะเลือกช่องไร้สัมผัสมาด้วย
+	got := SelectReaders([]string{"Some Reader PICC"})
+
+	if len(got) != 1 || got[0] != "Some Reader PICC" {
+		t.Fatalf("เครื่องที่มีแต่ช่องไร้สัมผัสควรยังใช้ได้ ได้ %v", got)
+	}
+}
+
+func TestSelectReadersKeepsASingleSlotReader(t *testing.T) {
+	got := SelectReaders([]string{"Generic Smart Card Reader 0"})
+
+	if len(got) != 1 {
+		t.Fatalf("เครื่องช่องเดียวต้องไม่ถูกคัดทิ้ง ได้ %v", got)
+	}
+}
+
+func TestSelectReadersReturnsNothingWhenOnlySamIsPresent(t *testing.T) {
+	if got := SelectReaders([]string{"Reader SAM"}); len(got) != 0 {
+		t.Fatalf("มีแต่ช่อง SAM ต้องถือว่าไม่มีช่องให้ใช้ ได้ %v", got)
+	}
+}

@@ -29,6 +29,13 @@ class DeviceManager extends Component
             'counterId' => 'required|exists:counters,id',
         ], attributes: ['name' => 'ชื่อเครื่อง', 'counterId' => 'เคาน์เตอร์']);
 
+        // รายการใน dropdown ไม่ใช่การควบคุมสิทธิ์ — ค่าที่ส่งมาแก้ได้จากฝั่งผู้ใช้
+        if (! $this->countersInScope()->where('counters.id', (int) $this->counterId)->exists()) {
+            $this->addError('counterId', 'เลือกได้เฉพาะเคาน์เตอร์ในสาขาของคุณ');
+
+            return;
+        }
+
         $token = 'crd_' . Str::random(40);
 
         $device = CardReaderDevice::create([
@@ -46,8 +53,17 @@ class DeviceManager extends Component
 
     public function revoke(int $id): void
     {
-        CardReaderDevice::whereNull('revoked_at')->where('id', $id)
-            ->update(['revoked_at' => now()]);
+        $query = CardReaderDevice::whereNull('revoked_at')->where('id', $id);
+
+        if (! Auth::user()?->isAdmin()) {
+            $query->whereIn('counter_id', $this->countersInScope()->pluck('counters.id'));
+        }
+
+        if ($query->update(['revoked_at' => now()]) === 0) {
+            session()->flash('error', 'เพิกถอนไม่ได้ — ไม่พบเครื่องนี้ในสาขาของคุณ');
+
+            return;
+        }
 
         session()->flash('success', 'เพิกถอนเครื่องแล้ว — เครื่องนั้นส่งข้อมูลเข้าระบบไม่ได้อีก');
     }
@@ -60,16 +76,39 @@ class DeviceManager extends Component
 
     public function getDevicesProperty()
     {
-        return CardReaderDevice::with('counter.branch')
+        $query = CardReaderDevice::with('counter.branch')
             ->orderByRaw('revoked_at is null desc')
-            ->orderByDesc('id')
-            ->get();
+            ->orderByDesc('id');
+
+        if (! Auth::user()?->isAdmin()) {
+            $query->whereIn('counter_id', $this->countersInScope()->pluck('counters.id'));
+        }
+
+        return $query->get();
     }
 
     public function getCountersProperty()
     {
-        return Counter::where('is_active', true)->with('branch')
-            ->orderBy('branch_id')->orderBy('counter_name')->get();
+        return $this->countersInScope()->get();
+    }
+
+    /**
+     * เคาน์เตอร์ที่ผู้ใช้คนนี้ผูกเครื่องเข้าไปได้
+     *
+     * branch_manager ก็ถือ module1/write เหมือน admin จึงเข้าหน้านี้ได้
+     * ถ้าไม่จำกัด เขาจะผูกเครื่องเข้ากับเคาน์เตอร์ของสาขาอื่นได้ แล้วยิง
+     * ข้อมูลบัตรเข้าไปโผล่ที่หน้าจอของสาขานั้น
+     */
+    private function countersInScope()
+    {
+        $query = Counter::where('is_active', true)->with('branch')
+            ->orderBy('branch_id')->orderBy('counter_name');
+
+        if (! Auth::user()?->isAdmin()) {
+            $query->where('branch_id', Auth::user()?->branch_id);
+        }
+
+        return $query;
     }
 
     public function render()

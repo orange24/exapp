@@ -44,8 +44,18 @@ func (r *Reader) Close() {
 	}
 }
 
-// Readers คืนรายชื่อเครื่องอ่านที่เสียบอยู่
+// Readers คืนเฉพาะช่องที่อาจมีบัตรประชาชนอยู่จริง (ดู SelectReaders)
 func (r *Reader) Readers() ([]string, error) {
+	all, err := r.ctx.ListReaders()
+	if err != nil {
+		return nil, err
+	}
+
+	return SelectReaders(all), nil
+}
+
+// AllReaders คืนทุกช่องตามที่ระบบรายงาน ใช้ตอนวินิจฉัยเท่านั้น
+func (r *Reader) AllReaders() ([]string, error) {
 	return r.ctx.ListReaders()
 }
 
