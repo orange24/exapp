@@ -260,6 +260,58 @@
                         <button @click="confirmCapture()" type="button" style="flex:1; padding:10px; background:#2563eb; color:#fff; font-weight:700; border:none; border-radius:8px; cursor:pointer;">ยืนยัน</button>
                     </div>
                 </div>
+                {{-- ผลการสแกน — เดิมสำเร็จแล้วเงียบสนิท พนักงานแยกไม่ออกว่า
+                     "อ่านได้แล้ว" กับ "ยังไม่ได้ทำอะไร" ต่างกันตรงไหน --}}
+                <template x-if="ocrResult && !ocrLoading">
+                    <div style="margin-top:10px; padding:10px 12px; border-radius:8px;"
+                         :style="ocrAllChecksPassed()
+                            ? 'background:#064e3b; border:1px solid #10b981;'
+                            : 'background:#78350f; border:1px solid #f59e0b;'">
+                        <div style="font-weight:700; margin-bottom:6px;"
+                             :style="ocrAllChecksPassed() ? 'color:#6ee7b7;' : 'color:#fcd34d;'"
+                             x-text="ocrAllChecksPassed()
+                                ? 'อ่านข้อมูลสำเร็จ — เลขตรวจสอบของพาสปอร์ตถูกต้อง'
+                                : 'อ่านได้ แต่บางตัวเลขอาจเพี้ยน — ตรวจกับเล่มจริงก่อนบันทึก'"></div>
+
+                        <table style="width:100%; font-size:13px; color:#e5e7eb;">
+                            <tr>
+                                <td style="padding:2px 0; width:110px; opacity:.75;">เลขพาสปอร์ต</td>
+                                <td style="font-family:monospace;" x-text="ocrResult.passportNo || '-'"></td>
+                                <td style="width:24px; text-align:right;" x-html="ocrMark(ocrResult.checks.passportNo)"></td>
+                            </tr>
+                            <tr>
+                                <td style="padding:2px 0; opacity:.75;">ชื่อ</td>
+                                <td colspan="2" x-text="((ocrResult.firstName || '') + ' ' + (ocrResult.lastName || '')).trim() || '-'"></td>
+                            </tr>
+                            <tr>
+                                <td style="padding:2px 0; opacity:.75;">สัญชาติ</td>
+                                <td colspan="2" x-text="ocrResult.nationality || '-'"></td>
+                            </tr>
+                            <tr>
+                                <td style="padding:2px 0; opacity:.75;">วันเกิด</td>
+                                <td style="font-family:monospace;" x-text="ocrResult.dob || '-'"></td>
+                                <td style="text-align:right;" x-html="ocrMark(ocrResult.checks.dob)"></td>
+                            </tr>
+                            <tr>
+                                <td style="padding:2px 0; opacity:.75;">วันหมดอายุ</td>
+                                <td style="font-family:monospace;" x-text="ocrResult.expiry || '-'"></td>
+                                <td style="text-align:right;" x-html="ocrMark(ocrResult.checks.expiry)"></td>
+                            </tr>
+                        </table>
+
+                        <div style="margin-top:8px; display:flex; gap:8px;">
+                            <button type="button" @click="closeCamera()"
+                                    style="flex:1; padding:8px; border-radius:6px; background:#10b981; color:#042f2e; font-weight:700;">
+                                ใช้ข้อมูลนี้
+                            </button>
+                            <button type="button" @click="ocrResult=null; step='crop'; $nextTick(() => initCropper());"
+                                    style="padding:8px 14px; border-radius:6px; background:#374151; color:#e5e7eb;">
+                                ครอปใหม่
+                            </button>
+                        </div>
+                    </div>
+                </template>
+
                 <div x-show="ocrLoading" style="margin-top:10px; padding:8px 12px; background:#1e3a5f; border-radius:8px; text-align:center;">
                     <span style="color:#facc15; font-weight:600;" x-text="ocrError || 'กำลังประมวลผล OCR...'"></span>
                 </div>
@@ -558,12 +610,48 @@ function buyForm() {
                 if (typeof Tesseract === 'undefined') { await new Promise((r, j) => { const s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'; s.onload = r; s.onerror = () => j(new Error('ไม่สามารถโหลด Tesseract.js')); document.head.appendChild(s); }); }
                 const { data } = await Tesseract.recognize(imageData, 'eng', { logger: m => { if (m.status === 'recognizing text') this.ocrError = 'กำลังอ่าน... ' + Math.round(m.progress * 100) + '%'; } });
                 const parsed = this.parseMRZ(data.text);
-                if (parsed.passportNo) { this.callLw('receiveOcrData', parsed); this.callLw('receivePassportImage', this.capturedImage); this.ocrError = ''; }
+                if (parsed.passportNo) { this.callLw('receiveOcrData', parsed); this.callLw('receivePassportImage', this.capturedImage); this.ocrError = ''; this.ocrResult = parsed; }
                 else { this.ocrError = 'ไม่พบข้อมูล MRZ — ลอง Crop เฉพาะแถบตัวอักษรด้านล่าง passport'; }
             } catch(e) { this.ocrError = 'เกิดข้อผิดพลาด: ' + e.message; } finally { this.ocrLoading = false; }
         },
+        /*
+         * เลขตรวจสอบของ MRZ ตาม ICAO 9303 — น้ำหนัก 7,3,1 วนไป
+         * A=10 ... Z=35, '<'=0
+         *
+         * มีไว้บอกว่า OCR อ่านถูกหรือเพี้ยน ซึ่งเป็นสิ่งเดียวที่แยกสองอย่างนี้ออกได้
+         * โดยไม่ต้องให้คนไปเทียบกับเล่มจริงทีละตัว — OCR สับสน 0 กับ O และ 1 กับ I
+         * เป็นประจำ และตัวเลขที่เพี้ยนไปตัวเดียวทำให้เทียบรายชื่อ ปปง. พลาดทั้งใบ
+         */
+        mrzCheckDigit(value) {
+            const weights = [7, 3, 1];
+            let sum = 0;
+
+            for (let i = 0; i < value.length; i++) {
+                const c = value[i];
+                let v;
+
+                if (c >= '0' && c <= '9') v = c.charCodeAt(0) - 48;
+                else if (c >= 'A' && c <= 'Z') v = c.charCodeAt(0) - 55;
+                else if (c === '<') v = 0;
+                else return null;
+
+                sum += v * weights[i % 3];
+            }
+
+            return String(sum % 10);
+        },
+
+        /** คืน true/false เมื่อตรวจได้ คืน null เมื่อ OCR อ่านเลขตรวจสอบไม่ออก */
+        mrzFieldOk(value, expected) {
+            if (!/^\d$/.test(expected)) return null;
+
+            const got = this.mrzCheckDigit(value);
+
+            return got === null ? null : got === expected;
+        },
+
         parseMRZ(text) {
-            const result = { firstName: '', lastName: '', nationality: '', dob: '', expiry: '', passportNo: '' };
+            const result = { firstName: '', lastName: '', nationality: '', dob: '', expiry: '', passportNo: '', checks: {} };
             const rawLines = text.split('\n').map(l => l.trim()).filter(l => l.length > 10);
             let rawLine1 = null;
             for (const rl of rawLines) {
@@ -591,6 +679,13 @@ function buyForm() {
                 const dob = l2.substring(13,19), exp = l2.substring(21,27);
                 if (/^\d{6}$/.test(dob)) { const yy = parseInt(dob.substring(0,2)); result.dob = (yy <= parseInt(new Date().getFullYear().toString().substring(2))?'20':'19') + dob.substring(0,2)+'-'+dob.substring(2,4)+'-'+dob.substring(4,6); }
                 if (/^\d{6}$/.test(exp)) result.expiry = '20'+exp.substring(0,2)+'-'+exp.substring(2,4)+'-'+exp.substring(4,6);
+
+                // เลขตรวจสอบอยู่ถัดจากแต่ละช่องตามมาตรฐาน ไม่ใช่ท้ายบรรทัด
+                result.checks = {
+                    passportNo: this.mrzFieldOk(l2.substring(0, 9), l2.charAt(9)),
+                    dob: this.mrzFieldOk(dob, l2.charAt(19)),
+                    expiry: this.mrzFieldOk(exp, l2.charAt(27)),
+                };
             }
             return result;
         },
