@@ -15,10 +15,37 @@
                 ค่านี้แสดงครั้งเดียว ปิดไปแล้วดูไม่ได้อีก ระบบเก็บไว้แค่ลายนิ้วมือของมัน
                 ถ้าทำหายให้สร้างเครื่องใหม่แล้วเพิกถอนตัวเก่า
             </p>
-            <div class="mt-3 p-3 bg-white border rounded font-mono text-sm break-all">{{ $issuedToken }}</div>
-            <button wire:click="dismissToken" class="mt-3 px-4 py-1.5 text-sm rounded bg-amber-600 text-white">
-                คัดลอกแล้ว ปิดได้
-            </button>
+            <div x-data="{ copied: false }">
+                <div class="mt-3 p-3 bg-white border rounded font-mono text-sm break-all"
+                     x-ref="token">{{ $issuedToken }}</div>
+
+                <div class="mt-3 flex items-center gap-2">
+                    {{-- คัดลอกให้จริง ไม่ใช่ให้ลากเลือกเอง — token ยาว 44 ตัวอักษร
+                         ลากพลาดไปตัวเดียวแล้วเครื่องจะต่อไม่ได้โดยไม่รู้สาเหตุ --}}
+                    <button type="button"
+                            @click="
+                                navigator.clipboard.writeText($refs.token.textContent.trim())
+                                    .then(() => { copied = true; setTimeout(() => copied = false, 2000) })
+                                    .catch(() => {
+                                        // บางเบราว์เซอร์ไม่ให้ใช้ clipboard — เลือกข้อความให้กด Cmd+C เอง
+                                        const r = document.createRange();
+                                        r.selectNodeContents($refs.token);
+                                        getSelection().removeAllRanges();
+                                        getSelection().addRange(r);
+                                    })
+                            "
+                            class="px-4 py-1.5 text-sm rounded text-white font-medium"
+                            style="background-color:#0e513a">
+                        <span x-show="!copied">คัดลอก token</span>
+                        <span x-show="copied" x-cloak>คัดลอกแล้ว</span>
+                    </button>
+
+                    <button type="button" wire:click="dismissToken"
+                            class="px-4 py-1.5 text-sm rounded border border-amber-600 text-amber-900">
+                        ปิด
+                    </button>
+                </div>
+            </div>
         </div>
     @endif
 
