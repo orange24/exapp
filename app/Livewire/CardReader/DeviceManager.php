@@ -76,8 +76,15 @@ class DeviceManager extends Component
 
     public function getDevicesProperty()
     {
+        /*
+         * เครื่องที่เพิกถอนแล้วไม่ต้องแสดง
+         *
+         * แถวยังอยู่ในฐานข้อมูล เพราะ revoked_at คือสิ่งที่ทำให้ token ใบนั้น
+         * ใช้ไม่ได้ และเป็นหลักฐานว่าเคยมีเครื่องนี้อยู่ที่เคาน์เตอร์ไหน
+         * แต่ในรายการที่คนดูทุกวัน มันเป็นแค่สิ่งรบกวนสายตา
+         */
         $query = CardReaderDevice::with('counter.branch')
-            ->orderByRaw('revoked_at is null desc')
+            ->active()
             ->orderByDesc('id');
 
         if (! Auth::user()?->isAdmin()) {

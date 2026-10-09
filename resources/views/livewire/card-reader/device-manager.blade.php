@@ -102,15 +102,13 @@
                     </thead>
                     <tbody>
                         @foreach ($this->devices as $d)
-                            <tr class="border-b last:border-0 {{ $d->revoked_at ? 'opacity-50' : '' }}">
+                            <tr class="border-b last:border-0">
                                 <td class="py-2 pr-3">{{ $d->name }}</td>
                                 <td class="py-2 pr-3 text-xs text-gray-600">
                                     {{ $d->counter?->branch?->branch_name }} — {{ $d->counter?->counter_name }}
                                 </td>
                                 <td class="py-2 pr-3">
-                                    @if ($d->revoked_at)
-                                        <span class="text-gray-500">เพิกถอนแล้ว</span>
-                                    @elseif ($d->health() === 'ready')
+                                    @if ($d->health() === 'ready')
                                         <span class="text-green-700">● พร้อม</span>
                                     @elseif ($d->health() === 'error')
                                         <span class="text-red-700" title="{{ $d->last_error }}">● มีปัญหา</span>
@@ -121,13 +119,11 @@
                                 <td class="py-2 pr-3 text-xs">{{ $d->last_seen_at?->format('d/m/Y H:i:s') ?? '-' }}</td>
                                 <td class="py-2 pr-3 text-xs">{{ $d->agent_version ?? '-' }}</td>
                                 <td class="py-2 text-right">
-                                    @unless ($d->revoked_at)
-                                        <button wire:click="revoke({{ $d->id }})"
-                                                wire:confirm="เพิกถอนเครื่องนี้? เครื่องจะส่งข้อมูลเข้าระบบไม่ได้อีกทันที และกู้คืนไม่ได้"
-                                                class="text-xs text-red-700 border border-red-300 rounded px-3 py-1">
-                                            เพิกถอน
-                                        </button>
-                                    @endunless
+                                    <button wire:click="revoke({{ $d->id }})"
+                                            wire:confirm="เพิกถอนเครื่องนี้? เครื่องจะส่งข้อมูลเข้าระบบไม่ได้อีกทันที กู้คืนไม่ได้ และจะหายไปจากรายการนี้"
+                                            class="text-xs text-red-700 border border-red-300 rounded px-3 py-1">
+                                        เพิกถอน
+                                    </button>
                                 </td>
                             </tr>
                         @endforeach

@@ -130,4 +130,40 @@ class DeviceManagerScopeTest extends TestCase
         $this->assertTrue($page->instance()->counters->contains('id', $this->otherCounter->id));
         $this->assertCount(1, $page->instance()->devices);
     }
+
+    public function test_a_revoked_device_disappears_from_the_list(): void
+    {
+        $live = CardReaderDevice::create([
+            'name' => 'เครื่องที่ใช้อยู่',
+            'counter_id' => $this->counter->id,
+            'token_hash' => CardReaderDevice::hashToken('crd_live'),
+        ]);
+
+        CardReaderDevice::create([
+            'name' => 'เครื่องที่เพิกถอนแล้ว',
+            'counter_id' => $this->counter->id,
+            'token_hash' => CardReaderDevice::hashToken('crd_dead'),
+            'revoked_at' => now(),
+        ]);
+
+        $devices = Livewire::actingAs($this->adminUser)
+            ->test('card-reader.device-manager')
+            ->instance()->devices;
+
+        $this->assertSame([$live->id], $devices->pluck('id')->all());
+    }
+
+    public function test_a_revoked_device_is_hidden_but_not_forgotten(): void
+    {
+        $device = CardReaderDevice::create([
+            'name' => 'เครื่องที่เพิกถอนแล้ว',
+            'counter_id' => $this->counter->id,
+            'token_hash' => CardReaderDevice::hashToken('crd_dead'),
+            'revoked_at' => now(),
+        ]);
+
+        // แถวต้องยังอยู่ — revoked_at คือสิ่งที่ทำให้ token ใบนั้นใช้ไม่ได้
+        // และเป็นหลักฐานว่าเคยมีเครื่องนี้อยู่ที่เคาน์เตอร์ไหน
+        $this->assertNotNull($device->fresh());
+    }
 }
