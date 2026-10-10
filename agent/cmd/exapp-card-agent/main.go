@@ -11,14 +11,18 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	"github.com/softernity/exapp-card-agent/internal/autostart"
 	"github.com/softernity/exapp-card-agent/internal/card"
 	"github.com/softernity/exapp-card-agent/internal/client"
 	"github.com/softernity/exapp-card-agent/internal/config"
+	"github.com/softernity/exapp-card-agent/internal/selfupdate"
+	"github.com/softernity/exapp-card-agent/internal/ui"
 )
 
 var version = "dev"
@@ -45,37 +49,64 @@ const (
 )
 
 func main() {
-	setup := flag.Bool("setup", false, "ตั้งค่าเซิร์ฟเวอร์และ token ครั้งแรก")
-	server := flag.String("server", "", "ที่อยู่ exapp เช่น https://exapp.softernity.com")
-	token := flag.String("token", "", "token ประจำเครื่องจากหน้าผู้ดูแลระบบ")
+	setup := flag.Bool("setup", false, "ตั้งค่าจากบรรทัดคำสั่ง (ปกติใช้หน้าเว็บแทน)")
+	server := flag.String("server", "", "ที่อยู่ exapp")
+	token := flag.String("token", "", "token ประจำเครื่อง")
+	background := flag.Bool("background", false, "ไม่ต้องเปิดเบราว์เซอร์ — ใช้ตอนระบบเรียกเองตอนบูต")
 	showVersion := flag.Bool("version", false, "แสดงรุ่น")
 	listReaders := flag.Bool("list-readers", false, "แสดงเครื่องอ่านที่เสียบอยู่ แล้วออก")
 	flag.Parse()
 
 	if *showVersion {
 		fmt.Println(version)
+
 		return
 	}
 
 	if *listReaders {
 		runListReaders()
+
 		return
 	}
 
 	if *setup {
 		runSetup(*server, *token)
+
 		return
 	}
 
-	cfg, err := config.Load()
-	if err != nil {
-		path, _ := config.Path()
-		log.Fatalf("อ่านไฟล์ตั้งค่าไม่ได้ (%s): %v\n\nตั้งค่าครั้งแรกด้วย:\n  exapp-card-agent -setup -server https://... -token crd_...", path, err)
+	/*
+	 * ดับเบิลคลิกซ้ำต้องเปิดหน้าของตัวที่รันอยู่ ไม่ใช่เปิดโปรแกรมตัวที่สอง
+	 *
+	 * สองตัวแย่งกันคุยกับเครื่องอ่านตัวเดียวจะพังทั้งคู่ และพนักงานจะเห็นแค่
+	 * ว่าบางครั้งอ่านได้บางครั้งไม่ได้ โดยไม่มีอะไรบอกว่าเพราะเปิดซ้อนกัน
+	 */
+	if url := config.RunningUI(); url != "" && reachable(url) {
+		log.Printf("โปรแกรมเปิดอยู่แล้ว — เปิดหน้าตั้งค่าของตัวเดิม")
+		_ = ui.OpenBrowser(url)
+
+		return
 	}
 
-	if err := run(cfg); err != nil {
+	if err := run(*background); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// reachable บอกว่าอินสแตนซ์ที่บันทึกที่อยู่ไว้ยังมีชีวิตอยู่ไหม
+//
+// ไฟล์ที่อยู่อาจค้างจากครั้งที่โปรแกรมถูกฆ่าโดยไม่ได้ปิดตัวเอง
+func reachable(url string) bool {
+	c := &http.Client{Timeout: 2 * time.Second}
+
+	resp, err := c.Get(url)
+	if err != nil {
+		return false
+	}
+
+	defer resp.Body.Close()
+
+	return resp.StatusCode < 500
 }
 
 // runListReaders ช่วยวินิจฉัยตอนติดตั้งครั้งแรก
@@ -107,6 +138,7 @@ func runListReaders() {
 	}
 
 	fmt.Printf("ระบบเห็นช่องทั้งหมด %d ช่อง:\n", len(all))
+
 	for _, n := range all {
 		mark := "ข้าม"
 		if usable[n] {
@@ -133,14 +165,54 @@ func runSetup(server, token string) {
 	fmt.Printf("บันทึกแล้วที่ %s\nรันต่อด้วย: exapp-card-agent\n", path)
 }
 
-func run(cfg *config.Config) error {
+func run(background bool) error {
+	web, err := ui.New(buildDeps())
+	if err != nil {
+		return err
+	}
+	defer web.Close()
+
+	if err := config.PublishUI(web.URL()); err != nil {
+		log.Printf("บันทึกที่อยู่หน้าตั้งค่าไม่ได้: %v", err)
+	}
+
+	defer config.ClearUI()
+
+	cfg, cfgErr := config.Load()
+
+	web.SetState(func(st *ui.State) {
+		st.Version = version
+		st.AutoStart = autostart.Enabled()
+		st.Configured = cfgErr == nil
+
+		if cfg != nil {
+			st.ServerURL = cfg.ServerURL
+		}
+	})
+
+	// ตอนระบบเรียกเองตอนบูต อย่าเด้งเบราว์เซอร์ใส่หน้าพนักงาน
+	if !background {
+		_ = ui.OpenBrowser(web.URL())
+	}
+
+	log.Printf("exapp-card-agent %s — หน้าตั้งค่า %s", version, web.URL())
+
+	if cfgErr != nil {
+		// ยังไม่ได้ตั้งค่า — รอให้กรอกในหน้าเว็บ ไม่ใช่ปิดตัวเองทิ้ง
+		log.Printf("ยังไม่ได้ตั้งค่า รอกรอกข้อมูลในหน้าเว็บ")
+		select {}
+	}
+
+	return serve(cfg, web, background)
+}
+
+func serve(cfg *config.Config, web *ui.Server, background bool) error {
 	api := client.New(cfg.ServerURL, cfg.Token, version)
 
 	reader, err := card.NewReader()
 	if err != nil {
-		// ไม่มี PC/SC ก็ยังต้องรายงานตัวให้หน้าเคาน์เตอร์ขึ้นไฟแดง
-		// ไม่งั้นพนักงานจะเห็นแค่ "ไม่มีอะไรเกิดขึ้น" แล้วเดาไม่ถูกว่าทำไม
 		reportFatal(api, err)
+		web.SetState(func(st *ui.State) { st.ReaderFound = false; st.LastError = err.Error() })
 
 		return err
 	}
@@ -151,7 +223,7 @@ func run(cfg *config.Config) error {
 
 	keys := make(chan *client.PassportRequest, 1)
 
-	go heartbeatLoop(ctx, api, reader, keys)
+	go heartbeatLoop(ctx, api, reader, keys, web)
 	go passportLoop(ctx, api, reader, keys)
 
 	watcher, err := reader.Watch()
@@ -161,7 +233,7 @@ func run(cfg *config.Config) error {
 		return err
 	}
 
-	log.Printf("exapp-card-agent %s — เฝ้าช่องเสียบบัตรอยู่", version)
+	log.Printf("เฝ้าช่องเสียบบัตรอยู่")
 
 	for {
 		select {
@@ -209,14 +281,61 @@ func run(cfg *config.Config) error {
 	}
 }
 
-func heartbeatLoop(ctx context.Context, api *client.Client, reader *card.Reader, keys chan<- *client.PassportRequest) {
+// buildDeps ต่อหน้าเว็บเข้ากับส่วนที่ทำงานจริง
+func buildDeps() ui.Deps {
+	up := selfupdate.New(version)
+
+	return ui.Deps{
+		Save: func(serverURL, token string) error {
+			cfg := &config.Config{ServerURL: serverURL, Token: token}
+			if err := cfg.Save(); err != nil {
+				return err
+			}
+
+			/*
+			 * ตั้งค่าใหม่แล้วต้องเริ่มใหม่ทั้งตัว
+			 *
+			 * ตัวที่รันอยู่ถือ token เดิมไว้ในหน่วยความจำ การต่อ client ใหม่
+			 * กลางคันโดยไม่รีสตาร์ตจะทำให้ส่วนที่กำลังอ่านบัตรอยู่ใช้ค่าเก่า
+			 */
+			log.Println("บันทึกการตั้งค่าแล้ว — ปิดโปรแกรมเพื่อให้เริ่มใหม่ด้วยค่าใหม่")
+
+			go func() {
+				time.Sleep(time.Second)
+				config.ClearUI()
+				os.Exit(0)
+			}()
+
+			return nil
+		},
+		TestConnection: func(serverURL, token string) error {
+			cfg := &config.Config{ServerURL: serverURL, Token: token}
+			if err := cfg.Validate(); err != nil {
+				return err
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+
+			_, err := client.New(serverURL, token, version).Heartbeat(ctx, "ready", "")
+
+			return err
+		},
+		SetAutoStart: autostart.Set,
+		CheckUpdate:  up.Check,
+		ApplyUpdate:  up.Apply,
+	}
+}
+
+func heartbeatLoop(ctx context.Context, api *client.Client, reader *card.Reader, keys chan<- *client.PassportRequest, web *ui.Server) {
 	ticker := time.NewTicker(heartbeatEvery)
 	defer ticker.Stop()
 
 	for {
 		status, message := "ready", ""
+		names, nameErr := reader.Readers()
 
-		if names, err := reader.Readers(); err != nil || len(names) == 0 {
+		if nameErr != nil || len(names) == 0 {
 			status, message = "no_reader", "ไม่พบเครื่องอ่านบัตรที่เสียบอยู่"
 		}
 
@@ -224,6 +343,20 @@ func heartbeatLoop(ctx context.Context, api *client.Client, reader *card.Reader,
 		if err != nil {
 			log.Printf("ส่งสัญญาณชีพไม่สำเร็จ: %v", err)
 		}
+
+		web.SetState(func(st *ui.State) {
+			st.ReaderFound = len(names) > 0
+			st.ReaderNames = names
+
+			if err == nil {
+				st.LastBeat = time.Now()
+				st.LastError = ""
+
+				return
+			}
+
+			st.LastError = err.Error()
+		})
 
 		if req != nil {
 			// ไม่บล็อกถ้าตัวอ่านพาสปอร์ตยังทำงานอยู่ — กุญแจใบถัดไปจะมากับ
