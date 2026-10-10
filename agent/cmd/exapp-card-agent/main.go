@@ -75,6 +75,9 @@ func main() {
 		return
 	}
 
+	// ต้องเริ่มก่อนอย่างอื่น ตัวที่แจกให้สาขาไม่มีหน้าจอให้ข้อความไปปรากฏ
+	defer config.StartLogging().Close()
+
 	/*
 	 * ดับเบิลคลิกซ้ำต้องเปิดหน้าของตัวที่รันอยู่ ไม่ใช่เปิดโปรแกรมตัวที่สอง
 	 *
@@ -196,6 +199,7 @@ func run(background bool) error {
 	}
 
 	log.Printf("exapp-card-agent %s — หน้าตั้งค่า %s", version, web.URL())
+	log.Printf("log อยู่ที่ %s", config.LogPath())
 
 	if cfgErr != nil {
 		// ยังไม่ได้ตั้งค่า — รอให้กรอกในหน้าเว็บ ไม่ใช่ปิดตัวเองทิ้ง

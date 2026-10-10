@@ -95,10 +95,21 @@ jobs:
             -ldflags "-s -w -X main.version=$VERSION" \
             -o exapp-card-agent-darwin-${{ matrix.arch }} ./cmd/exapp-card-agent
 
+          # ห่อเป็น .app ด้วย — ไฟล์เปล่า ๆ พอดับเบิลคลิกใน Finder แล้ว macOS
+          # จะเปิด Terminal ขึ้นมารันให้ ทิ้งหน้าต่างดำค้างไว้ซึ่งพนักงานอาจเผลอปิด
+          VERSION=$VERSION ./scripts/make-app-bundle.sh \
+            exapp-card-agent-darwin-${{ matrix.arch }} \
+            exapp-card-agent-${{ matrix.arch }}.app
+
+          # .app เป็นโฟลเดอร์ ต้องบีบก่อนถึงแนบกับ release ได้
+          zip -qry exapp-card-agent-${{ matrix.arch }}.app.zip exapp-card-agent-${{ matrix.arch }}.app
+
       - uses: actions/upload-artifact@v4
         with:
           name: exapp-card-agent-darwin-${{ matrix.arch }}
-          path: agent/exapp-card-agent-darwin-${{ matrix.arch }}
+          path: |
+            agent/exapp-card-agent-darwin-${{ matrix.arch }}
+            agent/exapp-card-agent-${{ matrix.arch }}.app.zip
 
   release:
     needs: [build-windows, build-macos]
@@ -116,3 +127,5 @@ jobs:
             exapp-card-agent.exe
             exapp-card-agent-darwin-amd64
             exapp-card-agent-darwin-arm64
+            exapp-card-agent-amd64.app.zip
+            exapp-card-agent-arm64.app.zip

@@ -36,3 +36,8 @@ CLAUDE.md
 # ไฟล์ build ของ agent — ไบนารีไม่ควรอยู่ใน repo
 agent/exapp-card-agent
 agent/exapp-card-agent.exe
+
+# .app ที่สร้างตอน build — ไม่ควรอยู่ใน repo
+agent/*.app/
+agent/*.app.zip
+agent/exapp-card-agent-darwin-*
