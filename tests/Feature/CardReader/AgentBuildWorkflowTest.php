@@ -42,7 +42,28 @@ class AgentBuildWorkflowTest extends TestCase
     {
         // คอมไพล์ผ่านไม่ได้แปลว่ารันได้ ถ้าแจกไฟล์ที่เปิดไม่ขึ้นไป 20 สาขา
         // กว่าจะรู้ก็ตอนที่ทุกสาขาพยายามติดตั้งพร้อมกัน
-        $this->assertStringContainsString('exapp-card-agent.exe -version', $this->workflow());
+        //
+        // ตัวที่แจกใช้ -H windowsgui ซึ่งพิมพ์อะไรออกหน้าจอไม่ได้ จึงต้อง build
+        // ตัว console ขึ้นมารันพิสูจน์ต่างหาก
+        $this->assertStringContainsString('./check.exe -version', $this->workflow());
+    }
+
+    public function test_the_shipped_windows_binary_opens_no_console_window(): void
+    {
+        // ดับเบิลคลิกแล้วมีหน้าต่างดำโผล่มาด้วยจะดูเหมือนโปรแกรมเสีย
+        $this->assertStringContainsString('-H windowsgui', $this->workflow());
+    }
+
+    public function test_macos_is_built_for_both_chip_families(): void
+    {
+        $source = $this->workflow();
+
+        // ตัวอัปเดตเองมองหาไฟล์ตามชื่อนี้ ถ้าไม่มีจะอัปเดตไม่ได้ทั้งที่มี release
+        foreach (['exapp-card-agent-darwin-amd64', 'exapp-card-agent-darwin-arm64'] as $asset) {
+            $this->assertStringContainsString($asset, $source, "release ขาดไฟล์ {$asset}");
+        }
+
+        $this->assertStringContainsString('runs-on: macos-latest', $source);
     }
 
     public function test_a_release_is_only_cut_from_a_tag(): void

@@ -37,10 +37,6 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          # อ่านจาก go.mod แทนการเขียนตายตัว
-          #
-          # เคยตรึงไว้ที่ 1.22 แล้วพอ go.mod ขยับเป็น 1.26 ตอนเพิ่มไลบรารีอ่าน
-          # พาสปอร์ต workflow ก็ยังติดตั้ง 1.22 อยู่ — build พังโดยไม่มีใครนึกถึง
           go-version-file: agent/go.mod
           cache-dependency-path: agent/go.sum
 
@@ -50,17 +46,62 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#card-agent-}"
           [ "$GITHUB_REF_TYPE" = "tag" ] || VERSION="dev-${GITHUB_SHA::7}"
-          go build -ldflags "-s -w -X main.version=$VERSION" \
+
+          # build สองรอบโดยตั้งใจ
+          #
+          # ตัวที่แจกใช้ -H windowsgui กันหน้าต่าง console สีดำโผล่ตอนดับเบิลคลิก
+          # แต่ธงนั้นทำให้โปรแกรมพิมพ์อะไรออกหน้าจอไม่ได้ ตรวจว่ารันขึ้นจริงไม่ได้
+          #
+          # จึง build ตัว console ขึ้นมาก่อนเพื่อรันพิสูจน์ว่ามันเริ่มทำงานได้
+          # คอมไพล์ผ่านไม่ได้แปลว่าเปิดขึ้น และการแจกไฟล์ที่เปิดไม่ขึ้นไป 20 สาขา
+          # จะรู้ตัวก็ตอนที่ทุกสาขาพยายามติดตั้งพร้อมกัน
+          go build -ldflags "-X main.version=$VERSION" -o check.exe ./cmd/exapp-card-agent
+          ./check.exe -version
+          rm check.exe
+
+          go build -ldflags "-s -w -H windowsgui -X main.version=$VERSION" \
             -o exapp-card-agent.exe ./cmd/exapp-card-agent
-          ./exapp-card-agent.exe -version
+
+          test -s exapp-card-agent.exe
 
       - uses: actions/upload-artifact@v4
         with:
           name: exapp-card-agent-windows
           path: agent/exapp-card-agent.exe
 
+  # macOS ต้อง build บนเครื่อง macOS เพราะ systray/PCSC ฝั่งนี้ใช้ cgo
+  # (ฝั่ง Windows ไม่ใช้ จึง cross-compile ได้ แต่ build บน Windows จริงแน่นอนกว่า)
+  build-macos:
+    needs: test
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: agent/go.mod
+          cache-dependency-path: agent/go.sum
+
+      - name: build
+        working-directory: agent
+        run: |
+          VERSION="${GITHUB_REF_NAME#card-agent-}"
+          [ "$GITHUB_REF_TYPE" = "tag" ] || VERSION="dev-${GITHUB_SHA::7}"
+
+          # ชื่อไฟล์ต้องตรงกับที่ตัวอัปเดตเองมองหา (internal/selfupdate assetName)
+          GOARCH=${{ matrix.arch }} CGO_ENABLED=1 go build \
+            -ldflags "-s -w -X main.version=$VERSION" \
+            -o exapp-card-agent-darwin-${{ matrix.arch }} ./cmd/exapp-card-agent
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: exapp-card-agent-darwin-${{ matrix.arch }}
+          path: agent/exapp-card-agent-darwin-${{ matrix.arch }}
+
   release:
-    needs: build-windows
+    needs: [build-windows, build-macos]
     if: github.ref_type == 'tag'
     runs-on: ubuntu-latest
     permissions:
@@ -68,7 +109,10 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: exapp-card-agent-windows
+          merge-multiple: true
       - uses: softprops/action-gh-release@v2
         with:
-          files: exapp-card-agent.exe
+          files: |
+            exapp-card-agent.exe
+            exapp-card-agent-darwin-amd64
+            exapp-card-agent-darwin-arm64
