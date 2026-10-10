@@ -326,8 +326,13 @@ func buildDeps() ui.Deps {
 			return err
 		},
 		SetAutoStart: autostart.Set,
-		CheckUpdate:  up.Check,
-		ApplyUpdate:  up.Apply,
+		Quit: func() {
+			log.Println("ปิดโปรแกรมตามที่สั่งจากหน้าเว็บ")
+			config.ClearUI()
+			os.Exit(0)
+		},
+		CheckUpdate: up.Check,
+		ApplyUpdate: up.Apply,
 	}
 }
 

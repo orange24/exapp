@@ -49,6 +49,12 @@ type Deps struct {
 	SetAutoStart   func(on bool) error
 	CheckUpdate    func() (version string, available bool, err error)
 	ApplyUpdate    func() error
+
+	// Quit ปิดโปรแกรมทั้งตัว ไม่ใช่แค่ปิดหน้าเว็บ
+	//
+	// โปรแกรมทำงานเบื้องหลังที่ไม่มีทางปิดนอกจากฆ่า process เป็นสิ่งที่
+	// ส่งให้สาขาไม่ได้ — ปิดหน้าต่างไปแล้วมันยังถือพอร์ตอยู่โดยไม่มีใครรู้
+	Quit func()
 }
 
 func New(deps Deps) (*Server, error) {
@@ -82,6 +88,7 @@ func New(deps Deps) (*Server, error) {
 	mux.HandleFunc("/test", s.guard(s.handleTest))
 	mux.HandleFunc("/autostart", s.guard(s.handleAutoStart))
 	mux.HandleFunc("/update", s.guard(s.handleUpdate))
+	mux.HandleFunc("/quit", s.guard(s.handleQuit))
 
 	s.http = &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 

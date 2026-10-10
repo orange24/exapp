@@ -23,6 +23,7 @@ var page = template.Must(template.New("p").Parse(`<!doctype html>
  button{padding:9px 18px;border:0;border-radius:6px;font-size:14px;cursor:pointer}
  .primary{background:#0e513a;color:#fff;font-weight:600}
  .ghost{background:#e5e7eb;color:#374151}
+ .danger{background:#fff;color:#b91c1c;border:1px solid #fca5a5}
  .row{display:flex;gap:9px;align-items:center;margin-top:18px;flex-wrap:wrap}
  .dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:8px;flex-shrink:0}
  .ok{background:#10b981}.bad{background:#ef4444}.idle{background:#9ca3af}
@@ -81,11 +82,16 @@ var page = template.Must(template.New("p").Parse(`<!doctype html>
       <button class="ghost" type="submit">ตรวจรุ่นใหม่</button>
     </form>
     <a href="/?setup=1&k={{.Key}}"><button class="ghost" type="button">แก้ไขการตั้งค่า</button></a>
+    <form method="post" action="/quit?k={{.Key}}" style="margin:0"
+          onsubmit="return confirm('ปิดโปรแกรม? เครื่องอ่านบัตรจะไม่ทำงานจนกว่าจะเปิดใหม่')">
+      <button class="danger" type="submit">ปิดโปรแกรม</button>
+    </form>
   </div>
 
   <div class="note">
-    ปิดหน้าต่างนี้ได้เลย โปรแกรมทำงานเบื้องหลังต่อ
-    เปิดกลับมาดูได้โดยดับเบิลคลิกที่ตัวโปรแกรมอีกครั้ง
+    <b>ปิดหน้าต่างนี้ไม่ได้ปิดโปรแกรม</b> — มันจะทำงานเบื้องหลังต่อ
+    ซึ่งเป็นสิ่งที่ต้องการ เปิดกลับมาดูได้โดยดับเบิลคลิกที่ตัวโปรแกรมอีกครั้ง
+    ถ้าจะหยุดจริง ๆ ให้กดปุ่มปิดโปรแกรม
   </div>
 </div>
 {{end}}
@@ -204,6 +210,30 @@ func (s *Server) handleAutoStart(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.render(w, r, "เลิกเปิดเองตอนบูตแล้ว", "good")
+}
+
+func (s *Server) handleQuit(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = w.Write([]byte(`<!doctype html><html lang="th"><head><meta charset="utf-8">
+<title>ปิดแล้ว</title><style>body{font-family:-apple-system,"Segoe UI",sans-serif;
+background:#f3f4f6;padding:40px;text-align:center;color:#374151}
+.c{max-width:420px;margin:0 auto;background:#fff;border-radius:10px;padding:28px}
+h1{font-size:18px;color:#0e513a;margin:0 0 8px}p{font-size:14px;line-height:1.7;margin:0}
+</style></head><body><div class="c">
+<h1>ปิดโปรแกรมแล้ว</h1>
+<p>เครื่องอ่านบัตรจะไม่ทำงานจนกว่าจะเปิดโปรแกรมใหม่<br>ปิดหน้าต่างนี้ได้เลย</p>
+</div></body></html>`))
+
+	// ตอบให้เบราว์เซอร์เห็นก่อน แล้วค่อยปิด ไม่งั้นผู้ใช้จะเจอหน้าว่าง
+	// แล้วไม่แน่ใจว่าปิดสำเร็จหรือโปรแกรมพัง
+	if f, ok := w.(http.Flusher); ok {
+		f.Flush()
+	}
+
+	go func() {
+		time.Sleep(300 * time.Millisecond)
+		s.deps.Quit()
+	}()
 }
 
 func (s *Server) handleUpdate(w http.ResponseWriter, r *http.Request) {

@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 )
 
 func newTestServer(t *testing.T, deps Deps) *Server {
@@ -200,4 +201,69 @@ func get(t *testing.T, u string) string {
 	b, _ := io.ReadAll(resp.Body)
 
 	return string(b)
+}
+
+func TestTheQuitButtonActuallyStopsTheProgram(t *testing.T) {
+	quit := make(chan struct{}, 1)
+
+	s := newTestServer(t, Deps{Quit: func() { quit <- struct{}{} }})
+	s.SetState(func(st *State) { st.Configured = true })
+
+	resp, err := http.PostForm("http://"+s.addr+"/quit?k="+s.secret, nil)
+	if err != nil {
+		t.Fatalf("ยิงไม่ได้: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+
+	// ต้องตอบให้เห็นก่อนปิด ไม่งั้นผู้ใช้เจอหน้าว่างแล้วไม่แน่ใจว่าสำเร็จไหม
+	if !strings.Contains(string(body), "ปิดโปรแกรมแล้ว") {
+		t.Fatal("ควรยืนยันให้ผู้ใช้เห็นก่อนปิด")
+	}
+
+	select {
+	case <-quit:
+	case <-time.After(3 * time.Second):
+		t.Fatal("ไม่ได้สั่งปิดโปรแกรมจริง")
+	}
+}
+
+func TestQuitCannotBeTriggeredWithoutTheSecret(t *testing.T) {
+	quit := make(chan struct{}, 1)
+
+	s := newTestServer(t, Deps{Quit: func() { quit <- struct{}{} }})
+
+	// โปรแกรมอื่นบนเครื่องเดียวกันต้องปิดเครื่องอ่านบัตรของเราไม่ได้
+	resp, err := http.PostForm("http://"+s.addr+"/quit", nil)
+	if err != nil {
+		t.Fatalf("ยิงไม่ได้: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("ควรถูกปฏิเสธ ได้ %d", resp.StatusCode)
+	}
+
+	select {
+	case <-quit:
+		t.Fatal("ไม่ควรถูกสั่งปิด")
+	case <-time.After(500 * time.Millisecond):
+	}
+}
+
+func TestTheStatusPageOffersAWayToStop(t *testing.T) {
+	s := newTestServer(t, Deps{})
+	s.SetState(func(st *State) { st.Configured = true })
+
+	body := get(t, s.URL())
+
+	// โปรแกรมเบื้องหลังที่ไม่มีทางปิดนอกจากฆ่า process ส่งให้สาขาไม่ได้
+	if !strings.Contains(body, "ปิดโปรแกรม") {
+		t.Fatal("หน้าสถานะต้องมีปุ่มปิดโปรแกรม")
+	}
+
+	if !strings.Contains(body, "ปิดหน้าต่างนี้ไม่ได้ปิดโปรแกรม") {
+		t.Fatal("ต้องบอกให้ชัดว่าปิดหน้าต่างไม่เท่ากับปิดโปรแกรม")
+	}
 }
