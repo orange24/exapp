@@ -8,8 +8,8 @@ use App\Models\CounterStock;
 use App\Models\Customer;
 use App\Models\TransactionMaster;
 use App\Models\TransactionDetail;
-use App\Models\Setting;
 use App\Models\WorkingDay;
+use App\Support\WorkingDayClock;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
@@ -112,10 +112,10 @@ new class extends Component
 
     protected function checkWorkingDayOpen(Counter $counter): void
     {
-        // Check if working day is open for this counter
-        $today = now()->format('Y-m-d');
+        // วันทำการที่กำลังเปิดอยู่ ไม่ใช่วันตามปฏิทิน — กะที่เปิดเมื่อวาน
+        // ยังไม่ปิดตอนเที่ยงคืน พนักงานต้องทำรายการต่อได้จนถึงเวลาตัดรอบ
         $workingDay = WorkingDay::where('counter_id', $counter->id)
-            ->where('work_date', $today)
+            ->whereDate('work_date', app(WorkingDayClock::class)->currentDate())
             ->where('status', 'open')
             ->first();
 
@@ -748,9 +748,7 @@ new class extends Component
     {
         if (!$this->counterId) return [];
 
-        $cutoff = Setting::get('WORKING_CUT_OFF', '03:00:00');
-        $dateStart = date('Y-m-d') . " {$cutoff}";
-        $dateEnd = date('Y-m-d', strtotime('+1 day')) . " {$cutoff}";
+        [$dateStart, $dateEnd] = app(WorkingDayClock::class)->currentWindow();
 
         // ดึง rate เฉลี่ยจาก transactions ต่อ denomination
         $avgRates = DB::table('transactions_detail')

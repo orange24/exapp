@@ -199,10 +199,9 @@ function counterSelector() {
 
 @php
     $counterId = session('working_counter_id');
-    $cutoff = \App\Models\Setting::get('WORKING_CUT_OFF', '03:00:00');
-    $today = now()->format('Y-m-d');
-    $dateStart = "{$today} {$cutoff}";
-    $dateEnd = now()->addDay()->format('Y-m-d') . " {$cutoff}";
+    // "วันนี้" ของหน้านี้คือวันทำการ ไม่ใช่วันตามปฏิทิน — ตอนตีหนึ่งพนักงาน
+    // ต้องยังเห็นยอดของกะที่ตัวเองกำลังทำอยู่
+    [$dateStart, $dateEnd] = app(\App\Support\WorkingDayClock::class)->currentWindow();
 
     // Today's transactions for this counter
     $todayQuery = \App\Models\TransactionMaster::where('flag_cancel', 'N')

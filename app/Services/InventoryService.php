@@ -6,8 +6,7 @@ use App\Models\CounterStock;
 use App\Models\StockMovement;
 use App\Models\StockTransfer;
 use App\Models\Inventory;
-use App\Models\Setting;
-use Carbon\Carbon;
+use App\Support\WorkingDayClock;
 use Illuminate\Support\Facades\DB;
 
 class InventoryService
@@ -483,9 +482,7 @@ class InventoryService
      */
     public function closeDay(int $counterId, string $date): void
     {
-        $cutoff = Setting::get('WORKING_CUT_OFF', '03:00:00');
-        $dateStart = "{$date} {$cutoff}";
-        $dateEnd = Carbon::parse($date)->addDay()->format('Y-m-d') . " {$cutoff}";
+        [$dateStart, $dateEnd] = app(WorkingDayClock::class)->window($date);
 
         // Get today's movements grouped by denomination
         $movements = StockMovement::where('counter_id', $counterId)

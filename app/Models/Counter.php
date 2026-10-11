@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\WorkingDayClock;
 use Illuminate\Database\Eloquent\Model;
 
 class Counter extends Model
@@ -39,18 +40,18 @@ class Counter extends Model
      * ใช้เตือนก่อนเปลี่ยนเคาน์เตอร์ทำงาน — บิลที่บันทึกไปแล้วถูกตราไว้กับ
      * counter_id เดิมและไม่ย้ายตาม การเปลี่ยนจึงมีผลกับรายการถัดไปเท่านั้น
      *
-     * ใช้ช่วงเวลาตาม WORKING_CUT_OFF เหมือนที่ closeDay / ThbCashService ใช้
-     * เพื่อให้ "วันนี้" หมายถึงวันทำการเดียวกันทั้งระบบ
+     * ถามช่วงเวลาจาก WorkingDayClock เหมือนทุกจุดในระบบ เพื่อให้ "วันนี้"
+     * หมายถึงวันทำการเดียวกันทั้งระบบ ไม่ใช่วันตามปฏิทิน
      *
      * @return array{has_open_day: bool, transaction_count: int}
      */
     public function workingDayActivity(): array
     {
-        $date = now()->format('Y-m-d');
-        $cutoff = Setting::get('WORKING_CUT_OFF', '03:00:00');
+        $clock = app(WorkingDayClock::class);
 
-        $dayStart = \Carbon\Carbon::parse("{$date} {$cutoff}");
-        $dayEnd = $dayStart->copy()->addDay();
+        $date = $clock->currentDate();
+        $dayStart = $clock->dayStart($date);
+        $dayEnd = $clock->dayEnd($date);
 
         return [
             'has_open_day' => WorkingDay::where('counter_id', $this->id)

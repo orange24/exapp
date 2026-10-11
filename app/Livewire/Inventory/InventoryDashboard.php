@@ -5,9 +5,8 @@ namespace App\Livewire\Inventory;
 use App\Models\Counter;
 use App\Models\CounterStock;
 use App\Models\Currency;
-use App\Models\Setting;
 use App\Models\StockMovement;
-use Carbon\Carbon;
+use App\Support\WorkingDayClock;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Livewire\Component;
@@ -20,7 +19,7 @@ class InventoryDashboard extends Component
 
     public function mount(): void
     {
-        $this->date = now()->format('Y-m-d');
+        $this->date = app(WorkingDayClock::class)->currentDate();
         $this->counterId = (string) (session('working_counter_id') ?? '');
     }
 
@@ -59,9 +58,7 @@ class InventoryDashboard extends Component
         $stocks = $query->get();
 
         // Get movements for the selected date
-        $cutoff = Setting::get('WORKING_CUT_OFF', '03:00:00');
-        $dateStart = "{$this->date} {$cutoff}";
-        $dateEnd = Carbon::parse($this->date)->addDay()->format('Y-m-d') . " {$cutoff}";
+        [$dateStart, $dateEnd] = app(WorkingDayClock::class)->window($this->date);
 
         $movements = StockMovement::where('counter_id', $this->counterId)
             ->whereNotNull('denomination_id')

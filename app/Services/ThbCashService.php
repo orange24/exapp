@@ -3,9 +3,9 @@
 namespace App\Services;
 
 use App\Models\CounterStock;
-use App\Models\Setting;
 use App\Models\StockMovement;
 use App\Models\WorkingDay;
+use App\Support\WorkingDayClock;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -39,7 +39,6 @@ class ThbCashService
     public const REF_ADJUST = 'thb_adjust';
     public const REF_WORKING_DAY = 'working_day';
 
-    private ?string $cutoff = null;
 
     // ─────────────────────────────────────────────────────────────────
     // ขอบเขตวันทำการ — ต้องตรงกับ InventoryService::closeDay() เป๊ะๆ
@@ -48,17 +47,17 @@ class ThbCashService
 
     public function cutoff(): string
     {
-        return $this->cutoff ??= (string) Setting::get('WORKING_CUT_OFF', '03:00:00');
+        return app(WorkingDayClock::class)->cutoff();
     }
 
     public function dayStart(string|Carbon $date): Carbon
     {
-        return Carbon::parse(Carbon::parse($date)->format('Y-m-d') . ' ' . $this->cutoff());
+        return app(WorkingDayClock::class)->dayStart($date);
     }
 
     public function dayEnd(string|Carbon $date): Carbon
     {
-        return $this->dayStart($date)->addDay();
+        return app(WorkingDayClock::class)->dayEnd($date);
     }
 
     // ─────────────────────────────────────────────────────────────────

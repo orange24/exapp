@@ -4,9 +4,8 @@ namespace App\Http\Controllers\Report;
 
 use App\Http\Controllers\Controller;
 use App\Models\Counter;
-use App\Models\Setting;
 use App\Models\TransactionDetail;
-use Carbon\Carbon;
+use App\Support\WorkingDayClock;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -18,8 +17,8 @@ class ProfitLossReportController extends Controller
 {
     public function index(Request $request)
     {
-        $dateFrom = $request->input('date_from', now()->format('Y-m-d'));
-        $dateTo = $request->input('date_to', now()->format('Y-m-d'));
+        $dateFrom = $request->input('date_from', app(WorkingDayClock::class)->currentDate());
+        $dateTo = $request->input('date_to', app(WorkingDayClock::class)->currentDate());
         $counterId = $request->input('counter_id', '');
 
         // Get visible counters based on user role
@@ -38,8 +37,8 @@ class ProfitLossReportController extends Controller
 
     public function exportExcel(Request $request)
     {
-        $dateFrom = $request->input('date_from', now()->format('Y-m-d'));
-        $dateTo = $request->input('date_to', now()->format('Y-m-d'));
+        $dateFrom = $request->input('date_from', app(WorkingDayClock::class)->currentDate());
+        $dateTo = $request->input('date_to', app(WorkingDayClock::class)->currentDate());
         $counterId = $request->input('counter_id', '');
 
         // Get visible counters based on user role
@@ -100,9 +99,7 @@ class ProfitLossReportController extends Controller
 
     private function getData(string $dateFrom, string $dateTo, array $counterIds)
     {
-        $cutoff = Setting::get('WORKING_CUT_OFF', '03:00:00');
-        $start = "{$dateFrom} {$cutoff}";
-        $end = Carbon::parse($dateTo)->addDay()->format('Y-m-d') . " {$cutoff}";
+        [$start, $end] = app(WorkingDayClock::class)->range($dateFrom, $dateTo);
 
         return DB::table('transactions_detail')
             ->join('transactions_master', 'transactions_detail.transaction_id', '=', 'transactions_master.id')

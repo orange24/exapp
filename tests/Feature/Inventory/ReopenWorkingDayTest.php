@@ -40,7 +40,7 @@ class ReopenWorkingDayTest extends TestCase
     /** เปิดวันแล้วปิดทันที เหมือนเคสกดผิดที่หน้าเคาน์เตอร์ */
     private function openThenClose(): WorkingDay
     {
-        $today = now()->format('Y-m-d');
+        $today = $this->workingDate();
 
         Livewire::actingAs($this->staffUser)
             ->test(\App\Livewire\Inventory\OpenCloseDay::class)
@@ -65,7 +65,7 @@ class ReopenWorkingDayTest extends TestCase
         return Livewire::actingAs($this->staffUser)
             ->test(\App\Livewire\Inventory\OpenCloseDay::class)
             ->set('counterId', $this->counter->id)
-            ->set('date', $date ?? now()->format('Y-m-d'))
+            ->set('date', $date ?? $this->workingDate())
             ->call('reopenDay', $reason);
     }
 
@@ -106,7 +106,7 @@ class ReopenWorkingDayTest extends TestCase
 
         $inv = Inventory::where('counter_id', $this->counter->id)
             ->where('denomination_id', $this->denomination->id)
-            ->whereDate('date', now()->format('Y-m-d'))
+            ->whereDate('date', $this->workingDate())
             ->firstOrFail();
 
         $this->assertEquals(500.0, (float) $inv->opening_balance);
@@ -130,7 +130,7 @@ class ReopenWorkingDayTest extends TestCase
         Livewire::actingAs($this->adminUser)
             ->test(\App\Livewire\Inventory\OpenCloseDay::class)
             ->set('counterId', $this->counter->id)
-            ->set('date', now()->format('Y-m-d'))
+            ->set('date', $this->workingDate())
             ->call('approveClosing', $wd->id);
 
         $this->assertEquals('approved', $wd->fresh()->closing_status);
@@ -143,7 +143,7 @@ class ReopenWorkingDayTest extends TestCase
 
     public function test_past_day_cannot_be_reopened(): void
     {
-        $yesterday = now()->subDay()->format('Y-m-d');
+        $yesterday = $this->workingMoment(0, 0, -1)->format('Y-m-d');
 
         $wd = WorkingDay::create([
             'counter_id' => $this->counter->id,
@@ -151,9 +151,9 @@ class ReopenWorkingDayTest extends TestCase
             'opening_thb_cash' => 0,
             'status' => 'closed',
             'opened_by' => $this->staffUser->id,
-            'opened_at' => now()->subDay(),
+            'opened_at' => $this->workingMoment(8, 0, -1),
             'closed_by' => $this->staffUser->id,
-            'closed_at' => now()->subDay(),
+            'closed_at' => $this->workingMoment(22, 0, -1),
             'closing_status' => 'pending',
         ]);
 
@@ -181,7 +181,7 @@ class ReopenWorkingDayTest extends TestCase
         Livewire::actingAs($this->staffUser)
             ->test(\App\Livewire\Inventory\OpenCloseDay::class)
             ->set('counterId', $this->counter->id)
-            ->set('date', now()->format('Y-m-d'))
+            ->set('date', $this->workingDate())
             ->call('prepareClosing')
             ->call('saveClosingAmounts');
 

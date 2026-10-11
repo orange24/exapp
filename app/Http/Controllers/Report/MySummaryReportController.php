@@ -4,8 +4,8 @@ namespace App\Http\Controllers\Report;
 
 use App\Http\Controllers\Controller;
 use App\Models\Counter;
-use App\Models\Setting;
 use App\Models\TransactionDetail;
+use App\Support\WorkingDayClock;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -21,7 +21,7 @@ class MySummaryReportController extends Controller
      */
     public function index(Request $request)
     {
-        $date = $request->input('date', now()->format('Y-m-d'));
+        $date = $request->input('date', app(WorkingDayClock::class)->currentDate());
         $counter = $this->workingCounter();
 
         return view('reports.my-summary', compact('date', 'counter'));
@@ -33,7 +33,7 @@ class MySummaryReportController extends Controller
      */
     public function exportExcel(Request $request)
     {
-        $date = $request->input('date', now()->format('Y-m-d'));
+        $date = $request->input('date', app(WorkingDayClock::class)->currentDate());
         $counter = $this->workingCounter();
 
         [$dateStart, $dateEnd] = $this->getDateRange($date);
@@ -172,11 +172,7 @@ class MySummaryReportController extends Controller
      */
     private function getDateRange(string $date): array
     {
-        $cutoff = Setting::get('WORKING_CUT_OFF', '03:00:00');
-        $dateStart = "{$date} {$cutoff}";
-        $dateEnd = Carbon::parse($date)->addDay()->format('Y-m-d') . " {$cutoff}";
-
-        return [$dateStart, $dateEnd];
+        return app(WorkingDayClock::class)->window($date);
     }
 
     /**

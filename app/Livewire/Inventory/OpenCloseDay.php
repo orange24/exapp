@@ -10,6 +10,7 @@ use App\Models\StockMovement;
 use App\Models\WorkingDay;
 use App\Services\InventoryService;
 use App\Services\ThbCashService;
+use App\Support\WorkingDayClock;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
@@ -45,7 +46,7 @@ class OpenCloseDay extends Component
     public function mount(): void
     {
         $this->counterId = (string) (session('working_counter_id') ?? '');
-        $this->date = now()->format('Y-m-d');
+        $this->date = app(WorkingDayClock::class)->currentDate();
     }
 
     public function getCountersProperty()
@@ -313,7 +314,7 @@ class OpenCloseDay extends Component
         // จำกัดไว้ที่วันปัจจุบัน — หน้า buy/sell มองหาวันทำการของวันนี้เท่านั้น
         // การเปิดวันเก่ากลับมาจึงไม่ช่วยให้ทำรายการได้ มีแต่จะทำให้ยอดปิดที่ปิดไป
         // แล้วเปลี่ยนย้อนหลัง
-        if ($this->date !== now()->format('Y-m-d')) {
+        if ($this->date !== app(WorkingDayClock::class)->currentDate()) {
             session()->flash('error', 'เปิดใหม่ได้เฉพาะวันทำการปัจจุบันเท่านั้น');
             return;
         }

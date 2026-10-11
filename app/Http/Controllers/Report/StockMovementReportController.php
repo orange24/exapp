@@ -5,8 +5,8 @@ namespace App\Http\Controllers\Report;
 use App\Http\Controllers\Controller;
 use App\Models\Counter;
 use App\Models\CounterStock;
-use App\Models\Setting;
 use App\Models\StockMovement;
+use App\Support\WorkingDayClock;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -18,7 +18,7 @@ class StockMovementReportController extends Controller
 {
     public function index(Request $request)
     {
-        $date = $request->input('date', now()->format('Y-m-d'));
+        $date = $request->input('date', app(WorkingDayClock::class)->currentDate());
         $counterId = $request->input('counter_id', session('working_counter_id'));
 
         $counters = Counter::with('branch')->where('is_active', true)->orderBy('branch_id')->get();
@@ -30,7 +30,7 @@ class StockMovementReportController extends Controller
 
     public function exportExcel(Request $request)
     {
-        $date = $request->input('date', now()->format('Y-m-d'));
+        $date = $request->input('date', app(WorkingDayClock::class)->currentDate());
         $counterId = $request->input('counter_id', session('working_counter_id'));
         $counter = $counterId ? Counter::find($counterId) : null;
         $data = $counterId ? $this->getData($counterId, $date) : collect();
@@ -100,9 +100,7 @@ class StockMovementReportController extends Controller
 
     private function getData(int $counterId, string $date)
     {
-        $cutoff = Setting::get('WORKING_CUT_OFF', '03:00:00');
-        $dateStart = "{$date} {$cutoff}";
-        $dateEnd = Carbon::parse($date)->addDay()->format('Y-m-d') . " {$cutoff}";
+        [$dateStart, $dateEnd] = app(WorkingDayClock::class)->window($date);
 
         $stocks = CounterStock::where('counter_id', $counterId)
             ->whereNotNull('denomination_id')

@@ -28,7 +28,7 @@ class CounterFormFillTest extends TestCase
         // ที่ไม่เกี่ยวกับสิ่งที่กำลังทดสอบเลย
         \App\Models\WorkingDay::insert([
             'counter_id' => $this->counter->id,
-            'work_date' => now()->format('Y-m-d'),
+            'work_date' => $this->workingDate(),
             'opening_thb_cash' => 0,
             'status' => 'open',
             'opened_by' => $this->adminUser->id,

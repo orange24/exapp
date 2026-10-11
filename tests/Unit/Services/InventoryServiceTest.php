@@ -273,7 +273,7 @@ class InventoryServiceTest extends TestCase
             500, 35.00, 1, $this->adminUser->id
         );
 
-        $today = now()->format('Y-m-d');
+        $today = $this->workingDate();
         $this->service->openDay($this->counter->id, $today);
 
         // Check inventory was created
@@ -295,7 +295,7 @@ class InventoryServiceTest extends TestCase
             500, 35.00, 1, $this->adminUser->id
         );
 
-        $today = now()->format('Y-m-d');
+        $today = $this->workingDate();
         $this->service->openDay($this->counter->id, $today);
         $this->service->closeDay($this->counter->id, $today);
 

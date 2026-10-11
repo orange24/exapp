@@ -37,7 +37,7 @@ class OpenCloseDayTest extends TestCase
         Livewire::actingAs($this->adminUser)
             ->test(\App\Livewire\Inventory\OpenCloseDay::class)
             ->set('counterId', $this->counter->id)
-            ->set('date', now()->format('Y-m-d'))
+            ->set('date', $this->workingDate())
             ->call('openDay')
             ->assertHasNoErrors();
 
@@ -59,7 +59,7 @@ class OpenCloseDayTest extends TestCase
 
         WorkingDay::create([
             'counter_id' => $this->counter->id,
-            'work_date' => now()->toDateString(),
+            'work_date' => $this->workingDate(),
             'status' => 'open',
             'opened_by' => $this->adminUser->id,
             'opened_at' => now(),
@@ -71,7 +71,7 @@ class OpenCloseDayTest extends TestCase
         $this->expectException(\Illuminate\Database\UniqueConstraintViolationException::class);
         WorkingDay::create([
             'counter_id' => $this->counter->id,
-            'work_date' => now()->toDateString(),
+            'work_date' => $this->workingDate(),
             'status' => 'open',
             'opened_by' => $this->adminUser->id,
             'opened_at' => now(),
@@ -82,14 +82,14 @@ class OpenCloseDayTest extends TestCase
     {
         $wd = WorkingDay::create([
             'counter_id' => $this->counter->id,
-            'work_date' => now()->toDateString(),
+            'work_date' => $this->workingDate(),
             'status' => 'open',
             'opened_by' => $this->adminUser->id,
             'opened_at' => now(),
         ]);
 
         // Close directly via service
-        app(\App\Services\InventoryService::class)->closeDay($this->counter->id, now()->format('Y-m-d'));
+        app(\App\Services\InventoryService::class)->closeDay($this->counter->id, $this->workingDate());
 
         $wd->update([
             'status' => 'closed',
@@ -114,13 +114,13 @@ class OpenCloseDayTest extends TestCase
             null,
             $this->adminUser->id,
             null,
-            now()->subDay()->setTime(10, 0),
+            $this->workingMoment(10, 0, -1),
         );
 
         Livewire::actingAs($this->adminUser)
             ->test(\App\Livewire\Inventory\OpenCloseDay::class)
             ->set('counterId', $this->counter->id)
-            ->set('date', now()->format('Y-m-d'))
+            ->set('date', $this->workingDate())
             ->call('openDay')
             ->assertHasNoErrors();
 
@@ -133,7 +133,7 @@ class OpenCloseDayTest extends TestCase
         Livewire::actingAs($this->adminUser)
             ->test(\App\Livewire\Inventory\OpenCloseDay::class)
             ->set('counterId', $this->counter->id)
-            ->set('date', now()->format('Y-m-d'))
+            ->set('date', $this->workingDate())
             ->set('topupThbCash', 300000)
             ->call('openDay')
             ->assertHasNoErrors();
@@ -154,7 +154,7 @@ class OpenCloseDayTest extends TestCase
      */
     public function test_topup_at_open_day_counts_as_intraday_cash_in_not_carried_forward(): void
     {
-        $today = now()->format('Y-m-d');
+        $today = $this->workingDate();
 
         Livewire::actingAs($this->adminUser)
             ->test(\App\Livewire\Inventory\OpenCloseDay::class)
@@ -180,7 +180,7 @@ class OpenCloseDayTest extends TestCase
         $component = Livewire::actingAs($this->adminUser)
             ->test(\App\Livewire\Inventory\OpenCloseDay::class)
             ->set('counterId', $this->counter->id)
-            ->set('date', now()->format('Y-m-d'));
+            ->set('date', $this->workingDate());
 
         $component->set('transferAmount', 200000)->call('topUpCash')->assertHasNoErrors();
         $this->assertEquals(200000.0, $thb->balance($this->counter->id));
@@ -194,7 +194,7 @@ class OpenCloseDayTest extends TestCase
     public function test_approving_closing_posts_the_thb_variance_into_next_day_opening(): void
     {
         $thb = app(ThbCashService::class);
-        $today = now()->format('Y-m-d');
+        $today = $this->workingDate();
 
         $thb->apply(
             $this->counter->id,
@@ -204,7 +204,7 @@ class OpenCloseDayTest extends TestCase
             null,
             $this->adminUser->id,
             null,
-            now()->setTime(9, 0),
+            $this->momentInsideCurrentWorkingDay(),
         );
 
         $wd = WorkingDay::create([
@@ -213,7 +213,7 @@ class OpenCloseDayTest extends TestCase
             'opening_thb_cash' => 0,
             'status' => 'open',
             'opened_by' => $this->adminUser->id,
-            'opened_at' => now()->setTime(8, 0),
+            'opened_at' => $this->momentInsideCurrentWorkingDay(),
         ]);
 
         // นับเงินได้ขาดไป 1,200 บาท
@@ -244,7 +244,7 @@ class OpenCloseDayTest extends TestCase
         // อนุมัติแล้ว — เงินที่นับได้จริงกลายเป็นยอดยกมาวันถัดไป
         $this->assertEquals(98800.0, $thb->openingFor(
             $this->counter->id,
-            now()->addDay()->format('Y-m-d')
+            \Carbon\Carbon::parse($today)->addDay()->format('Y-m-d')
         ));
     }
 }

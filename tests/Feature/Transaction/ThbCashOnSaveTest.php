@@ -42,7 +42,7 @@ class ThbCashOnSaveTest extends TestCase
 
         WorkingDay::insert([
             'counter_id' => $this->counter->id,
-            'work_date' => now()->format('Y-m-d'),
+            'work_date' => $this->workingDate(),
             'opening_thb_cash' => 0,
             'status' => 'open',
             'opened_by' => $this->adminUser->id,

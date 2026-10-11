@@ -32,7 +32,7 @@ class InventorySummaryUsesBillRateTest extends TestCase
         return Livewire::actingAs($this->adminUser)
             ->test(\App\Livewire\Inventory\InventoryDashboard::class)
             ->set('counterId', $this->counter->id)
-            ->set('date', now()->format('Y-m-d'));
+            ->set('date', $this->workingDate());
     }
 
     public function test_sold_tile_uses_the_bill_rate_not_average_cost(): void
