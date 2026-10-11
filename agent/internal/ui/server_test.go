@@ -312,3 +312,74 @@ func TestAResultMessageIsNotSweptAwayByARefresh(t *testing.T) {
 		t.Fatal("หน้าที่มีข้อความผลลัพธ์ต้องไม่รีเฟรชทับ")
 	}
 }
+
+func TestOnlyTheServerUrlCanBeChangedWithoutRetypingTheToken(t *testing.T) {
+	var savedToken string
+
+	s := newTestServer(t, Deps{
+		TestConnection: func(string, string) error { return nil },
+		Save:           func(_, tk string) error { savedToken = tk; return nil },
+		CurrentToken:   func() (string, error) { return "crd_already_saved", nil },
+	})
+	s.SetState(func(st *State) { st.Configured = true })
+
+	/*
+	 * token แสดงครั้งเดียวตอนออกให้ ถ้าบังคับให้พิมพ์ใหม่ทุกครั้งที่แก้ที่อยู่
+	 * เซิร์ฟเวอร์ คนที่พิมพ์ URL ผิดจะต้องเพิกถอนเครื่องแล้วสร้างใหม่
+	 * เพียงเพราะแก้ตัวอักษรเดียว
+	 */
+	resp, err := http.PostForm(s.saveURL(), url.Values{
+		"k": {s.secret}, "server_url": {"https://exapp.new"}, "token": {""},
+	})
+	if err != nil {
+		t.Fatalf("ยิงไม่ได้: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if savedToken != "crd_already_saved" {
+		t.Fatalf("ควรใช้ token เดิม ได้ %q", savedToken)
+	}
+}
+
+func TestAnEmptyTokenWithNothingSavedIsRefused(t *testing.T) {
+	saved := false
+
+	s := newTestServer(t, Deps{
+		TestConnection: func(string, string) error { return nil },
+		Save:           func(string, string) error { saved = true; return nil },
+		CurrentToken:   func() (string, error) { return "", nil },
+	})
+
+	resp, err := http.PostForm(s.saveURL(), url.Values{
+		"k": {s.secret}, "server_url": {"https://exapp.test"}, "token": {""},
+	})
+	if err != nil {
+		t.Fatalf("ยิงไม่ได้: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if saved {
+		t.Fatal("ไม่ควรบันทึกเมื่อไม่มี token ทั้งเก่าและใหม่")
+	}
+}
+
+func TestTheEditFormSaysATokenIsAlreadyStored(t *testing.T) {
+	s := newTestServer(t, Deps{})
+	s.SetState(func(st *State) { st.Configured = true; st.ServerURL = "https://exapp.test" })
+
+	body := get(t, "http://"+s.addr+"/?setup=1&k="+s.secret)
+
+	// ช่องว่างเปล่าแยกไม่ออกระหว่าง "ไม่โชว์" กับ "ยังไม่มี"
+	if !strings.Contains(body, "มี token บันทึกไว้แล้ว") {
+		t.Fatal("ต้องบอกว่ามี token อยู่แล้ว")
+	}
+
+	if !strings.Contains(body, "แก้ไขการตั้งค่า") {
+		t.Fatal("หัวข้อต้องไม่ใช่ 'ครั้งแรก' เมื่อตั้งค่าไปแล้ว")
+	}
+
+	// และยังต้องไม่เผลอแสดง token กลับมา
+	if strings.Contains(body, "crd_") && !strings.Contains(body, "crd_...") {
+		t.Fatal("ต้องไม่แสดง token")
+	}
+}

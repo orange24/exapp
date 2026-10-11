@@ -325,6 +325,14 @@ func buildDeps() ui.Deps {
 
 			return err
 		},
+		CurrentToken: func() (string, error) {
+			cfg, err := config.Load()
+			if err != nil {
+				return "", err
+			}
+
+			return cfg.Token, nil
+		},
 		SetAutoStart: autostart.Set,
 		Quit: func() {
 			log.Println("ปิดโปรแกรมตามที่สั่งจากหน้าเว็บ")

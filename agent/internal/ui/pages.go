@@ -50,15 +50,36 @@ var page = template.Must(template.New("p").Parse(`<!doctype html>
 
 {{if .Setup}}
 <div class="card">
-  <h1>ตั้งค่าเครื่องอ่านบัตรครั้งแรก</h1>
+  <h1>{{if .HasToken}}แก้ไขการตั้งค่า{{else}}ตั้งค่าเครื่องอ่านบัตรครั้งแรก{{end}}</h1>
   <div class="sub">ขอ token ได้จากหน้า ตั้งค่า → เครื่องอ่านบัตรประชาชน ในระบบ exapp</div>
   <form method="post" action="/save?k={{.Key}}">
     <label>ที่อยู่เซิร์ฟเวอร์</label>
     <input type="text" name="server_url" value="{{.ServerURL}}" placeholder="https://exapp.softernity.com" required>
+
     <label>token ประจำเครื่อง</label>
-    <input type="password" name="token" placeholder="crd_..." required>
+    {{if .HasToken}}
+      {{/*
+        ช่องว่าง = ใช้ตัวเดิม
+
+        token ไม่เคยถูกแสดงกลับ และจะไม่แสดง — มันถูกเก็บไว้แล้ว ไม่มีเหตุผล
+        ให้เอากลับมาอยู่บนหน้าจอที่อาจมีคนเดินผ่านหรือถูกถ่ายภาพ
+
+        แต่ถ้าไม่บอกว่าเว้นว่างได้ คนที่อยากแก้แค่ที่อยู่เซิร์ฟเวอร์จะต้องหา
+        token มาพิมพ์ใหม่ ซึ่งหาไม่ได้แล้วเพราะมันแสดงครั้งเดียว — กลายเป็น
+        ต้องเพิกถอนเครื่องแล้วสร้างใหม่เพียงเพราะพิมพ์ URL ผิด
+      */}}
+      <input type="password" name="token" placeholder="เว้นว่างไว้เพื่อใช้ token เดิม" autocomplete="off">
+      <div class="note" style="margin-top:6px">
+        มี token บันทึกไว้แล้ว ระบบไม่แสดงกลับด้วยเหตุผลด้านความปลอดภัย
+        เว้นช่องนี้ว่างไว้ถ้าไม่ต้องการเปลี่ยน
+      </div>
+    {{else}}
+      <input type="password" name="token" placeholder="crd_..." autocomplete="off" required>
+    {{end}}
+
     <div class="row">
       <button class="primary" type="submit">ทดสอบและบันทึก</button>
+      {{if .HasToken}}<a href="/?k={{.Key}}"><button class="ghost" type="button">ยกเลิก</button></a>{{end}}
     </div>
     <div class="note">
       ระบบจะลองต่อกับเซิร์ฟเวอร์ก่อนบันทึก ถ้าต่อไม่ได้จะไม่บันทึกให้
@@ -110,6 +131,7 @@ var page = template.Must(template.New("p").Parse(`<!doctype html>
 type view struct {
 	Setup        bool
 	Refresh      bool
+	HasToken     bool
 	Key          string
 	Message      string
 	MessageKind  string
@@ -132,6 +154,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, msg, kind string
 	v := view{
 		Setup:       setup,
 		Refresh:     !setup && msg == "",
+		HasToken:    st.Configured,
 		Key:         s.secret,
 		Message:     msg,
 		MessageKind: kind,
@@ -167,6 +190,18 @@ func (s *Server) handleSave(w http.ResponseWriter, r *http.Request) {
 
 	url := trimmed(r.FormValue("server_url"))
 	token := trimmed(r.FormValue("token"))
+
+	// เว้นว่างแปลว่าไม่ต้องการเปลี่ยน token — ดึงตัวเดิมมาใช้ต่อ
+	if token == "" {
+		existing, err := s.deps.CurrentToken()
+		if err != nil || existing == "" {
+			s.render(w, r, "ยังไม่มี token บันทึกไว้ กรุณากรอก", "err")
+
+			return
+		}
+
+		token = existing
+	}
 
 	/*
 	 * ลองต่อก่อนบันทึกเสมอ

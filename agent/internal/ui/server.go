@@ -50,6 +50,10 @@ type Deps struct {
 	CheckUpdate    func() (version string, available bool, err error)
 	ApplyUpdate    func() error
 
+	// CurrentToken คืน token ที่บันทึกไว้ ใช้ตอนผู้ใช้แก้เฉพาะที่อยู่เซิร์ฟเวอร์
+	// โดยไม่พิมพ์ token ใหม่ — ไม่ได้ใช้แสดงบนหน้าจอ
+	CurrentToken func() (string, error)
+
 	// Quit ปิดโปรแกรมทั้งตัว ไม่ใช่แค่ปิดหน้าเว็บ
 	//
 	// โปรแกรมทำงานเบื้องหลังที่ไม่มีทางปิดนอกจากฆ่า process เป็นสิ่งที่
