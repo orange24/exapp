@@ -12,6 +12,15 @@ import (
 var page = template.Must(template.New("p").Parse(`<!doctype html>
 <html lang="th"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+{{if .Refresh}}{{/*
+  รีเฟรชเองทุก 5 วินาที เฉพาะหน้าสถานะ
+
+  สถานะเปลี่ยนได้ตลอดโดยไม่มีใครแตะหน้าจอ — เสียบสายเครื่องอ่าน เน็ตหลุด
+  เซิร์ฟเวอร์ล่ม ถ้าไม่รีเฟรช หน้าจะค้างอยู่ที่ภาพตอนเปิดตลอดไป แล้วพนักงาน
+  จะเชื่อว่าเครื่องยังเสียอยู่ทั้งที่แก้ไปแล้ว
+
+  ไม่รีเฟรชหน้ากรอกข้อมูล เพราะจะล้างสิ่งที่พิมพ์ค้างไว้
+*/}}<meta http-equiv="refresh" content="5">{{end}}
 <title>เครื่องอ่านบัตร — exapp</title>
 <style>
  body{font-family:-apple-system,"Segoe UI",sans-serif;background:#f3f4f6;margin:0;padding:24px;color:#111}
@@ -100,6 +109,7 @@ var page = template.Must(template.New("p").Parse(`<!doctype html>
 
 type view struct {
 	Setup        bool
+	Refresh      bool
 	Key          string
 	Message      string
 	MessageKind  string
@@ -117,8 +127,11 @@ type view struct {
 func (s *Server) render(w http.ResponseWriter, r *http.Request, msg, kind string) {
 	st := s.snapshot()
 
+	setup := !st.Configured || r.URL.Query().Get("setup") == "1"
+
 	v := view{
-		Setup:       !st.Configured || r.URL.Query().Get("setup") == "1",
+		Setup:       setup,
+		Refresh:     !setup && msg == "",
 		Key:         s.secret,
 		Message:     msg,
 		MessageKind: kind,

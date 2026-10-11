@@ -5,7 +5,9 @@
 package card
 
 import (
+	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/ebfe/scard"
@@ -26,6 +28,7 @@ var (
 )
 
 type Reader struct {
+	mu  sync.Mutex
 	ctx *scard.Context
 }
 
@@ -39,14 +42,60 @@ func NewReader() (*Reader, error) {
 }
 
 func (r *Reader) Close() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	if r.ctx != nil {
 		_ = r.ctx.Release()
+		r.ctx = nil
 	}
+}
+
+/*
+context คืน context ที่ใช้ได้ สร้างใหม่ถ้าตัวเดิมตายไปแล้ว
+
+บน macOS บริการ PC/SC จะหยุดทำงานเมื่อไม่มีเครื่องอ่านเสียบอยู่ และเริ่มใหม่
+เมื่อมีคนเสียบ context ที่สร้างไว้ตอนยังไม่เสียบจึงตายไปพร้อมบริการเดิม
+ListReaders จะคืนรายการว่างตลอดกาลแม้เสียบเครื่องอ่านแล้ว
+
+เจอจริงที่เคาน์เตอร์: เปิดโปรแกรมก่อนเสียบสาย พอเสียบแล้วหน้าจอยังบอกว่า
+ไม่พบเครื่องอ่าน และไม่หายแม้เปิดโปรแกรมใหม่ (เพราะดับเบิลคลิกซ้ำไปเปิดหน้า
+ของตัวเดิมที่ยังถือ context ที่ตายแล้ว)
+*/
+func (r *Reader) context() (*scard.Context, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.ctx != nil {
+		if ok, _ := r.ctx.IsValid(); ok {
+			return r.ctx, nil
+		}
+
+		_ = r.ctx.Release()
+		r.ctx = nil
+	}
+
+	ctx, err := scard.EstablishContext()
+	if err != nil {
+		return nil, fmt.Errorf("ต่อกับบริการ PC/SC ไม่ได้: %w", err)
+	}
+
+	r.ctx = ctx
+
+	return ctx, nil
+}
+
+// staleContext บอกว่าความผิดพลาดนี้เกิดจาก context ที่ใช้ไม่ได้แล้ว
+// ไม่ใช่จากตัวบัตรหรือเครื่องอ่าน
+func staleContext(err error) bool {
+	return errors.Is(err, scard.ErrServiceStopped) ||
+		errors.Is(err, scard.ErrNoService) ||
+		errors.Is(err, scard.ErrInvalidHandle)
 }
 
 // Readers คืนเฉพาะช่องที่อาจมีบัตรประชาชนอยู่จริง (ดู SelectReaders)
 func (r *Reader) Readers() ([]string, error) {
-	all, err := r.ctx.ListReaders()
+	all, err := r.AllReaders()
 	if err != nil {
 		return nil, err
 	}
@@ -56,7 +105,44 @@ func (r *Reader) Readers() ([]string, error) {
 
 // AllReaders คืนทุกช่องตามที่ระบบรายงาน ใช้ตอนวินิจฉัยเท่านั้น
 func (r *Reader) AllReaders() ([]string, error) {
-	return r.ctx.ListReaders()
+	ctx, err := r.context()
+	if err != nil {
+		return nil, err
+	}
+
+	names, err := ctx.ListReaders()
+
+	// ไม่มีเครื่องอ่านเสียบอยู่ไม่ใช่ความผิดพลาด แค่ยังไม่มีอะไรให้ใช้
+	if errors.Is(err, scard.ErrNoReadersAvailable) {
+		return nil, nil
+	}
+
+	if staleContext(err) {
+		// บริการเพิ่งเริ่มใหม่เพราะมีคนเสียบเครื่องอ่าน — สร้าง context ใหม่แล้วถามซ้ำ
+		r.invalidate()
+
+		ctx, err = r.context()
+		if err != nil {
+			return nil, err
+		}
+
+		names, err = ctx.ListReaders()
+		if errors.Is(err, scard.ErrNoReadersAvailable) {
+			return nil, nil
+		}
+	}
+
+	return names, err
+}
+
+func (r *Reader) invalidate() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.ctx != nil {
+		_ = r.ctx.Release()
+		r.ctx = nil
+	}
 }
 
 // Watcher เฝ้าจังหวะที่บัตรถูกเสียบเข้าไป
@@ -82,13 +168,18 @@ func (r *Reader) Watch() (*Watcher, error) {
 		return nil, fmt.Errorf("ไม่พบเครื่องอ่านบัตร")
 	}
 
+	ctx, err := r.context()
+	if err != nil {
+		return nil, err
+	}
+
 	states := make([]scard.ReaderState, len(names))
 	for i, n := range names {
 		states[i].Reader = n
 		states[i].CurrentState = scard.StateUnaware
 	}
 
-	return &Watcher{ctx: r.ctx, names: names, states: states}, nil
+	return &Watcher{ctx: ctx, names: names, states: states}, nil
 }
 
 // WaitForInsertion บล็อกจนมีบัตรถูกเสียบ คืนชื่อช่องนั้น
@@ -151,7 +242,12 @@ func transmit(c *scard.Card, cmd []byte) ([]byte, error) {
 
 // Read อ่านบัตรที่อยู่ในเครื่องอ่านชื่อ reader
 func (r *Reader) Read(reader string) (Data, error) {
-	c, err := r.ctx.Connect(reader, scard.ShareShared, scard.ProtocolT0|scard.ProtocolT1)
+	ctx, err := r.context()
+	if err != nil {
+		return Data{}, err
+	}
+
+	c, err := ctx.Connect(reader, scard.ShareShared, scard.ProtocolT0|scard.ProtocolT1)
 	if err != nil {
 		return Data{}, fmt.Errorf("เชื่อมกับบัตรไม่ได้: %w", err)
 	}

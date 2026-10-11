@@ -267,3 +267,48 @@ func TestTheStatusPageOffersAWayToStop(t *testing.T) {
 		t.Fatal("ต้องบอกให้ชัดว่าปิดหน้าต่างไม่เท่ากับปิดโปรแกรม")
 	}
 }
+
+func TestTheStatusPageRefreshesItself(t *testing.T) {
+	s := newTestServer(t, Deps{})
+	s.SetState(func(st *State) { st.Configured = true })
+
+	/*
+	 * สถานะเปลี่ยนได้โดยไม่มีใครแตะหน้าจอ — เสียบสายเครื่องอ่าน เน็ตหลุด
+	 * เซิร์ฟเวอร์ล่ม ถ้าไม่รีเฟรช หน้าจะค้างอยู่ที่ภาพตอนเปิดตลอดไป
+	 * แล้วพนักงานจะเชื่อว่าเครื่องยังเสียอยู่ทั้งที่แก้ไปแล้ว
+	 */
+	if !strings.Contains(get(t, s.URL()), `http-equiv="refresh"`) {
+		t.Fatal("หน้าสถานะต้องรีเฟรชเอง")
+	}
+}
+
+func TestTheSetupFormDoesNotRefreshUnderTheUser(t *testing.T) {
+	s := newTestServer(t, Deps{})
+
+	// รีเฟรชตอนกำลังพิมพ์ token จะล้างสิ่งที่พิมพ์ไปแล้ว
+	if strings.Contains(get(t, s.URL()), `http-equiv="refresh"`) {
+		t.Fatal("หน้ากรอกข้อมูลต้องไม่รีเฟรชเอง")
+	}
+}
+
+func TestAResultMessageIsNotSweptAwayByARefresh(t *testing.T) {
+	s := newTestServer(t, Deps{
+		TestConnection: func(string, string) error { return nil },
+		Save:           func(string, string) error { return nil },
+	})
+
+	resp, err := http.PostForm(s.saveURL(), url.Values{
+		"k": {s.secret}, "server_url": {"https://exapp.test"}, "token": {"crd_x"},
+	})
+	if err != nil {
+		t.Fatalf("ยิงไม่ได้: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+
+	// ข้อความ "บันทึกแล้ว" ที่หายไปใน 5 วินาทีคือข้อความที่คนอ่านไม่ทัน
+	if strings.Contains(string(body), `http-equiv="refresh"`) {
+		t.Fatal("หน้าที่มีข้อความผลลัพธ์ต้องไม่รีเฟรชทับ")
+	}
+}

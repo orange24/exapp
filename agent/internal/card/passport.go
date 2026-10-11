@@ -104,7 +104,7 @@ type ContactlessReader struct {
 
 // Contactless คืนตัวเฝ้าช่องไร้สัมผัส หรือ nil ถ้าเครื่องนี้ไม่มีช่องนั้น
 func (r *Reader) Contactless() *ContactlessReader {
-	all, err := r.ctx.ListReaders()
+	all, err := r.AllReaders()
 	if err != nil {
 		return nil
 	}
@@ -114,7 +114,12 @@ func (r *Reader) Contactless() *ContactlessReader {
 		return nil
 	}
 
-	return &ContactlessReader{ctx: r.ctx, name: name}
+	ctx, err := r.context()
+	if err != nil {
+		return nil
+	}
+
+	return &ContactlessReader{ctx: ctx, name: name}
 }
 
 // WaitForTap รอจนมีอะไรมาแตะที่แท่น
