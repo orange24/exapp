@@ -17,9 +17,26 @@ if [ ! -f "$BIN" ]; then
 fi
 
 rm -rf "$OUT"
-mkdir -p "$OUT/Contents/MacOS"
+mkdir -p "$OUT/Contents/MacOS" "$OUT/Contents/Resources"
 
-cp "$BIN" "$OUT/Contents/MacOS/exapp-card-agent"
+# โปรแกรมจริงอยู่ใน Resources ส่วน MacOS เป็นสคริปต์สั้น ๆ ที่ปล่อยมันแล้วจบ
+#
+# ดับเบิลคลิก .app ที่กำลังรันอยู่ macOS จะพยายามปลุก process เดิมให้มาข้างหน้า
+# แทนที่จะเริ่มตัวใหม่ โปรแกรม Go ไม่มี event loop ของ Cocoa จึงไม่ตอบ
+# แล้ว Finder ขึ้นว่า "ไม่ตอบสนอง" — โค้ดกันเปิดซ้ำของเราไม่มีโอกาสทำงานเลย
+#
+# สคริปต์ที่จบทันทีทำให้ macOS ไม่เคยเห็นแอปนี้ "กำลังรัน" ดับเบิลคลิกครั้งถัดไป
+# จึงเริ่มสคริปต์ใหม่เสมอ แล้วตัวโปรแกรมค่อยตัดสินเองว่ามีตัวเก่ารันอยู่ไหม
+cp "$BIN" "$OUT/Contents/Resources/exapp-card-agent-bin"
+chmod +x "$OUT/Contents/Resources/exapp-card-agent-bin"
+
+cat > "$OUT/Contents/MacOS/exapp-card-agent" <<'LAUNCHER'
+#!/bin/sh
+# ปล่อยโปรแกรมจริงให้ทำงานต่อแล้วจบตัวเองทันที
+DIR=$(cd "$(dirname "$0")/../Resources" && pwd)
+"$DIR/exapp-card-agent-bin" >/dev/null 2>&1 &
+exit 0
+LAUNCHER
 chmod +x "$OUT/Contents/MacOS/exapp-card-agent"
 
 cat > "$OUT/Contents/Info.plist" <<PLIST
