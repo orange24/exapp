@@ -32,9 +32,11 @@ class BranchController extends Controller
             'address'      => 'nullable|string|max:255',
             'tax_id'       => 'nullable|string|max:30',
             'license_no'   => 'nullable|string|max:30',
+            'cut_off_time' => ['nullable', 'date_format:H:i', 'before:12:00'],
             'is_active'    => 'boolean',
         ]);
         $validated['is_active'] = $request->boolean('is_active');
+        $validated['cut_off_time'] = $this->normaliseCutOff($validated['cut_off_time'] ?? null);
         Branch::create($validated);
         return redirect()->route('admin.branches.index')->with('success', 'เพิ่มสาขาเรียบร้อย');
     }
@@ -57,9 +59,11 @@ class BranchController extends Controller
             'address'      => 'nullable|string|max:255',
             'tax_id'       => 'nullable|string|max:30',
             'license_no'   => 'nullable|string|max:30',
+            'cut_off_time' => ['nullable', 'date_format:H:i', 'before:12:00'],
             'is_active'    => 'boolean',
         ]);
         $validated['is_active'] = $request->boolean('is_active');
+        $validated['cut_off_time'] = $this->normaliseCutOff($validated['cut_off_time'] ?? null);
         $branch->update($validated);
         return redirect()->route('admin.branches.index')->with('success', 'แก้ไขสาขาเรียบร้อย');
     }
@@ -95,5 +99,19 @@ class BranchController extends Controller
         $name = $counter->counter_name;
         $counter->delete();
         return redirect()->route('admin.branches.edit', $branchId)->with('success', "ลบ {$name} เรียบร้อย");
+    }
+    /**
+     * ช่องเวลาใน html ส่งมาเป็น H:i เก็บให้เป็น H:i:s เสมอ
+     *
+     * ไม่ปล่อยให้ฐานข้อมูลเป็นคนเติมให้ เพราะ MySQL เติม sqlite ไม่เติม
+     * แล้วพฤติกรรมจะต่างกันระหว่างเทสกับของจริง เว้นว่าง = ใช้ค่ากลางของระบบ
+     */
+    private function normaliseCutOff(?string $value): ?string
+    {
+        if ($value === null || trim($value) === "") {
+            return null;
+        }
+
+        return \Carbon\Carbon::createFromTimeString($value)->format("H:i:s");
     }
 }

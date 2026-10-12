@@ -35,11 +35,10 @@ class AvgRateSummaryController extends Controller
             $selectedCounters = $counters->pluck('id')->map(fn($id) => (string) $id)->toArray();
         }
 
-        [$dateStart, $dateEnd] = $this->getDateRange($date);
 
-        $buying = $this->getAvgSummary('BUYING', $selectedCounters, $dateStart, $dateEnd);
-        $selling = $this->getAvgSummary('SELLING', $selectedCounters, $dateStart, $dateEnd);
-        $summary = $this->getNetSummary($selectedCounters, $dateStart, $dateEnd, $buying);
+        $buying = $this->getAvgSummary('BUYING', $selectedCounters, $date);
+        $selling = $this->getAvgSummary('SELLING', $selectedCounters, $date);
+        $summary = $this->getNetSummary($selectedCounters, $date, $buying);
 
         return view('reports.avg-rate-summary', compact(
             'date', 'counters', 'selectedCounters',
@@ -55,11 +54,10 @@ class AvgRateSummaryController extends Controller
         $date = $request->input('date', app(WorkingDayClock::class)->currentDate());
         $selectedCounters = $request->input('counters', []);
 
-        [$dateStart, $dateEnd] = $this->getDateRange($date);
 
-        $buying = $this->getAvgSummary('BUYING', $selectedCounters, $dateStart, $dateEnd);
-        $selling = $this->getAvgSummary('SELLING', $selectedCounters, $dateStart, $dateEnd);
-        $summary = $this->getNetSummary($selectedCounters, $dateStart, $dateEnd, $buying);
+        $buying = $this->getAvgSummary('BUYING', $selectedCounters, $date);
+        $selling = $this->getAvgSummary('SELLING', $selectedCounters, $date);
+        $summary = $this->getNetSummary($selectedCounters, $date, $buying);
 
         $spreadsheet = new Spreadsheet();
         $spreadsheet->removeSheetByIndex(0);
@@ -212,14 +210,12 @@ class AvgRateSummaryController extends Controller
     /**
      * Get transaction summary with AVG rate, grouped by currency only.
      */
-    private function getAvgSummary(string $trnsType, array $counterIds, string $dateStart, string $dateEnd)
+    private function getAvgSummary(string $trnsType, array $counterIds, string $date)
     {
         $query = TransactionDetail::join('transactions_master', 'transactions_detail.transaction_id', '=', 'transactions_master.id')
             ->join('currencies', 'transactions_detail.currency_code', '=', 'currencies.currency_code')
             ->where('transactions_master.trns_type', $trnsType)
             ->where('transactions_master.flag_cancel', 'N')
-            ->where('transactions_master.trns_datetime', '>', $dateStart)
-            ->where('transactions_master.trns_datetime', '<=', $dateEnd)
             ->selectRaw('
                 transactions_detail.currency_name,
                 currencies.seq,
@@ -231,9 +227,10 @@ class AvgRateSummaryController extends Controller
             ->orderBy('currencies.seq')
             ->orderBy('transactions_detail.currency_name');
 
-        if (!empty($counterIds)) {
-            $query->whereIn('transactions_master.counter_id', $counterIds);
-        }
+        // แต่ละสาขาใช้ช่วงเวลาของตัวเอง — รายงานรวมหลายสาขาไม่มีช่วงเดียวที่ถูก
+        app(WorkingDayClock::class)->constrainToWorkingDay(
+            $query, 'transactions_master.trns_datetime', 'transactions_master.counter_id', $date, $counterIds
+        );
 
         return $query->get();
     }
@@ -242,7 +239,7 @@ class AvgRateSummaryController extends Controller
      * Get net summary per currency (buying amount - selling THB, selling amount - buying THB).
      * Uses buying avg rate for THB calculation — same logic as reference system.
      */
-    private function getNetSummary(array $counterIds, string $dateStart, string $dateEnd, $buyingData)
+    private function getNetSummary(array $counterIds, string $date, $buyingData)
     {
         // Cache buying avg rates
         $buyingRates = [];
@@ -254,8 +251,6 @@ class AvgRateSummaryController extends Controller
         //           SELLING gives negative THB (as amount), positive foreign amount (as total)
         $subQuery = TransactionDetail::join('transactions_master', 'transactions_detail.transaction_id', '=', 'transactions_master.id')
             ->where('transactions_master.flag_cancel', 'N')
-            ->where('transactions_master.trns_datetime', '>', $dateStart)
-            ->where('transactions_master.trns_datetime', '<=', $dateEnd)
             ->selectRaw("
                 transactions_detail.currency_name,
                 transactions_detail.currency_code,
@@ -268,9 +263,10 @@ class AvgRateSummaryController extends Controller
             ")
             ->groupBy('transactions_master.trns_type', 'transactions_detail.currency_name', 'transactions_detail.currency_code');
 
-        if (!empty($counterIds)) {
-            $subQuery->whereIn('transactions_master.counter_id', $counterIds);
-        }
+        // แต่ละสาขาใช้ช่วงเวลาของตัวเอง — รายงานรวมหลายสาขาไม่มีช่วงเดียวที่ถูก
+        app(WorkingDayClock::class)->constrainToWorkingDay(
+            $subQuery, 'transactions_master.trns_datetime', 'transactions_master.counter_id', $date, $counterIds
+        );
 
         // Wrap in outer query to net out per currency
         $results = DB::table(DB::raw("({$subQuery->toSql()}) as d"))
@@ -294,15 +290,6 @@ class AvgRateSummaryController extends Controller
         });
     }
 
-    /**
-     * ช่วงเวลาของวันทำการ — ขอบอยู่ที่เวลาตัดรอบ ไม่ใช่เที่ยงคืน
-     *
-     * @return array{0: string, 1: string}
-     */
-    private function getDateRange(string $date): array
-    {
-        return app(WorkingDayClock::class)->window($date);
-    }
 
     /**
      * Apply thin borders to a cell range.

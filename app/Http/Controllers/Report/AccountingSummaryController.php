@@ -22,7 +22,6 @@ class AccountingSummaryController extends Controller
     {
         $date = $request->input('date', app(WorkingDayClock::class)->currentDate());
 
-        [$dateStart, $dateEnd] = $this->getDateRange($date);
 
         // Get all active counters that have transactions for this date
         $counters = Counter::with('branch')
@@ -34,9 +33,9 @@ class AccountingSummaryController extends Controller
         // Build summary per counter
         $counterSummaries = [];
         foreach ($counters as $counter) {
-            $buying = $this->getSummary('BUYING', $counter->id, $dateStart, $dateEnd);
-            $selling = $this->getSummary('SELLING', $counter->id, $dateStart, $dateEnd);
-            $commission = $this->getCommission($counter->id, $dateStart, $dateEnd);
+            $buying = $this->getSummary('BUYING', $counter->id, $date);
+            $selling = $this->getSummary('SELLING', $counter->id, $date);
+            $commission = $this->getCommission($counter->id, $date);
 
             // Skip counters with no transactions
             if ($buying->isEmpty() && $selling->isEmpty()) {
@@ -55,9 +54,9 @@ class AccountingSummaryController extends Controller
         }
 
         // All-branch combined summary
-        $allBuying = $this->getSummary('BUYING', null, $dateStart, $dateEnd);
-        $allSelling = $this->getSummary('SELLING', null, $dateStart, $dateEnd);
-        $allCommission = $this->getCommission(null, $dateStart, $dateEnd);
+        $allBuying = $this->getSummary('BUYING', null, $date);
+        $allSelling = $this->getSummary('SELLING', null, $date);
+        $allCommission = $this->getCommission(null, $date);
 
         return view('reports.accounting-summary', compact(
             'date', 'counterSummaries',
@@ -72,7 +71,6 @@ class AccountingSummaryController extends Controller
     {
         $date = $request->input('date', app(WorkingDayClock::class)->currentDate());
 
-        [$dateStart, $dateEnd] = $this->getDateRange($date);
 
         $counters = Counter::with('branch')
             ->where('is_active', true)
@@ -86,9 +84,9 @@ class AccountingSummaryController extends Controller
 
         // --- Per-counter sheets ---
         foreach ($counters as $counter) {
-            $buying = $this->getSummary('BUYING', $counter->id, $dateStart, $dateEnd);
-            $selling = $this->getSummary('SELLING', $counter->id, $dateStart, $dateEnd);
-            $commission = $this->getCommission($counter->id, $dateStart, $dateEnd);
+            $buying = $this->getSummary('BUYING', $counter->id, $date);
+            $selling = $this->getSummary('SELLING', $counter->id, $date);
+            $commission = $this->getCommission($counter->id, $date);
 
             // Skip counters with no transactions
             if ($buying->isEmpty() && $selling->isEmpty()) {
@@ -104,9 +102,9 @@ class AccountingSummaryController extends Controller
         }
 
         // --- All-branch combined sheet ---
-        $allBuying = $this->getSummary('BUYING', null, $dateStart, $dateEnd);
-        $allSelling = $this->getSummary('SELLING', null, $dateStart, $dateEnd);
-        $allCommission = $this->getCommission(null, $dateStart, $dateEnd);
+        $allBuying = $this->getSummary('BUYING', null, $date);
+        $allSelling = $this->getSummary('SELLING', null, $date);
+        $allCommission = $this->getCommission(null, $date);
 
         if ($allBuying->isNotEmpty() || $allSelling->isNotEmpty()) {
             $sheet = $spreadsheet->createSheet($sheetIndex);
@@ -276,33 +274,23 @@ class AccountingSummaryController extends Controller
         }
     }
 
-    /**
-     * ช่วงเวลาของวันทำการ — ขอบอยู่ที่เวลาตัดรอบ ไม่ใช่เที่ยงคืน
-     *
-     * @return array{0: string, 1: string}
-     */
-    private function getDateRange(string $date): array
-    {
-        return app(WorkingDayClock::class)->window($date);
-    }
 
     /**
      * Get transaction summary grouped by currency and rate.
      */
-    private function getSummary(string $trnsType, ?int $counterId, string $dateStart, string $dateEnd)
+    private function getSummary(string $trnsType, ?int $counterId, string $date)
     {
         $query = TransactionDetail::join('transactions_master', 'transactions_detail.transaction_id', '=', 'transactions_master.id')
             ->where('transactions_master.trns_type', $trnsType)
             ->where('transactions_master.flag_cancel', 'N')
-            ->where('transactions_master.trns_datetime', '>', $dateStart)
-            ->where('transactions_master.trns_datetime', '<=', $dateEnd)
             ->selectRaw('transactions_detail.currency_name, transactions_detail.unit_price, SUM(transactions_detail.amount) as total_amount, SUM(transactions_detail.total) as total_thb')
             ->groupBy('transactions_detail.currency_name', 'transactions_detail.unit_price')
             ->orderBy('transactions_detail.currency_name');
 
-        if ($counterId) {
-            $query->where('transactions_master.counter_id', $counterId);
-        }
+        // แต่ละสาขาใช้ช่วงเวลาของตัวเอง — รายงานรวมหลายสาขาไม่มีช่วงเดียวที่ถูก
+        app(WorkingDayClock::class)->constrainToWorkingDay(
+            $query, 'transactions_master.trns_datetime', 'transactions_master.counter_id', $date, $counterId ? [$counterId] : []
+        );
 
         return $query->get();
     }
@@ -310,14 +298,12 @@ class AccountingSummaryController extends Controller
     /**
      * Get commission summary for discount booth selling transactions.
      */
-    private function getCommission(?int $counterId, string $dateStart, string $dateEnd)
+    private function getCommission(?int $counterId, string $date)
     {
         $query = TransactionDetail::join('transactions_master', 'transactions_detail.transaction_id', '=', 'transactions_master.id')
             ->where('transactions_master.trns_type', 'SELLING')
             ->where('transactions_master.flag_cancel', 'N')
             ->where('transactions_master.is_discount_booth', true)
-            ->where('transactions_master.trns_datetime', '>', $dateStart)
-            ->where('transactions_master.trns_datetime', '<=', $dateEnd)
             ->selectRaw('
                 transactions_detail.currency_name,
                 transactions_detail.unit_price,
@@ -329,9 +315,10 @@ class AccountingSummaryController extends Controller
             ->groupBy('transactions_detail.currency_name', 'transactions_detail.unit_price', 'transactions_detail.discount_rate_sell')
             ->orderBy('transactions_detail.currency_name');
 
-        if ($counterId) {
-            $query->where('transactions_master.counter_id', $counterId);
-        }
+        // แต่ละสาขาใช้ช่วงเวลาของตัวเอง — รายงานรวมหลายสาขาไม่มีช่วงเดียวที่ถูก
+        app(WorkingDayClock::class)->constrainToWorkingDay(
+            $query, 'transactions_master.trns_datetime', 'transactions_master.counter_id', $date, $counterId ? [$counterId] : []
+        );
 
         return $query->get();
     }

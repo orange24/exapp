@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class WorkingDay extends Model
 {
     protected $fillable = [
-        'counter_id', 'work_date', 'opening_thb_cash', 'status',
+        'counter_id', 'work_date', 'cut_off_time', 'opening_thb_cash', 'status',
         'opened_by', 'opened_at', 'closed_by', 'closed_at', 'note',
         'closing_items', 'closing_status', 'closing_approved_by', 'closing_approved_at', 'closing_notes',
         'closing_thb_expected', 'closing_thb_actual', 'closing_thb_variance',

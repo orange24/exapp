@@ -19,7 +19,9 @@ class InventoryDashboard extends Component
 
     public function mount(): void
     {
-        $this->date = app(WorkingDayClock::class)->currentDate();
+        $this->date = app(WorkingDayClock::class)->currentDateForCounter(
+            (int) (session('working_counter_id') ?? 0)
+        );
         $this->counterId = (string) (session('working_counter_id') ?? '');
     }
 
@@ -58,7 +60,8 @@ class InventoryDashboard extends Component
         $stocks = $query->get();
 
         // Get movements for the selected date
-        [$dateStart, $dateEnd] = app(WorkingDayClock::class)->window($this->date);
+        [$dateStart, $dateEnd] = app(WorkingDayClock::class)
+            ->windowForCounter((int) $this->counterId, $this->date);
 
         $movements = StockMovement::where('counter_id', $this->counterId)
             ->whereNotNull('denomination_id')

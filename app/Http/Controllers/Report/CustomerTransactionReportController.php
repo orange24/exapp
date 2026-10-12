@@ -71,15 +71,18 @@ class CustomerTransactionReportController extends Controller
 
     private function getData(string $dateFrom, string $dateTo, string $search)
     {
-        [$start, $end] = app(WorkingDayClock::class)->range($dateFrom, $dateTo);
+        $clock = app(WorkingDayClock::class);
 
         $query = DB::table('transactions_master')
             ->leftJoin('customers', 'transactions_master.customer_id', '=', 'customers.id')
             ->where('transactions_master.flag_cancel', 'N')
-            ->where('transactions_master.trns_datetime', '>', $start)
-            ->where('transactions_master.trns_datetime', '<=', $end)
             ->whereNotNull('transactions_master.cust_name')
             ->where('transactions_master.cust_name', '!=', '');
+
+        // แต่ละสาขาใช้ช่วงเวลาของตัวเอง
+        $clock->constrainToWorkingDayRange(
+            $query, 'transactions_master.trns_datetime', 'transactions_master.counter_id', $dateFrom, $dateTo
+        );
 
         if ($search) {
             $query->where(function ($q) use ($search) {
@@ -101,13 +104,15 @@ class CustomerTransactionReportController extends Controller
             ->orderByRaw('SUM(1) DESC')
             ->limit(200)
             ->get()
-            ->map(function ($row) use ($start, $end) {
+            ->map(function ($row) use ($clock, $dateFrom, $dateTo) {
                 $thb = DB::table('transactions_master')
                     ->join('transactions_detail', 'transactions_master.id', '=', 'transactions_detail.transaction_id')
                     ->where('transactions_master.flag_cancel', 'N')
-                    ->where('transactions_master.trns_datetime', '>', $start)
-                    ->where('transactions_master.trns_datetime', '<=', $end)
-                    ->where('transactions_master.cust_name', $row->cust_name)
+                    ->where('transactions_master.cust_name', $row->cust_name);
+
+                $clock->constrainToWorkingDayRange($thb, 'transactions_master.trns_datetime', 'transactions_master.counter_id', $dateFrom, $dateTo);
+
+                $thb = $thb
                     ->selectRaw('
                         SUM(CASE WHEN trns_type="BUYING" THEN transactions_detail.total ELSE 0 END) as buy_thb,
                         SUM(CASE WHEN trns_type="SELLING" THEN transactions_detail.amount ELSE 0 END) as sell_thb

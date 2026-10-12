@@ -68,13 +68,16 @@ class CashierPerformanceReportController extends Controller
 
     private function getData(string $dateFrom, string $dateTo)
     {
-        [$start, $end] = app(WorkingDayClock::class)->range($dateFrom, $dateTo);
+        $clock = app(WorkingDayClock::class);
 
-        return DB::table('transactions_master')
+        $query = DB::table('transactions_master')
             ->join('users', 'transactions_master.created_by', '=', 'users.id')
-            ->where('transactions_master.flag_cancel', 'N')
-            ->where('transactions_master.trns_datetime', '>', $start)
-            ->where('transactions_master.trns_datetime', '<=', $end)
+            ->where('transactions_master.flag_cancel', 'N');
+
+        // แต่ละสาขาใช้ช่วงเวลาของตัวเอง
+        $clock->constrainToWorkingDayRange($query, 'transactions_master.trns_datetime', 'transactions_master.counter_id', $dateFrom, $dateTo);
+
+        return $query
             ->selectRaw('
                 users.name as staff_name,
                 transactions_master.counter_name,
@@ -86,16 +89,18 @@ class CashierPerformanceReportController extends Controller
             ->groupBy('users.name', 'transactions_master.counter_name')
             ->orderBy('users.name')
             ->get()
-            ->map(function ($row) use ($start, $end) {
+            ->map(function ($row) use ($clock, $dateFrom, $dateTo) {
                 // Get THB totals per staff (separate query for detail sums)
                 $thb = DB::table('transactions_master')
                     ->join('transactions_detail', 'transactions_master.id', '=', 'transactions_detail.transaction_id')
                     ->join('users', 'transactions_master.created_by', '=', 'users.id')
                     ->where('transactions_master.flag_cancel', 'N')
-                    ->where('transactions_master.trns_datetime', '>', $start)
-                    ->where('transactions_master.trns_datetime', '<=', $end)
                     ->where('users.name', $row->staff_name)
-                    ->where('transactions_master.counter_name', $row->counter_name)
+                    ->where('transactions_master.counter_name', $row->counter_name);
+
+                $clock->constrainToWorkingDayRange($thb, 'transactions_master.trns_datetime', 'transactions_master.counter_id', $dateFrom, $dateTo);
+
+                $thb = $thb
                     ->selectRaw('
                         SUM(CASE WHEN trns_type="BUYING" THEN transactions_detail.total ELSE 0 END) as buy_thb,
                         SUM(CASE WHEN trns_type="SELLING" THEN transactions_detail.amount ELSE 0 END) as sell_thb

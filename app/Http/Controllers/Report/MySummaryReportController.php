@@ -36,10 +36,9 @@ class MySummaryReportController extends Controller
         $date = $request->input('date', app(WorkingDayClock::class)->currentDate());
         $counter = $this->workingCounter();
 
-        [$dateStart, $dateEnd] = $this->getDateRange($date);
 
-        $buying = $this->getSummary('BUYING', $counter?->id, $dateStart, $dateEnd);
-        $selling = $this->getSummary('SELLING', $counter?->id, $dateStart, $dateEnd);
+        $buying = $this->getSummary('BUYING', $counter?->id, $date);
+        $selling = $this->getSummary('SELLING', $counter?->id, $date);
 
         // Build spreadsheet
         $spreadsheet = new Spreadsheet();
@@ -168,14 +167,6 @@ class MySummaryReportController extends Controller
     }
 
     /**
-     * @return array{0: string, 1: string}
-     */
-    private function getDateRange(string $date): array
-    {
-        return app(WorkingDayClock::class)->window($date);
-    }
-
-    /**
      * Get transaction summary for the logged-in user's own transactions at
      * one counter, grouped by currency and rate.
      *
@@ -183,7 +174,7 @@ class MySummaryReportController extends Controller
      * SELLING: transactions_detail.amount = THB, .total = foreign currency
      * — so which column is "fc_amount" vs "thb_amount" flips by $trnsType.
      */
-    private function getSummary(string $trnsType, ?int $counterId, string $dateStart, string $dateEnd)
+    private function getSummary(string $trnsType, ?int $counterId, string $date)
     {
         $fcColumn = $trnsType === 'BUYING' ? 'amount' : 'total';
         $thbColumn = $trnsType === 'BUYING' ? 'total' : 'amount';
@@ -192,14 +183,15 @@ class MySummaryReportController extends Controller
             ->where('transactions_master.trns_type', $trnsType)
             ->where('transactions_master.flag_cancel', 'N')
             ->where('transactions_master.created_by', auth()->id())
-            ->where('transactions_master.trns_datetime', '>', $dateStart)
-            ->where('transactions_master.trns_datetime', '<=', $dateEnd)
             ->selectRaw("transactions_detail.currency_name, transactions_detail.unit_price, SUM(transactions_detail.{$fcColumn}) as fc_amount, SUM(transactions_detail.{$thbColumn}) as thb_amount")
             ->groupBy('transactions_detail.currency_name', 'transactions_detail.unit_price')
             ->orderBy('transactions_detail.currency_name');
 
         if ($counterId) {
-            $query->where('transactions_master.counter_id', $counterId);
+            // ช่วงเวลาตามรอบตัดวันของสาขาที่เคาน์เตอร์นี้สังกัด
+            app(WorkingDayClock::class)->constrainToWorkingDay(
+                $query, 'transactions_master.trns_datetime', 'transactions_master.counter_id', $date, [$counterId]
+            );
         } else {
             // No working counter selected — a user with no counter has no transactions to show.
             $query->whereRaw('1 = 0');

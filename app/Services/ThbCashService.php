@@ -45,19 +45,27 @@ class ThbCashService
     // ช่วงของวัน D คือ (dayStart(D), dayEnd(D)] — เปิดซ้าย ปิดขวา
     // ─────────────────────────────────────────────────────────────────
 
-    public function cutoff(): string
+    public function cutoff(?int $counterId = null): string
     {
-        return app(WorkingDayClock::class)->cutoff();
+        return app(WorkingDayClock::class)->cutoff($this->branchOf($counterId));
     }
 
-    public function dayStart(string|Carbon $date): Carbon
+    public function dayStart(string|Carbon $date, ?int $counterId = null): Carbon
     {
-        return app(WorkingDayClock::class)->dayStart($date);
+        return app(WorkingDayClock::class)->dayStart($date, $this->branchOf($counterId));
     }
 
-    public function dayEnd(string|Carbon $date): Carbon
+    public function dayEnd(string|Carbon $date, ?int $counterId = null): Carbon
     {
-        return app(WorkingDayClock::class)->dayEnd($date);
+        return app(WorkingDayClock::class)->dayEnd($date, $this->branchOf($counterId));
+    }
+
+    /** ไม่ส่งเคาน์เตอร์มา = ใช้ค่ากลาง ไม่ใช่ค่าของสาขาใดสาขาหนึ่ง */
+    private function branchOf(?int $counterId): ?int
+    {
+        return $counterId === null
+            ? null
+            : app(WorkingDayClock::class)->branchOfCounter($counterId);
     }
 
     // ─────────────────────────────────────────────────────────────────
@@ -88,13 +96,13 @@ class ThbCashService
     /** ยอดยกมาของวันทำการ */
     public function openingFor(int $counterId, string|Carbon $date): float
     {
-        return $this->balanceAsOf($counterId, $this->dayStart($date));
+        return $this->balanceAsOf($counterId, $this->dayStart($date, $counterId));
     }
 
     /** ยอดปลายวันตามระบบ (ก่อนนับเงินจริง) */
     public function expectedClosingFor(int $counterId, string|Carbon $date): float
     {
-        return $this->balanceAsOf($counterId, $this->dayEnd($date));
+        return $this->balanceAsOf($counterId, $this->dayEnd($date, $counterId));
     }
 
     /**
@@ -109,8 +117,8 @@ class ThbCashService
         $rows = StockMovement::query()
             ->thb()
             ->where('counter_id', $counterId)
-            ->where('moved_at', '>', $this->dayStart($date))
-            ->where('moved_at', '<=', $this->dayEnd($date))
+            ->where('moved_at', '>', $this->dayStart($date, $counterId))
+            ->where('moved_at', '<=', $this->dayEnd($date, $counterId))
             ->selectRaw('
                 SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END) as total_in,
                 SUM(CASE WHEN amount < 0 THEN amount ELSE 0 END) as total_out
@@ -322,7 +330,7 @@ class ThbCashService
             (int) $workingDay->id,
             $userId,
             'ผลต่างยอดปิดเงินบาทวันที่ ' . Carbon::parse($workingDay->work_date)->format('d/m/Y'),
-            $this->dayEnd($workingDay->work_date),
+            $this->dayEnd($workingDay->work_date, (int) $workingDay->counter_id),
         );
     }
 

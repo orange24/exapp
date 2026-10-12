@@ -23,7 +23,6 @@ class DailyReportController extends Controller
         $date = $request->input('date', app(WorkingDayClock::class)->currentDate());
         $counterId = session('working_counter_id');
 
-        [$dateStart, $dateEnd] = $this->getDateRange($date);
 
         // Get visible counters based on user role
         $visibleBranchIds = auth()->user()->getVisibleBranchIds();
@@ -33,8 +32,8 @@ class DailyReportController extends Controller
 
         $counter = $counterId ? Counter::find($counterId) : null;
 
-        $buying = $this->getSummary('BUYING', $visibleCounterIds, $dateStart, $dateEnd);
-        $selling = $this->getSummary('SELLING', $visibleCounterIds, $dateStart, $dateEnd);
+        $buying = $this->getSummary('BUYING', $visibleCounterIds, $date);
+        $selling = $this->getSummary('SELLING', $visibleCounterIds, $date);
 
         return view('reports.daily', compact('date', 'counterId', 'counter', 'buying', 'selling'));
     }
@@ -47,7 +46,6 @@ class DailyReportController extends Controller
         $date = $request->input('date', app(WorkingDayClock::class)->currentDate());
         $counterId = session('working_counter_id');
 
-        [$dateStart, $dateEnd] = $this->getDateRange($date);
 
         // Get visible counters based on user role
         $visibleBranchIds = auth()->user()->getVisibleBranchIds();
@@ -58,8 +56,8 @@ class DailyReportController extends Controller
         $counter = $counterId ? Counter::find($counterId) : null;
         $counterName = $counter?->counter_name ?? '-';
 
-        $buying = $this->getSummary('BUYING', $visibleCounterIds, $dateStart, $dateEnd);
-        $selling = $this->getSummary('SELLING', $visibleCounterIds, $dateStart, $dateEnd);
+        $buying = $this->getSummary('BUYING', $visibleCounterIds, $date);
+        $selling = $this->getSummary('SELLING', $visibleCounterIds, $date);
 
         // Build spreadsheet
         $spreadsheet = new Spreadsheet();
@@ -189,15 +187,6 @@ class DailyReportController extends Controller
         ]);
     }
 
-    /**
-     * ช่วงเวลาของวันทำการ — ขอบอยู่ที่เวลาตัดรอบ ไม่ใช่เที่ยงคืน
-     *
-     * @return array{0: string, 1: string}
-     */
-    private function getDateRange(string $date): array
-    {
-        return app(WorkingDayClock::class)->window($date);
-    }
 
     /**
      * Get transaction summary grouped by currency and rate.
@@ -206,7 +195,7 @@ class DailyReportController extends Controller
      * SELLING: transactions_detail.amount = THB, .total = foreign currency
      * — so which column is "fc_amount" vs "thb_amount" flips by $trnsType.
      */
-    private function getSummary(string $trnsType, array $counterIds, string $dateStart, string $dateEnd)
+    private function getSummary(string $trnsType, array $counterIds, string $date)
     {
         $fcColumn = $trnsType === 'BUYING' ? 'amount' : 'total';
         $thbColumn = $trnsType === 'BUYING' ? 'total' : 'amount';
@@ -214,15 +203,14 @@ class DailyReportController extends Controller
         $query = TransactionDetail::join('transactions_master', 'transactions_detail.transaction_id', '=', 'transactions_master.id')
             ->where('transactions_master.trns_type', $trnsType)
             ->where('transactions_master.flag_cancel', 'N')
-            ->where('transactions_master.trns_datetime', '>', $dateStart)
-            ->where('transactions_master.trns_datetime', '<=', $dateEnd)
             ->selectRaw("transactions_detail.currency_name, transactions_detail.unit_price, SUM(transactions_detail.{$fcColumn}) as fc_amount, SUM(transactions_detail.{$thbColumn}) as thb_amount")
             ->groupBy('transactions_detail.currency_name', 'transactions_detail.unit_price')
             ->orderBy('transactions_detail.currency_name');
 
-        if (!empty($counterIds)) {
-            $query->whereIn('transactions_master.counter_id', $counterIds);
-        }
+        // แต่ละสาขาใช้ช่วงเวลาของตัวเอง — รายงานรวมหลายสาขาไม่มีช่วงเดียวที่ถูก
+        app(WorkingDayClock::class)->constrainToWorkingDay(
+            $query, 'transactions_master.trns_datetime', 'transactions_master.counter_id', $date, $counterIds
+        );
 
         return $query->get();
     }

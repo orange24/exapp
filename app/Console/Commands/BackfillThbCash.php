@@ -64,7 +64,7 @@ class BackfillThbCash extends Command
                 'amount' => (float) $wd->opening_thb_cash,
                 'ref_type' => ThbCashService::REF_TOPUP,
                 'ref_id' => (int) $wd->id,
-                'at' => $thb->dayStart($wd->work_date),
+                'at' => $thb->dayStart($wd->work_date, (int) $wd->counter_id),
                 'note' => 'ยกยอดเงินทุนเดิมก่อนเริ่มบันทึกเงินบาทเป็นสต็อก',
             ];
         }

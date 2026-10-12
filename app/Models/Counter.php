@@ -49,9 +49,11 @@ class Counter extends Model
     {
         $clock = app(WorkingDayClock::class);
 
-        $date = $clock->currentDate();
-        $dayStart = $clock->dayStart($date);
-        $dayEnd = $clock->dayEnd($date);
+        $branchId = $this->branch_id === null ? null : (int) $this->branch_id;
+
+        $date = $clock->currentDate($branchId);
+        $dayStart = $clock->dayStart($date, $branchId);
+        $dayEnd = $clock->dayEnd($date, $branchId);
 
         return [
             'has_open_day' => WorkingDay::where('counter_id', $this->id)

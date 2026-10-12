@@ -116,7 +116,7 @@ new class extends Component
         // วันทำการที่กำลังเปิดอยู่ ไม่ใช่วันตามปฏิทิน — กะที่เปิดเมื่อวาน
         // ยังไม่ปิดตอนเที่ยงคืน พนักงานต้องทำรายการต่อได้จนถึงเวลาตัดรอบ
         $workingDay = WorkingDay::where('counter_id', $counter->id)
-            ->whereDate('work_date', app(WorkingDayClock::class)->currentDate())
+            ->whereDate('work_date', app(WorkingDayClock::class)->currentDate($counter->branch_id))
             ->where('status', 'open')
             ->first();
 
@@ -813,7 +813,8 @@ new class extends Component
     {
         if (!$this->counterId) return [];
 
-        [$dateStart, $dateEnd] = app(WorkingDayClock::class)->currentWindow();
+        [$dateStart, $dateEnd] = app(WorkingDayClock::class)
+            ->currentWindowForCounter((int) $this->counterId);
 
         // ดึง rate เฉลี่ยจาก transactions ต่อ denomination
         $avgRates = DB::table('transactions_detail')

@@ -100,7 +100,7 @@ class StockMovementReportController extends Controller
 
     private function getData(int $counterId, string $date)
     {
-        [$dateStart, $dateEnd] = app(WorkingDayClock::class)->window($date);
+        [$dateStart, $dateEnd] = app(WorkingDayClock::class)->windowForCounter($counterId, $date);
 
         $stocks = CounterStock::where('counter_id', $counterId)
             ->whereNotNull('denomination_id')

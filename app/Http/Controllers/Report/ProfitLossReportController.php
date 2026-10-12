@@ -99,14 +99,16 @@ class ProfitLossReportController extends Controller
 
     private function getData(string $dateFrom, string $dateTo, array $counterIds)
     {
-        [$start, $end] = app(WorkingDayClock::class)->range($dateFrom, $dateTo);
-
-        return DB::table('transactions_detail')
+        $query = DB::table('transactions_detail')
             ->join('transactions_master', 'transactions_detail.transaction_id', '=', 'transactions_master.id')
-            ->where('transactions_master.flag_cancel', 'N')
-            ->where('transactions_master.trns_datetime', '>', $start)
-            ->where('transactions_master.trns_datetime', '<=', $end)
-            ->when(!empty($counterIds), fn($q) => $q->whereIn('transactions_master.counter_id', $counterIds))
+            ->where('transactions_master.flag_cancel', 'N');
+
+        // แต่ละสาขาใช้ช่วงเวลาของตัวเอง — รายงานรวมหลายสาขาไม่มีช่วงเดียวที่ถูก
+        app(WorkingDayClock::class)->constrainToWorkingDayRange(
+            $query, 'transactions_master.trns_datetime', 'transactions_master.counter_id', $dateFrom, $dateTo, $counterIds
+        );
+
+        return $query
             ->selectRaw('
                 transactions_detail.currency_code,
                 SUM(CASE WHEN trns_type="BUYING" THEN transactions_detail.amount ELSE 0 END) as buy_amount,

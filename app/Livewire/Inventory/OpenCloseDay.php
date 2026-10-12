@@ -46,7 +46,9 @@ class OpenCloseDay extends Component
     public function mount(): void
     {
         $this->counterId = (string) (session('working_counter_id') ?? '');
-        $this->date = app(WorkingDayClock::class)->currentDate();
+        $this->date = app(WorkingDayClock::class)->currentDateForCounter(
+            (int) (session('working_counter_id') ?? 0)
+        );
     }
 
     public function getCountersProperty()
@@ -150,9 +152,14 @@ class OpenCloseDay extends Component
 
         // opening_thb_cash เก็บยอดยกมาที่ระบบคำนวณได้ ไม่ใช่ยอดที่พนักงานกรอก
         // — เป็น snapshot ไว้ตรวจย้อนหลังว่าตอนเปิดวันระบบเห็นเท่าไหร่
+        // ตราเวลาตัดรอบที่มีผลตอนนี้ไว้กับแถว เพื่อให้ยอดของวันนี้นิ่งถาวร —
+        // ถ้าพรุ่งนี้สาขาเปลี่ยนเวลาตัดรอบ รายงานของวันนี้ต้องไม่ขยับตาม
+        $clock = app(WorkingDayClock::class);
+
         WorkingDay::create([
             'counter_id' => $this->counterId,
             'work_date' => $this->date,
+            'cut_off_time' => $clock->cutoff($clock->branchOfCounter((int) $this->counterId)),
             'opening_thb_cash' => $thbCash->openingFor((int) $this->counterId, $this->date),
             'status' => 'open',
             'opened_by' => Auth::id(),
@@ -314,7 +321,7 @@ class OpenCloseDay extends Component
         // จำกัดไว้ที่วันปัจจุบัน — หน้า buy/sell มองหาวันทำการของวันนี้เท่านั้น
         // การเปิดวันเก่ากลับมาจึงไม่ช่วยให้ทำรายการได้ มีแต่จะทำให้ยอดปิดที่ปิดไป
         // แล้วเปลี่ยนย้อนหลัง
-        if ($this->date !== app(WorkingDayClock::class)->currentDate()) {
+        if ($this->date !== app(WorkingDayClock::class)->currentDateForCounter((int) $this->counterId)) {
             session()->flash('error', 'เปิดใหม่ได้เฉพาะวันทำการปัจจุบันเท่านั้น');
             return;
         }

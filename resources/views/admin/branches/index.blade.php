@@ -47,6 +47,10 @@
                 @if ($branch->phone)
                     <div>โทร: {{ $branch->phone }}</div>
                 @endif
+                {{-- แสดงเฉพาะสาขาที่ตั้งค่าเอง เพื่อให้เห็นได้ทันทีว่าสาขาไหนต่างจากค่ากลาง --}}
+                @if ($branch->cut_off_time)
+                    <div>ตัดรอบ: {{ substr($branch->cut_off_time, 0, 5) }}</div>
+                @endif
                 <div class="flex gap-4 text-xs text-gray-400">
                     <span>{{ $branch->counters_count }} เคาน์เตอร์</span>
                     <span>{{ $branch->users_count }} ผู้ใช้</span>

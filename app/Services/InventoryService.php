@@ -482,7 +482,7 @@ class InventoryService
      */
     public function closeDay(int $counterId, string $date): void
     {
-        [$dateStart, $dateEnd] = app(WorkingDayClock::class)->window($date);
+        [$dateStart, $dateEnd] = app(WorkingDayClock::class)->windowForCounter($counterId, $date);
 
         // Get today's movements grouped by denomination
         $movements = StockMovement::where('counter_id', $counterId)

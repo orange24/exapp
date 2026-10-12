@@ -54,6 +54,18 @@
                 <input type="text" name="phone" value="{{ old('phone', $branch->phone) }}"
                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
             </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">เวลาตัดรอบวันทำการ</label>
+                <input type="time" name="cut_off_time"
+                       value="{{ old('cut_off_time', $branch->cut_off_time ? substr($branch->cut_off_time, 0, 5) : '') }}"
+                       class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                <p class="mt-1 text-xs text-gray-500">
+                    เวลาที่ยอดของวันทำการถูกตัดรอบ ตั้ง 03:00 หมายถึงรายการตั้งแต่ตี 3
+                    ไปจนถึงตี 3 ของวันถัดไปนับเป็นวันเดียวกัน เว้นว่างไว้เพื่อใช้ค่ากลางของระบบ
+                    ตั้งได้ถึงเที่ยงวัน (ไม่รวมเที่ยง) เพราะเลยจากนั้นความหมายจะกลับหัว
+                </p>
+                @error('cut_off_time') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+            </div>
             <div class="flex items-end">
                 <label class="flex items-center gap-3 pb-2 cursor-pointer">
                     <input type="hidden" name="is_active" value="0">

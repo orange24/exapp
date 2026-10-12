@@ -201,7 +201,8 @@ function counterSelector() {
     $counterId = session('working_counter_id');
     // "วันนี้" ของหน้านี้คือวันทำการ ไม่ใช่วันตามปฏิทิน — ตอนตีหนึ่งพนักงาน
     // ต้องยังเห็นยอดของกะที่ตัวเองกำลังทำอยู่
-    [$dateStart, $dateEnd] = app(\App\Support\WorkingDayClock::class)->currentWindow();
+    [$dateStart, $dateEnd] = app(\App\Support\WorkingDayClock::class)
+        ->currentWindowForCounter((int) ($counterId ?? 0));
 
     // Today's transactions for this counter
     $todayQuery = \App\Models\TransactionMaster::where('flag_cancel', 'N')
