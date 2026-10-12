@@ -178,7 +178,7 @@ new class extends Component
                 ->whereDate('rate_date', $today)
                 ->first();
 
-            CounterRate::updateOrCreate(
+            CounterRate::putRate(
                 [
                     'counter_id'      => $this->counterId,
                     'denomination_id' => $denomId,

@@ -209,7 +209,7 @@ class RateSettingController extends Controller
                     ->whereDate('rate_date', $today)
                     ->first();
 
-                CounterRate::updateOrCreate(
+                CounterRate::putRate(
                     [
                         'counter_id'      => $counter->id,
                         'denomination_id' => $denomId,

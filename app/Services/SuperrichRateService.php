@@ -221,15 +221,37 @@ class SuperrichRateService
      */
     public function distributeBatch(SuperrichRateBatch $batch, int $userId): int
     {
-        if ($batch->status !== SuperrichRateBatch::STATUS_APPROVED) {
-            throw new \RuntimeException('สามารถกระจายได้เฉพาะชุดราคาที่อนุมัติแล้ว');
-        }
-
         $counterIds = $batch->target_counter_ids ?? [];
         $ratesData = $batch->rates_data ?? [];
         $updatedCount = 0;
 
         DB::transaction(function () use ($counterIds, $ratesData, $userId, $batch, &$updatedCount) {
+            /*
+             * จองชุดราคาไว้ก่อนลงมือ
+             *
+             * เดิมด่านนี้อ่านสถานะจาก object ในหน่วยความจำ นอก transaction แล้ว
+             * ค่อยเปลี่ยนเป็น distributed ตอนท้าย การกดซ้อนกันสองครั้งจึงผ่านด่าน
+             * ไปพร้อมกัน ต่างคนต่างมองไม่เห็นแถวที่อีกฝ่ายยังไม่ commit แล้วเขียน
+             * ราคาซ้ำกันทั้งชุด (เกิดขึ้นจริงกับชุด #357 วันที่ 2026-10-12)
+             *
+             * lockForUpdate ทำให้คนที่สองมารอตรงนี้จนคนแรก commit แล้วอ่านเจอ
+             * สถานะใหม่และถอยออกไป ถ้าคนแรกพัง ทุกอย่างรวมถึงสถานะถูกย้อนกลับ
+             * กดใหม่ได้ตามปกติ
+             */
+            $locked = SuperrichRateBatch::whereKey($batch->getKey())->lockForUpdate()->first();
+
+            if (! $locked) {
+                throw new \RuntimeException('ไม่พบชุดราคานี้');
+            }
+
+            if ($locked->status === SuperrichRateBatch::STATUS_DISTRIBUTED) {
+                throw new \RuntimeException('ชุดราคานี้ถูกกระจายไปแล้ว');
+            }
+
+            if ($locked->status !== SuperrichRateBatch::STATUS_APPROVED) {
+                throw new \RuntimeException('สามารถกระจายได้เฉพาะชุดราคาที่อนุมัติแล้ว');
+            }
+
             foreach ($counterIds as $counterId) {
                 foreach ($ratesData as $rate) {
                     if (! $rate['denomination_id']) continue;
@@ -241,7 +263,7 @@ class SuperrichRateService
                         ->first();
 
                     // Write new rate
-                    CounterRate::updateOrCreate(
+                    CounterRate::putRate(
                         [
                             'counter_id' => $counterId,
                             'denomination_id' => $rate['denomination_id'],
@@ -272,10 +294,13 @@ class SuperrichRateService
                 }
             }
 
-            $batch->update([
+            $locked->update([
                 'status' => SuperrichRateBatch::STATUS_DISTRIBUTED,
                 'distributed_at' => now(),
             ]);
+
+            // ให้ object ที่ผู้เรียกถืออยู่เห็นสถานะใหม่ด้วย ไม่งั้นหน้าจอยังโชว์ปุ่มกระจาย
+            $batch->setRawAttributes($locked->getAttributes(), true);
         });
 
         return $updatedCount;
