@@ -11,8 +11,13 @@ use Tests\TestCase;
  */
 class ChipPhotoTest extends TestCase
 {
-    /** สร้างไฟล์ JPEG 2000 จริงด้วยเครื่องมือชุดเดียวกับที่ใช้แปลง */
-    private function makeJp2(): string
+    /**
+     * สร้างไฟล์ JPEG 2000 จริงด้วยเครื่องมือชุดเดียวกับที่ใช้แปลง
+     *
+     * $ext เลือกได้สองแบบเพราะชิปส่งมาได้ทั้งสองแบบ — jp2 คือไฟล์แบบมีกล่องหุ้ม
+     * ส่วน j2k คือ codestream ดิบ ๆ ไม่มีกล่อง
+     */
+    private function makeJp2(string $ext = 'jp2'): string
     {
         foreach (['opj_compress', 'opj_decompress'] as $tool) {
             if (trim((string) shell_exec("command -v {$tool}")) === '') {
@@ -21,7 +26,7 @@ class ChipPhotoTest extends TestCase
         }
 
         $png = tempnam(sys_get_temp_dir(), 'chip') . '.png';
-        $jp2 = $png . '.jp2';
+        $jp2 = $png . '.' . $ext;
 
         $img = imagecreatetruecolor(60, 80);
         imagefill($img, 0, 0, imagecolorallocate($img, 120, 130, 140));
@@ -40,14 +45,35 @@ class ChipPhotoTest extends TestCase
         return base64_encode($raw);
     }
 
+    /** รูป jpeg จริง ๆ ขนาดจิ๋ว ใช้แทนรูปจากชิปที่ไม่ต้องแปลง */
+    private function makeJpeg(): string
+    {
+        $img = imagecreatetruecolor(8, 8);
+        ob_start();
+        imagejpeg($img);
+        $jpeg = (string) ob_get_clean();
+        imagedestroy($img);
+
+        return base64_encode($jpeg);
+    }
+
     public function test_a_jpeg_from_the_chip_is_passed_through_untouched(): void
     {
-        $jpeg = base64_encode('ไม่ใช่รูปจริง แต่ไม่ต้องแปลง');
+        $jpeg = $this->makeJpeg();
 
         $out = app(ChipPhoto::class)->toBrowserReadable($jpeg, 'image/jpeg');
 
-        $this->assertSame($jpeg, $out['data']);
+        $this->assertSame($jpeg, $out['data'], 'ของที่เบราว์เซอร์แสดงได้อยู่แล้วไม่ต้องแตะ');
         $this->assertSame('image/jpeg', $out['mime']);
+    }
+
+    public function test_bytes_that_only_claim_to_be_a_jpeg_are_refused(): void
+    {
+        // ส่งต่อไปตรง ๆ จะได้กรอบรูปแตกที่หน้าเคาน์เตอร์ ซึ่งดูเหมือนระบบพัง
+        // ไม่แสดงอะไรเลยพร้อมข้อความอธิบายดีกว่า
+        $this->assertNull(
+            app(ChipPhoto::class)->toBrowserReadable(base64_encode('ไม่ใช่รูปจริง'), 'image/jpeg')
+        );
     }
 
     public function test_a_jpeg2000_photo_becomes_something_a_browser_can_show(): void
@@ -85,5 +111,56 @@ class ChipPhotoTest extends TestCase
         $huge = base64_encode(str_repeat('x', 3 * 1024 * 1024));
 
         $this->assertNull(app(ChipPhoto::class)->toBrowserReadable($huge, 'image/jp2'));
+    }
+    public function test_a_raw_codestream_from_the_chip_is_converted_too(): void
+    {
+        if (trim((string) shell_exec('command -v opj_decompress')) === '') {
+            $this->markTestSkipped('ไม่มี opj_decompress ในเครื่องนี้');
+        }
+
+        /*
+         * พาสปอร์ตหลายเล่มเก็บรูปเป็น codestream ดิบ (ขึ้นต้น FF4F FF51) ไม่ใช่
+         * ไฟล์ .jp2 ที่มีกล่องหุ้ม แต่ gmrtd รายงาน mime เป็น image/jp2 ทั้งคู่
+         * opj_decompress เตือนเรื่องนามสกุลแต่ยังถอดรหัสให้ เทสนี้ล็อกไว้ว่า
+         * ทั้งสองแบบต้องได้รูปออกมา ไม่ใช่แค่แบบที่มีกล่องหุ้ม
+         */
+        $out = app(ChipPhoto::class)->toBrowserReadable($this->makeJp2('j2k'), 'image/jp2');
+
+        $this->assertNotNull($out, 'codestream ดิบต้องแปลงได้');
+        $this->assertSame('image/jpeg', $out['mime']);
+
+        $info = getimagesizefromstring(base64_decode($out['data']));
+
+        $this->assertNotFalse($info);
+        $this->assertSame('image/jpeg', $info['mime']);
+    }
+
+    public function test_the_real_format_wins_over_what_the_chip_claims(): void
+    {
+        if (trim((string) shell_exec('command -v opj_decompress')) === '') {
+            $this->markTestSkipped('ไม่มี opj_decompress ในเครื่องนี้');
+        }
+
+        // บางเล่มรายงาน mime มาว่าง หรือมาเป็นชื่อที่เราไม่รู้จัก การเชื่อ mime
+        // อย่างเดียวทำให้รูปที่แปลงได้อยู่แล้วถูกทิ้ง — ดูไบต์แรกเอาดีกว่า
+        $out = app(ChipPhoto::class)->toBrowserReadable($this->makeJp2(), '');
+
+        $this->assertNotNull($out);
+        $this->assertSame('image/jpeg', $out['mime']);
+    }
+
+    public function test_a_real_jpeg_is_recognised_even_when_the_mime_is_wrong(): void
+    {
+        $img = imagecreatetruecolor(10, 10);
+        ob_start();
+        imagejpeg($img);
+        $jpeg = (string) ob_get_clean();
+        imagedestroy($img);
+
+        $out = app(ChipPhoto::class)->toBrowserReadable(base64_encode($jpeg), 'image/jp2');
+
+        $this->assertNotNull($out);
+        $this->assertSame('image/jpeg', $out['mime']);
+        $this->assertSame(base64_encode($jpeg), $out['data'], 'jpeg ไม่ต้องแปลงซ้ำ');
     }
 }

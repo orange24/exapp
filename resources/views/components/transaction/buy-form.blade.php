@@ -627,8 +627,13 @@ new class extends Component
 
         $this->chipError = '';
         $this->chipAuthenticity = (string) ($card['authenticity'] ?? '');
-        $this->chipPhoto = ! empty($card['photo_base64']) && ($card['photo_mime'] ?? '') === 'image/jpeg'
-            ? 'data:image/jpeg;base64,' . $card['photo_base64']
+        // รับเฉพาะชนิดที่เบราว์เซอร์แสดงได้จริง เซิร์ฟเวอร์แปลง JPEG 2000 จากชิป
+        // มาให้แล้ว อะไรที่ไม่อยู่ในรายการนี้แปลว่าแปลงไม่สำเร็จ ให้ว่างไว้ดีกว่า
+        // ใส่ลงไปแล้วได้กรอบรูปแตก
+        $mime = (string) ($card['photo_mime'] ?? '');
+
+        $this->chipPhoto = ! empty($card['photo_base64']) && in_array($mime, ['image/jpeg', 'image/png'], true)
+            ? 'data:' . $mime . ';base64,' . $card['photo_base64']
             : '';
 
         $this->runSanctionScreening(\App\Models\SanctionScreening::TRIGGER_TRANSACTION);

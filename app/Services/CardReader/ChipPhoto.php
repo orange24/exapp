@@ -24,21 +24,51 @@ class ChipPhoto
      */
     public function toBrowserReadable(string $base64, string $mime): ?array
     {
-        if ($mime === 'image/jpeg' || $mime === 'image/png') {
-            return ['data' => $base64, 'mime' => $mime];
-        }
-
-        if (! in_array($mime, ['image/jp2', 'image/jpeg2000', 'image/jpx'], true)) {
-            return null;
-        }
-
         $raw = base64_decode($base64, true);
 
         if ($raw === false || $raw === '' || strlen($raw) > self::MAX_INPUT_BYTES) {
             return null;
         }
 
+        /*
+         * ดูไบต์แรกเอา ไม่เชื่อ mime ที่ชิปแจ้งมา
+         *
+         * gmrtd เดารูปแบบจากไบต์แรกเหมือนกัน แต่ถ้ามันเดาไม่ออกจะคืนค่าว่าง
+         * มาให้โดยไม่บอกว่าเดาไม่ออก การกรองด้วย mime อย่างเดียวจึงทิ้งรูปที่
+         * แปลงได้อยู่แล้วไปฟรี ๆ ไบต์แรกเป็นสิ่งที่โกหกไม่ได้
+         */
+        $format = $this->sniff($raw);
+
+        if ($format === 'jpeg' || $format === 'png') {
+            return ['data' => $base64, 'mime' => 'image/' . $format];
+        }
+
+        if ($format !== 'jp2') {
+            return null;
+        }
+
         return $this->convert($raw);
+    }
+
+    /** @return 'jpeg'|'png'|'jp2'|null */
+    private function sniff(string $raw): ?string
+    {
+        // JPEG ปกติ: FF D8 FF
+        if (str_starts_with($raw, "\xFF\xD8\xFF")) {
+            return 'jpeg';
+        }
+
+        if (str_starts_with($raw, "\x89PNG\r\n\x1A\n")) {
+            return 'png';
+        }
+
+        // JPEG 2000 มาได้สองแบบ — มีกล่องหุ้ม กับ codestream ดิบ
+        if (str_starts_with($raw, "\x00\x00\x00\x0CjP  \r\n")
+            || str_starts_with($raw, "\xFF\x4F\xFF\x51")) {
+            return 'jp2';
+        }
+
+        return null;
     }
 
     /** @return array{data: string, mime: string}|null */

@@ -36,7 +36,7 @@
         <div class="text-sm">
             @if ($chipAuthenticity === 'verified')
                 <div class="font-semibold text-green-800">ยืนยันจากชิปแล้ว — ลายเซ็นของประเทศผู้ออกถูกต้อง</div>
-                <div class="text-green-700 text-xs mt-1">ข้อมูลด้านล่างมาจากชิป ไม่ใช่จากการอ่านรูป</div>
+                <div class="text-green-700 text-xs mt-1">แสดงข้อมูลจากการอ่านชิป</div>
             @elseif ($chipAuthenticity === 'failed')
                 <div class="font-semibold text-red-800">ลายเซ็นของชิปไม่ผ่านการตรวจ — ข้อมูลอาจถูกแก้ไข</div>
                 <div class="text-red-700 text-xs mt-1">ต้องให้ผู้จัดการอนุมัติก่อนทำรายการ</div>

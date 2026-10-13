@@ -333,4 +333,92 @@ class PassportChipApiTest extends TestCase
 
         $inbox->call('poll')->assertDispatched('chip-cleared');
     }
+    /** รูป JPEG 2000 จริง เหมือนที่ชิปพาสปอร์ตเก็บไว้ใน DG2 */
+    private function chipPhotoBase64(): string
+    {
+        foreach (['opj_compress', 'opj_decompress'] as $tool) {
+            if (trim((string) shell_exec("command -v {$tool}")) === '') {
+                $this->markTestSkipped("ไม่มี {$tool} ในเครื่องนี้");
+            }
+        }
+
+        $png = tempnam(sys_get_temp_dir(), 'face') . '.png';
+        $jp2 = $png . '.jp2';
+
+        $img = imagecreatetruecolor(60, 80);
+        imagefill($img, 0, 0, imagecolorallocate($img, 180, 150, 130));
+        imagepng($img, $png);
+        imagedestroy($img);
+
+        shell_exec(sprintf('opj_compress -i %s -o %s 2>/dev/null', escapeshellarg($png), escapeshellarg($jp2)));
+        $raw = (string) file_get_contents($jp2);
+        @unlink($png);
+        @unlink($jp2);
+
+        return base64_encode($raw);
+    }
+
+    public function test_the_face_from_the_chip_reaches_the_counter_screen(): void
+    {
+        /*
+         * เหตุผลหลักที่อ่านชิปคือให้พนักงานเทียบหน้าคนที่ยืนอยู่ตรงหน้ากับรูปที่
+         * ประเทศผู้ออกเซ็นรับรองไว้ ไม่ใช่รูปที่พิมพ์บนหน้ากระดาษซึ่งแก้ได้
+         * ทางเดินมีสามท่อน — agent ส่งมา เซิร์ฟเวอร์แปลงเป็นสิ่งที่เบราว์เซอร์
+         * แสดงได้ แล้วฟอร์มเอาไปขึ้นจอ เทสนี้เดินครบทั้งสามท่อน
+         */
+        $request = $this->openRequest();
+        session(['working_counter_id' => $this->counter->id]);
+
+        \App\Models\WorkingDay::insert([
+            'counter_id' => $this->counter->id,
+            'work_date' => $this->workingDate(),
+            'opening_thb_cash' => 0,
+            'status' => 'open',
+            'opened_by' => $this->adminUser->id,
+            'opened_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->withToken($this->token)
+            ->postJson(route('api.card-reader.passport'), $this->chipResult([
+                'request_id' => $request->id,
+                'photo_base64' => $this->chipPhotoBase64(),
+                'photo_mime' => 'image/jp2',
+            ]))
+            ->assertOk();
+
+        // ผ่านกล่องรับเหมือนหน้าจอจริง ไม่ประกอบ payload เอง — กล่องรับเป็นคนติดป้าย
+        // ว่าใบนี้มาจากพาสปอร์ตหรือบัตรประชาชน ซึ่งฟอร์มใช้ตัดสินใจว่าจะกรอกช่องไหน
+        $payload = app(\App\Services\CardReader\CounterInbox::class)->consume($this->counter->id);
+
+        $this->assertNotNull($payload);
+        $this->assertArrayHasKey('photo_base64', $payload, 'เซิร์ฟเวอร์ต้องเก็บรูปที่แปลงแล้วไว้');
+        $this->assertSame('image/jpeg', $payload['photo_mime'], 'ต้องแปลงเป็นสิ่งที่เบราว์เซอร์แสดงได้');
+
+        $info = getimagesizefromstring(base64_decode($payload['photo_base64']));
+        $this->assertNotFalse($info);
+        $this->assertSame('image/jpeg', $info['mime']);
+
+        \Livewire\Livewire::actingAs($this->staffUser)
+            ->test('transaction.buy-form')
+            ->dispatch('card-read', card: $payload)
+            ->assertSet('chipPhoto', fn ($v) => str_starts_with((string) $v, 'data:image/jpeg;base64,'));
+    }
+
+    public function test_a_chip_without_a_photo_still_fills_the_form(): void
+    {
+        // เล่มที่อ่านรูปไม่ได้ต้องไม่ทำให้ทั้งรายการใช้ไม่ได้ — ชื่อกับเลขเล่ม
+        // มีค่ามากกว่ารูป
+        $request = $this->openRequest();
+
+        $this->withToken($this->token)
+            ->postJson(route('api.card-reader.passport'), $this->chipResult(['request_id' => $request->id]))
+            ->assertOk();
+
+        $payload = CardReaderRead::firstOrFail()->payload;
+
+        $this->assertArrayNotHasKey('photo_base64', $payload);
+        $this->assertSame('AC2784283', $payload['document_no']);
+    }
 }
