@@ -45,7 +45,9 @@ class CardReaderMenuTest extends TestCase
             $user = new User(['role_id' => $role->id]);
             $user->setRelation('role', $role);
 
-            $allowed = $user->hasPermission('module1', 'write');
+            // ถามคำถามเดียวกับที่ middleware 'manage-card-readers' ถาม —
+            // ไม่ใช่ module1/write เพียวๆ เพราะ staff เข้าหน้านี้ได้ด้วย
+            $allowed = $user->canManageCardReaders();
 
             $this->assertSame(
                 $allowed,

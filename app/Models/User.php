@@ -239,6 +239,21 @@ class User extends Authenticatable
         return !in_array($role, ['trader', 'auditor']);
     }
 
+    /**
+     * ตั้งค่าเครื่องอ่านบัตรประชาชนที่เคาน์เตอร์ได้หรือไม่
+     *
+     * ไม่ใช่สิทธิ์ module1/write เพียวๆ เพราะ staff ไม่ได้ถือสิทธิ์จัดการระบบ
+     * แต่เครื่องอ่านตั้งอยู่ตรงหน้าเขา ถ้าต้องรอ admin ลงทะเบียนให้ทุกครั้ง
+     * เคาน์เตอร์จะหยุดรอทั้งที่งานนี้ใช้เวลาสิบวินาที — สิ่งที่กันไว้แทนคือ
+     * ขอบเขตสาขา ไม่ใช่ตัวสิทธิ์เข้าหน้า (ดู getVisibleBranchIds())
+     *
+     * auditor ถือ read ทุก module แต่ไม่ได้นั่งเคาน์เตอร์ จึงไม่เข้าข่าย
+     */
+    public function canManageCardReaders(): bool
+    {
+        return $this->hasPermission('module1', 'write') || $this->role?->name === 'staff';
+    }
+
     // Menu Access Methods
     public function getAccessibleMenus()
     {

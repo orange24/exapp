@@ -294,9 +294,10 @@ Route::middleware(['auth', 'session.check'])->group(function () {
         ->middleware('permission:module7,write');
 
     // เครื่องอ่านบัตรประชาชนที่เคาน์เตอร์ — ออก/เพิกถอน token ประจำเครื่อง
-    // ใช้สิทธิ์ module1 (ผู้ใช้/ระบบ) เพราะนี่คือการจัดการอุปกรณ์ ไม่ใช่งานตรวจรายชื่อ
+    // staff เข้าได้ด้วย เพราะเครื่องตั้งอยู่ตรงหน้าเขา รอ admin ไม่ได้
+    // แต่ขอบเขตถูกล็อกไว้ที่สาขาที่เขาลงเวรอยู่ (ดู DeviceManager)
     Route::get('/admin/card-readers', fn () => view('card-reader.devices'))
         ->name('card-readers.index')
-        ->middleware('permission:module1,write');
+        ->middleware('manage-card-readers');
 });
 

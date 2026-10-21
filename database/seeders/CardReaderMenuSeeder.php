@@ -3,8 +3,8 @@
 namespace Database\Seeders;
 
 use App\Models\Menu;
-use App\Models\Permission;
 use App\Models\Role;
+use App\Models\User;
 use Illuminate\Database\Seeder;
 
 /**
@@ -12,17 +12,14 @@ use Illuminate\Database\Seeder;
  *
  * วางใต้ "ตั้งค่า" เพราะเป็นการจัดการอุปกรณ์ ไม่ใช่งานประจำวันของเคาน์เตอร์
  *
- * ให้เมนูตาม "ใครถือสิทธิ์ module1/write จริง" ไม่ใช่ระบุชื่อ role ไว้ตายตัว
- * ตอนแรกผมเขียนเป็น superadmin กับ admin แล้วพบว่า role superadmin
- * ไม่มีสิทธิ์ module1 สักอย่างเลย และ hasPermission() ก็ไม่มีทางลัดให้
- * superadmin ด้วย — วันที่มีใครสร้างผู้ใช้ superadmin ขึ้นมา เขาจะเห็นเมนู
- * แล้วกดเจอ 403 การอ่านจากสิทธิ์จริงทำให้เมนูกับประตูตรงกันเสมอ
+ * ให้เมนูตาม "ใครเข้าหน้านี้ได้จริง" ไม่ใช่ระบุชื่อ role ไว้ตายตัว — ถามคำถาม
+ * เดียวกับที่ middleware ถามตอนเปิดหน้า (User::canManageCardReaders()) เมนู
+ * กับประตูจึงตรงกันเสมอ ตอนแรกผมเขียนเป็น superadmin กับ admin แล้วพบว่า role
+ * superadmin ไม่มีสิทธิ์ module1 สักอย่างเลย — วันที่มีใครสร้างผู้ใช้
+ * superadmin ขึ้นมา เขาจะเห็นเมนูแล้วกดเจอ 403
  */
 class CardReaderMenuSeeder extends Seeder
 {
-    private const MODULE = 'module1';
-    private const ACTION = 'write';
-
     public function run(): void
     {
         $parent = Menu::where('key', 'settings')->first();
@@ -43,18 +40,29 @@ class CardReaderMenuSeeder extends Seeder
             ]
         );
 
-        $permission = Permission::where('module', self::MODULE)->where('action', self::ACTION)->first();
+        foreach (Role::with('permissions')->get() as $role) {
+            if (! $this->roleCanManageCardReaders($role)) {
+                continue;
+            }
 
-        if ($permission === null) {
-            return;
-        }
-
-        $roles = Role::whereHas('permissions', fn ($q) => $q->whereKey($permission->id))->get();
-
-        foreach ($roles as $role) {
+            // ต้องผูกหัวข้อ "ตั้งค่า" ด้วย ไม่งั้นเมนูลูกไม่ถูก render เลย
             $role->menus()->syncWithoutDetaching([$parent->id, $menu->id]);
         }
 
         Menu::flushAccessCache();
+    }
+
+    /**
+     * ถาม User::canManageCardReaders() โดยไม่ต้องมีผู้ใช้จริงใน role นั้น
+     *
+     * role ที่ยังไม่มีใครใช้ก็ต้องได้เมนูไว้ล่วงหน้า เพราะ seeder นี้รันตอน
+     * deploy ไม่ใช่ตอนสร้างผู้ใช้
+     */
+    private function roleCanManageCardReaders(Role $role): bool
+    {
+        $probe = new User(['role_id' => $role->id]);
+        $probe->setRelation('role', $role);
+
+        return $probe->canManageCardReaders();
     }
 }

@@ -29,6 +29,7 @@ return $app
             'admin'         => \App\Http\Middleware\EnsureUserIsAdmin::class,
             'permission'    => \App\Http\Middleware\EnsurePermission::class,
             'card-reader'   => \App\Http\Middleware\AuthenticateCardReader::class,
+            'manage-card-readers' => \App\Http\Middleware\EnsureCanManageCardReaders::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

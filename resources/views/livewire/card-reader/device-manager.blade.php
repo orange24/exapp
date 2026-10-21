@@ -50,7 +50,19 @@
     @endif
 
     <div class="bg-white rounded shadow p-5 mb-5">
-        <h2 class="font-semibold mb-3" style="color:#0e513a">เพิ่มเครื่องอ่านบัตร</h2>
+        <div class="flex flex-wrap items-baseline justify-between gap-2 mb-3">
+            <h2 class="font-semibold" style="color:#0e513a">เพิ่มเครื่องอ่านบัตร</h2>
+
+            {{-- บอกไปเลยว่ากำลังตั้งค่าของสาขาไหน ไม่ต้องให้เดาว่าทำไม
+                 ไม่มีสาขาอื่นให้เลือก --}}
+            @if ($this->lockedBranch)
+                <span class="text-xs text-gray-500">
+                    สาขา
+                    <span class="font-medium text-gray-700">{{ $this->lockedBranch->branch_name }}</span>
+                    — ตั้งได้เฉพาะเคาน์เตอร์ของสาขานี้
+                </span>
+            @endif
+        </div>
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
             <div>
@@ -64,7 +76,9 @@
                 <select wire:model.blur="counterId" class="w-full border rounded px-3 py-2 text-sm">
                     <option value="">— เลือก —</option>
                     @foreach ($this->counters as $c)
-                        <option value="{{ $c->id }}">{{ $c->branch?->branch_name }} — {{ $c->counter_name }}</option>
+                        <option value="{{ $c->id }}">
+                            @if (! $this->lockedBranch){{ $c->branch?->branch_name }} — @endif{{ $c->counter_name }}
+                        </option>
                     @endforeach
                 </select>
                 @error('counterId') <div class="text-xs text-red-600 mt-1">{{ $message }}</div> @enderror
