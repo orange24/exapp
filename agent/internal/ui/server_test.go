@@ -383,3 +383,50 @@ func TestTheEditFormSaysATokenIsAlreadyStored(t *testing.T) {
 		t.Fatal("ต้องไม่แสดง token")
 	}
 }
+
+func TestTheSetupFormStartsOnTheRealServer(t *testing.T) {
+	s := newTestServer(t, Deps{})
+
+	// เครื่องที่สาขาต่อกับระบบจริงเสมอ การให้พนักงานพิมพ์ URL เองมีแต่ทาง
+	// พิมพ์ผิด แล้วอาการที่ได้คือ "ต่อกับระบบไม่ได้" ซึ่งชี้ไปผิดที่
+	body := get(t, s.URL())
+
+	if !strings.Contains(body, `value="`+DefaultServerURL+`"`) {
+		t.Fatalf("ช่องที่อยู่เซิร์ฟเวอร์ต้องกรอก %s มาให้แล้ว", DefaultServerURL)
+	}
+}
+
+func TestEditingKeepsTheServerAlreadySavedNotTheDefault(t *testing.T) {
+	s := newTestServer(t, Deps{})
+
+	// เครื่องที่ตั้งค่าไว้ที่อื่นแล้ว (เช่น UAT) ต้องไม่ถูกค่า default ทับตอนกดแก้ไข
+	s.SetState(func(st *State) { st.Configured = true; st.ServerURL = "https://exapp-uat.softernity.com" })
+
+	body := get(t, s.URL()+"&setup=1")
+
+	if !strings.Contains(body, `value="https://exapp-uat.softernity.com"`) {
+		t.Fatal("หน้าแก้ไขต้องแสดงที่อยู่ที่บันทึกไว้แล้ว")
+	}
+}
+
+func TestTheStatusPageSaysWhenAnUpdateIsWaitingForRestart(t *testing.T) {
+	s := newTestServer(t, Deps{})
+
+	// อัปเดตอัตโนมัติวางไฟล์ใหม่ไว้แล้วแต่ยังไม่มีผลจนกว่าจะเปิดใหม่
+	// ถ้าไม่บอก พนักงานจะเห็นเลขรุ่นเดิมค้างอยู่แล้วคิดว่าอัปเดตไม่ติด
+	s.SetState(func(st *State) {
+		st.Configured = true
+		st.ServerURL = "https://exapp.test"
+		st.UpdateReady = "1.4.0"
+	})
+
+	body := get(t, s.URL())
+
+	if !strings.Contains(body, "1.4.0") {
+		t.Fatal("หน้าสถานะต้องบอกว่ามีรุ่นใหม่รออยู่")
+	}
+
+	if !strings.Contains(body, "เปิดโปรแกรมใหม่") {
+		t.Fatal("ต้องบอกด้วยว่าต้องเปิดใหม่ถึงจะมีผล")
+	}
+}

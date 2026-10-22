@@ -39,6 +39,10 @@ type State struct {
 	Version     string
 	CounterName string
 	AutoStart   bool
+
+	// UpdateReady คือรุ่นที่โหลดมาวางไว้แล้วแต่ยังไม่มีผลจนกว่าจะเปิดใหม่
+	// ว่าง = ไม่มีอะไรรออยู่
+	UpdateReady string
 }
 
 // Deps คือสิ่งที่ UI สั่งให้ส่วนอื่นทำ — ประกาศเป็น interface เพื่อให้ทดสอบได้

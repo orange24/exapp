@@ -5,9 +5,11 @@
 package selfupdate
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"runtime"
 	"strings"
@@ -32,12 +34,70 @@ type release struct {
 type Updater struct {
 	current string
 	http    *http.Client
+
+	// api กับ apply แยกออกมาให้เทสสวมของปลอมเข้าไปได้
+	//
+	// apply ของจริงเขียนทับไฟล์ที่กำลังรันอยู่ ถ้าเทสเรียกตัวจริงมันจะไป
+	// เขียนทับไบนารีของ go test เอง
+	api   string
+	apply func(io.Reader) error
 }
 
 func New(currentVersion string) *Updater {
 	return &Updater{
 		current: strings.TrimSuffix(strings.TrimPrefix(currentVersion, "v"), "-uat"),
 		http:    &http.Client{Timeout: 60 * time.Second},
+		api:     releasesAPI,
+		apply: func(r io.Reader) error {
+			return selfupdate.Apply(r, selfupdate.Options{})
+		},
+	}
+}
+
+// Auto ตรวจรุ่นใหม่เองเป็นระยะ แล้วโหลดมาวางไว้เงียบ ๆ
+//
+// ตรวจทันทีรอบหนึ่งตอนเรียก แล้ววนตามรอบที่กำหนด ตั้งใจไม่รีสตาร์ตตัวเอง —
+// ไฟล์ใหม่จะมีผลตอนเปิดโปรแกรมครั้งถัดไป ซึ่งคือเช้าวันถัดไปเพราะสาขาตั้ง
+// ให้เปิดเองตอนบูตอยู่แล้ว การรีสตาร์ตกลางวันเสี่ยงไปตัดจังหวะที่พนักงาน
+// กำลังเสียบบัตรอยู่ ซึ่งแลกไม่คุ้มกับการได้รุ่นใหม่เร็วขึ้นไม่กี่ชั่วโมง
+//
+// onApplied ถูกเรียกเมื่ออัปเดตสำเร็จ ส่ง nil มาได้ถ้าไม่สนใจ
+func (u *Updater) Auto(ctx context.Context, every time.Duration, onApplied func(version string)) {
+	ticker := time.NewTicker(every)
+	defer ticker.Stop()
+
+	for {
+		// เน็ตสาขาล่มเป็นเรื่องปกติ ตรวจพลาดรอบนี้ก็ว่ากันรอบหน้า
+		// ห้าม return ออกไป ไม่งั้นรุ่นใหม่จะไม่ถึงเครื่องนั้นอีกเลย
+		version, available, err := u.Check()
+
+		switch {
+		case err != nil:
+			log.Printf("ตรวจรุ่นใหม่ไม่สำเร็จ: %v", err)
+		case !available:
+		default:
+			if err := u.Apply(); err != nil {
+				log.Printf("อัปเดตอัตโนมัติไม่สำเร็จ: %v", err)
+
+				break
+			}
+
+			log.Printf("อัปเดตเป็นรุ่น %s แล้ว จะมีผลเมื่อเปิดโปรแกรมครั้งถัดไป", version)
+
+			if onApplied != nil {
+				onApplied(version)
+			}
+
+			// อัปเดตแล้วไม่ต้องตรวจต่อ ไฟล์บนดิสก์เป็นรุ่นล่าสุดแล้ว
+			// แต่ u.current ยังเป็นรุ่นเก่า ถ้าวนต่อจะโหลดซ้ำทุกรอบ
+			return
+		}
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
 	}
 }
 
@@ -88,7 +148,7 @@ func (u *Updater) Apply() error {
 		return fmt.Errorf("ดาวน์โหลดไม่สำเร็จ (HTTP %d)", resp.StatusCode)
 	}
 
-	if err := selfupdate.Apply(resp.Body, selfupdate.Options{}); err != nil {
+	if err := u.apply(resp.Body); err != nil {
 		// ไลบรารีเก็บไฟล์เดิมไว้ให้กู้คืนเมื่อการเขียนทับล้มเหลวกลางคัน
 		if rollbackErr := selfupdate.RollbackError(err); rollbackErr != nil {
 			return fmt.Errorf("อัปเดตล้มเหลวและกู้คืนไฟล์เดิมไม่ได้: %w", rollbackErr)
@@ -101,7 +161,7 @@ func (u *Updater) Apply() error {
 }
 
 func (u *Updater) latest() (*release, error) {
-	resp, err := u.http.Get(releasesAPI + "?per_page=20")
+	resp, err := u.http.Get(u.api + "?per_page=20")
 	if err != nil {
 		return nil, fmt.Errorf("ติดต่อ GitHub ไม่ได้: %w", err)
 	}

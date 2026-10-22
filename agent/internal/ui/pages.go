@@ -8,6 +8,15 @@ import (
 	"time"
 )
 
+// DefaultServerURL คือระบบจริง — ค่าที่กรอกมาให้ตั้งแต่เปิดหน้าตั้งค่าครั้งแรก
+//
+// เครื่องที่สาขาต่อกับระบบจริงเสมอ การให้พนักงานพิมพ์ URL เองมีแต่ทางพิมพ์ผิด
+// แล้วอาการที่ได้คือ "ต่อกับระบบไม่ได้" ซึ่งชี้ไปผิดที่ — คนจะไปไล่หาที่เน็ต
+// หรือที่ token ทั้งที่ปัญหาอยู่ที่ตัวอักษรเดียวในช่องแรก
+//
+// ใครจะต่อ UAT ก็ลบแล้วพิมพ์ทับได้ตามเดิม
+const DefaultServerURL = "https://exapp.softernity.com"
+
 // หน้าเดียวจบ ไม่มี asset ภายนอก เพราะเครื่องสาขาอาจไม่มีอินเทอร์เน็ตตอนตั้งค่า
 var page = template.Must(template.New("p").Parse(`<!doctype html>
 <html lang="th"><head><meta charset="utf-8">
@@ -103,6 +112,10 @@ var page = template.Must(template.New("p").Parse(`<!doctype html>
   {{range .ReaderNames}}<div class="line" style="color:#6b7280;font-size:13px">
     <span class="dot idle"></span>{{.}}</div>{{end}}
 
+  {{if .UpdateReady}}<div class="msg good" style="margin-top:10px">
+    โหลดรุ่น {{.UpdateReady}} มาแล้ว — ปิดแล้วเปิดโปรแกรมใหม่เพื่อให้มีผล
+    (หรือรอเปิดเครื่องพรุ่งนี้)</div>{{end}}
+
   <div class="row">
     <form method="post" action="/autostart?k={{.Key}}" style="margin:0">
       <input type="hidden" name="on" value="{{if .AutoStart}}0{{else}}1{{end}}">
@@ -144,12 +157,20 @@ type view struct {
 	LastBeatText string
 	LastError    string
 	AutoStart    bool
+	UpdateReady  string
 }
 
 func (s *Server) render(w http.ResponseWriter, r *http.Request, msg, kind string) {
 	st := s.snapshot()
 
 	setup := !st.Configured || r.URL.Query().Get("setup") == "1"
+
+	// เฉพาะตอนยังไม่เคยตั้งค่า — เครื่องที่ชี้ไปที่อื่นไว้แล้วต้องไม่ถูกทับ
+	// ตอนกดแก้ไข ไม่งั้นคนที่อยากแก้แค่ token จะย้ายเซิร์ฟเวอร์โดยไม่รู้ตัว
+	serverURL := st.ServerURL
+	if serverURL == "" {
+		serverURL = DefaultServerURL
+	}
 
 	v := view{
 		Setup:       setup,
@@ -158,13 +179,14 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, msg, kind string
 		Key:         s.secret,
 		Message:     msg,
 		MessageKind: kind,
-		ServerURL:   st.ServerURL,
+		ServerURL:   serverURL,
 		Version:     st.Version,
 		CounterName: st.CounterName,
 		ReaderFound: st.ReaderFound,
 		ReaderNames: st.ReaderNames,
 		LastError:   st.LastError,
 		AutoStart:   st.AutoStart,
+		UpdateReady: st.UpdateReady,
 	}
 
 	// ได้ยินจากเซิร์ฟเวอร์ภายในสองนาทีถือว่าต่อติด — เท่ากับเกณฑ์ที่ฝั่งเซิร์ฟเวอร์ใช้

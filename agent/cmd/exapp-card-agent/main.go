@@ -46,6 +46,15 @@ const (
 
 	// นานพอให้พนักงานหยิบพาสปอร์ตมาแตะ แต่ไม่นานจนกุญแจที่เซิร์ฟเวอร์หมดอายุก่อน
 	passportTapWindow = 100 * time.Second
+
+	/*
+	 * จังหวะตรวจรุ่นใหม่
+	 *
+	 * ตรวจรอบแรกทันทีที่เปิดโปรแกรม แล้วทุกหกชั่วโมง — ถี่กว่านี้ไม่ได้อะไรเพิ่ม
+	 * เพราะไฟล์ใหม่มีผลตอนเปิดครั้งถัดไปอยู่ดี และ GitHub API จำกัดจำนวนคำขอ
+	 * ต่อ IP ไว้ ยี่สิบสาขาที่อาจออกเน็ตผ่าน IP เดียวกันไม่ควรไปชนเพดานนั้น
+	 */
+	updateCheckEvery = 6 * time.Hour
 )
 
 func main() {
@@ -229,6 +238,17 @@ func serve(cfg *config.Config, web *ui.Server, background bool) error {
 
 	go heartbeatLoop(ctx, api, reader, keys, web)
 	go passportLoop(ctx, api, reader, keys)
+
+	/*
+	 * ดึงรุ่นใหม่เองโดยไม่ต้องให้ใครไปกดปุ่มที่เครื่อง
+	 *
+	 * ปุ่ม "ตรวจรุ่นใหม่" ยังอยู่สำหรับคนที่อยากได้เดี๋ยวนี้ แต่ลำพังปุ่มเดียว
+	 * แปลว่าทุกครั้งที่แก้บั๊กต้องมีคนไปแตะเครื่องครบทุกสาขา ซึ่งเป็นภาระที่
+	 * ทำให้เราไม่กล้าปล่อยรุ่นใหม่ — แล้วบั๊กก็ค้างอยู่ที่สาขานานกว่าที่ควร
+	 */
+	go selfupdate.New(version).Auto(ctx, updateCheckEvery, func(v string) {
+		web.SetState(func(st *ui.State) { st.UpdateReady = v })
+	})
 
 	watcher, err := reader.Watch()
 	if err != nil {
