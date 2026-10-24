@@ -4,6 +4,9 @@
 
 @section('content')
 {{-- Counter Selection Modal --}}
+{{-- auditor/trader ไม่ได้นั่งเคาน์เตอร์ — ไม่ต้อง render markup ของ modal
+     ทิ้งไว้ใน DOM ให้เขาเลย ไม่งั้นมีโอกาสถูกเปิดขึ้นมาโดยไม่ตั้งใจ --}}
+@if (auth()->user()->worksAtACounter())
 <div x-data="counterSelector()" x-init="init()">
     {{-- Modal overlay --}}
     <div x-show="showModal" x-cloak
@@ -196,6 +199,7 @@ function counterSelector() {
     }
 }
 </script>
+@endif
 
 @php
     $counterId = session('working_counter_id');

@@ -103,6 +103,9 @@
         @endif
 
         {{-- Working Counter Selector --}}
+        {{-- auditor/trader ไม่ได้นั่งเคาน์เตอร์ การขึ้นกล่องนี้ให้เขาสื่อผิดว่า
+             เขาผูกอยู่กับสาขาเดียว ทั้งที่ขอบเขตการมองเห็นไม่ได้ทำงานแบบนั้น --}}
+        @if (auth()->user()->worksAtACounter())
         @php
             // เดิมบรรทัดนี้เช็ค canSwitchBranch() (= isAdmin) ทำให้ staff และ
             // branch_manager แก้เคาน์เตอร์ที่เลือกผิดตอน login ไม่ได้เลย
@@ -151,12 +154,14 @@
                     </a>
                 </div>
             @else
-                {{-- Trader/Auditor: ไม่ได้ทำรายการหน้าเคาน์เตอร์ แสดงชื่อเฉยๆ --}}
+                {{-- role ที่นั่งเคาน์เตอร์แต่ย้ายเคาน์เตอร์เองไม่ได้ — แสดงชื่อเฉย ๆ
+                     (trader/auditor ไม่เข้ามาถึงตรงนี้แล้ว ถูกกันไว้ข้างบน) --}}
                 <div class="px-2 py-1.5 text-sm font-semibold" style="color:#0e513a;">
                     {{ $workingName }}
                 </div>
             @endif
         </div>
+        @endif
 
         {{-- Nav --}}
         @php

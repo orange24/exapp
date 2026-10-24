@@ -43,13 +43,31 @@ class UserController extends Controller
     /**
      * Validate and create user.
      */
+    /**
+     * สาขาบังคับไหม ขึ้นกับว่า role นั้นนั่งเคาน์เตอร์หรือเปล่า
+     *
+     * auditor ตรวจสอบทุกสาขา จึงไม่ได้ประจำสาขาไหน การบังคับให้เลือกสาขา
+     * ทำให้ต้องผูกเขาไว้กับสาขาใดสาขาหนึ่งแบบมั่ว ๆ แล้วขอบเขตการมองเห็น
+     * ก็ไปอิงกับค่ามั่วนั้น ส่วน staff ที่ไม่มีสาขาจะไม่มีเคาน์เตอร์ให้ลงเวร
+     * และใช้หน้าซื้อ/ขายไม่ได้เลย จึงยังบังคับอยู่
+     */
+    private function branchRule(Request $request): string
+    {
+        $role = Role::find($request->input('role_id'));
+
+        $probe = new User(['role_id' => $role?->id]);
+        $probe->setRelation('role', $role);
+
+        return $probe->worksAtACounter() ? 'required' : 'nullable';
+    }
+
     public function store(Request $request)
     {
         $validated = $request->validate([
             'name'      => 'required|string|max:255',
             'email'     => 'required|email|unique:users,email',
             'password'  => 'required|string|min:8|confirmed',
-            'branch_id' => 'required|exists:branches,id',
+            'branch_id' => [$this->branchRule($request), 'nullable', 'exists:branches,id'],
             'role_id'   => 'required|exists:roles,id',
             'is_active' => 'boolean',
         ]);
@@ -88,7 +106,7 @@ class UserController extends Controller
             'name'      => 'required|string|max:255',
             'email'     => ['required', 'email', Rule::unique('users')->ignore($user->id)],
             'password'  => 'nullable|string|min:8|confirmed',
-            'branch_id' => 'required|exists:branches,id',
+            'branch_id' => [$this->branchRule($request), 'nullable', 'exists:branches,id'],
             'role_id'   => 'required|exists:roles,id',
             'is_active' => 'boolean',
         ]);

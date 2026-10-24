@@ -95,6 +95,23 @@ class User extends Authenticatable
         return $this->role?->name === 'trader';
     }
 
+    public function isAuditor(): bool
+    {
+        return $this->role?->name === 'auditor';
+    }
+
+    /**
+     * นั่งทำรายการที่เคาน์เตอร์จริงหรือไม่
+     *
+     * auditor ตรวจสอบทุกสาขาและ trader ดูแลคลัง — ทั้งคู่ไม่ได้ประจำเคาน์เตอร์
+     * ไหน การขึ้น "เคาน์เตอร์ทำงาน" ให้เขาใน sidebar สื่อผิดว่าเขาผูกอยู่กับ
+     * สาขาเดียว ทั้งที่ขอบเขตการมองเห็นของเขาไม่ได้ทำงานแบบนั้น
+     */
+    public function worksAtACounter(): bool
+    {
+        return ! $this->isAuditor() && ! $this->isTrader();
+    }
+
     /**
      * เปลี่ยน "สาขาทำงาน" เองได้หรือไม่
      *
@@ -177,7 +194,14 @@ class User extends Authenticatable
             return [session('working_branch_id', $this->branch_id)];
         }
 
-        return [$this->branch_id]; // Own branch only (Branch Manager, Auditor)
+        // auditor ตรวจสอบทุกสาขา ไม่ได้ประจำสาขาไหน — ถ้าจำกัดไว้ที่สาขาเดียว
+        // เขาจะตรวจได้แค่สาขาที่บังเอิญถูกผูกไว้ตอนสร้างผู้ใช้ และถ้าไม่ผูก
+        // สาขาเลย (branch_id = null) เขาจะไม่เห็นอะไรเลยสักสาขา
+        if ($this->isAuditor()) {
+            return Branch::pluck('id')->toArray();
+        }
+
+        return [$this->branch_id]; // Own branch only (Branch Manager)
     }
 
     public function getManagedBranchIds(): array
