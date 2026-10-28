@@ -68,12 +68,15 @@ git push Exapp master
 ```bash
 # เครื่องเก่า
 cd ~/.claude/projects
-tar czf ~/Desktop/claude-memory-exapp.tgz -Volumes-Work-PHP-src-exapp-src-exapp
+tar czf ~/Desktop/claude-memory-exapp.tgz "./-Volumes-Work-PHP-src-exapp-src-exapp"
 
 # เครื่องใหม่ — วางโปรเจกต์ไว้ path เดิมก่อน แล้วค่อยแตก
 mkdir -p ~/.claude/projects
 tar xzf ~/Desktop/claude-memory-exapp.tgz -C ~/.claude/projects
 ```
+
+> ต้องมี `./` นำหน้าชื่อโฟลเดอร์ และต้องใส่เครื่องหมายคำพูดครอบ — ชื่อมันขึ้นต้น
+> ด้วย `-` ถ้าเขียนเปล่า ๆ `tar` จะอ่านเป็น option แล้วพ่น usage ออกมาแทน
 
 ถ้าเครื่องใหม่วางโปรเจกต์ไว้ **path อื่น** ต้องเปลี่ยนชื่อโฟลเดอร์ให้ตรง path
 ใหม่ (เอา `/` เป็น `-`) เช่น `/Users/me/code/exapp` → `-Users-me-code-exapp`
