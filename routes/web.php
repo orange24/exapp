@@ -86,6 +86,11 @@ Route::middleware(['auth', 'session.check'])->group(function () {
         return back()->with('success', 'เปลี่ยนสาขาทำงานเป็น ' . $branch->branch_name);
     })->name('switch-branch');
 
+    // สลับบริษัทที่กำลังทำงานอยู่ — ล้างสาขา/เคาน์เตอร์ที่ลงเวรไว้ด้วย
+    // เพราะของเดิมเป็นของบริษัทที่เพิ่งสลับออกมา
+    Route::post('/switch-company', \App\Http\Controllers\SwitchCompanyController::class)
+        ->name('switch-company');
+
     // Switch working counter (stored in session)
     Route::post('/switch-counter', function (\Illuminate\Http\Request $request) {
         $counterId = $request->input('counter_id');
@@ -149,6 +154,10 @@ Route::middleware(['auth', 'session.check'])->group(function () {
             // Module 1: Permission Matrix
             Route::get('/permissions', [PermissionController::class, 'index'])->name('permissions.index');
             Route::put('/permissions', [PermissionController::class, 'update'])->name('permissions.update');
+
+            // Company Management — บริษัทเป็นเจ้าของสาขา จึงวางไว้เหนือสาขา
+            Route::resource('companies', \App\Http\Controllers\Admin\CompanyController::class)->except(['show', 'destroy']);
+            Route::patch('/companies/{company}/toggle-active', [\App\Http\Controllers\Admin\CompanyController::class, 'toggleActive'])->name('companies.toggle-active');
 
             // Branch & Counter Management
             Route::resource('branches', BranchController::class)->except(['show', 'destroy']);

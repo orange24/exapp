@@ -67,6 +67,35 @@
             }
         @endphp
 
+        {{-- Company Selector --}}
+        {{-- ขึ้นเฉพาะคนที่ดูแลมากกว่าหนึ่งบริษัท — คนที่มีบริษัทเดียวเห็น
+             dropdown ที่เลือกอะไรไม่ได้แล้วสงสัยว่ามันมีไว้ทำไม --}}
+        @php
+            $companyIds = auth()->user()->accessibleCompanyIds();
+            $myCompanies = count($companyIds) > 1
+                ? \App\Models\Company::whereIn('id', $companyIds)
+                    ->where('is_active', true)->orderBy('company_code')->get()
+                : collect();
+            $activeCompanyId = auth()->user()->activeCompanyId();
+        @endphp
+        @if ($myCompanies->count() > 1)
+        <div x-show="sidebarOpen" class="px-3 py-2" style="border-bottom:1px solid #e5e7eb;">
+            <div class="text-xs mb-1" style="color:#888;">บริษัท</div>
+            <form method="POST" action="{{ route('switch-company') }}">
+                @csrf
+                <select name="company_id" onchange="this.form.submit();"
+                        class="w-full text-sm font-semibold bg-white border border-gray-300 rounded px-2 py-1.5"
+                        style="color:#0e513a;">
+                    @foreach ($myCompanies as $company)
+                        <option value="{{ $company->id }}" {{ $activeCompanyId == $company->id ? 'selected' : '' }}>
+                            {{ $company->company_name }}
+                        </option>
+                    @endforeach
+                </select>
+            </form>
+        </div>
+        @endif
+
         {{-- Working Branch Selector --}}
         @if(auth()->user()->role?->name === 'staff')
         @php

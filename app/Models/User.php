@@ -112,6 +112,57 @@ class User extends Authenticatable
         return ! $this->isAuditor() && ! $this->isTrader();
     }
 
+    public function companies()
+    {
+        return $this->belongsToMany(Company::class);
+    }
+
+    /**
+     * บริษัทที่ผู้ใช้คนนี้เข้าถึงได้
+     *
+     * admin เข้าได้ทุกบริษัทเสมอ ไม่ต้องไล่ผูกให้ ส่วนคนอื่นดูจากที่ผูกไว้
+     * ถ้ายังไม่เคยผูก (ผู้ใช้เดิมทั้งระบบก่อนมีฟีเจอร์นี้) ให้ตกไปใช้บริษัท
+     * ของสาขาตัวเอง — ไม่งั้นวันที่ deploy ทุกคนจะเข้าระบบไม่ได้พร้อมกัน
+     *
+     * @return array<int, int>
+     */
+    public function accessibleCompanyIds(): array
+    {
+        if ($this->isAdmin()) {
+            return Company::pluck('id')->toArray();
+        }
+
+        $assigned = $this->companies()->pluck('companies.id')->toArray();
+
+        if ($assigned !== []) {
+            return $assigned;
+        }
+
+        $own = $this->branch?->company_id;
+
+        return $own ? [$own] : [];
+    }
+
+    /**
+     * บริษัทที่กำลังทำงานอยู่
+     *
+     * ค่าใน session ต้องถูกตรวจกับสิทธิ์ปัจจุบันทุกครั้ง ไม่ใช่เชื่อตามที่เคย
+     * ตั้งไว้ — ผู้ใช้ที่ถูกถอดสิทธิ์บริษัทระหว่างที่ยัง login ค้างอยู่ต้อง
+     * หลุดออกจากบริษัทนั้นทันที ไม่ใช่รอจนกว่าเขาจะ logout เอง
+     */
+    public function activeCompanyId(): ?int
+    {
+        $allowed = $this->accessibleCompanyIds();
+
+        if ($allowed === []) {
+            return null;
+        }
+
+        $chosen = (int) session('active_company_id');
+
+        return in_array($chosen, $allowed, true) ? $chosen : $allowed[0];
+    }
+
     /**
      * เปลี่ยน "สาขาทำงาน" เองได้หรือไม่
      *
@@ -180,6 +231,39 @@ class User extends Authenticatable
     }
 
     public function getVisibleBranchIds(): array
+    {
+        return $this->narrowToActiveCompany($this->branchIdsByRole());
+    }
+
+    /**
+     * ตัดสาขาที่ไม่ได้อยู่ในบริษัทที่กำลังทำงานอยู่ทิ้ง
+     *
+     * นี่คือจุดเดียวที่ทั้งระบบถูก scope ตามบริษัท — หน้า inventory, รายงาน,
+     * การโอนสต็อก และอื่น ๆ เรียก getVisibleBranchIds() อยู่แล้วทั้งหมด
+     * การบีบที่นี่จึงได้ผลทั่วระบบโดยไม่ต้องไล่แก้ทีละหน้า
+     *
+     * @param  array<int, int>  $branchIds
+     * @return array<int, int>
+     */
+    private function narrowToActiveCompany(array $branchIds): array
+    {
+        $companyId = $this->activeCompanyId();
+
+        if ($companyId === null) {
+            return $branchIds;
+        }
+
+        return Branch::whereIn('id', $branchIds)
+            ->where('company_id', $companyId)
+            ->pluck('id')->toArray();
+    }
+
+    /**
+     * ขอบเขตสาขาตาม role อย่างเดียว ยังไม่คิดเรื่องบริษัท
+     *
+     * @return array<int, int>
+     */
+    private function branchIdsByRole(): array
     {
         if ($this->isAdmin()) {
             return Branch::pluck('id')->toArray(); // All branches
