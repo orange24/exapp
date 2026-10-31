@@ -25,6 +25,7 @@ RUN apk add --no-cache \
     freetype-dev \
     libzip-dev \
     icu-dev \
+    icu-data-full \
     oniguruma-dev \
     curl \
     openjpeg-tools \

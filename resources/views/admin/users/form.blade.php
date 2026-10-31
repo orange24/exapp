@@ -188,7 +188,7 @@
                 roleName() { return roleNames[this.roleId] ?? ''; },
                 isAdmin() { return ['admin', 'superadmin'].includes(this.roleName()); },
                 // ต้องตรงกับ UserController::needsBranches()
-                needsBranches() { return this.roleId !== '' && !this.isAdmin() && !['auditor', 'trader'].includes(this.roleName()); },
+                needsBranches() { return this.roleId !== '' && !this.isAdmin() && !['auditor', 'auditor_readonly', 'trader'].includes(this.roleName()); },
                 needsCompanies() { return this.roleId !== '' && !this.isAdmin(); },
 
                 // ติ๊กสาขาแล้วติ๊กบริษัทของสาขานั้นให้ด้วย

@@ -57,7 +57,8 @@ class CountryCode
 
     /** คำที่คนพิมพ์บ่อยแต่ไม่ใช่ชื่อประเทศตรงตัว */
     private const ALIASES = [
-        'THAI' => 'TH', 'THAILAND' => 'TH', 'คนไทย' => 'TH',
+        // "ไทย" ต้องอยู่ที่นี่ด้วย ไม่พึ่ง ICU — image Alpine บน Cloud Run เคยมีแต่ข้อมูลภาษาอังกฤษ
+        'THAI' => 'TH', 'THAILAND' => 'TH', 'ไทย' => 'TH', 'คนไทย' => 'TH', 'สัญชาติไทย' => 'TH',
         'UK' => 'GB', 'ENGLAND' => 'GB', 'BRITISH' => 'GB', 'อังกฤษ' => 'GB',
         'USA' => 'US', 'AMERICA' => 'US', 'AMERICAN' => 'US', 'อเมริกา' => 'US',
         'KOREA' => 'KR', 'SOUTH KOREA' => 'KR', 'เกาหลี' => 'KR', 'เกาหลีใต้' => 'KR',
@@ -83,6 +84,12 @@ class CountryCode
 
         $upper = mb_strtoupper($value);
 
+        // OCR บนพาสปอร์ตอ่าน O เป็นเลข 0 และ I เป็นเลข 1 ("0MN") — รหัสประเทศไม่มีตัวเลข
+        // จึงแปลงกลับได้โดยไม่ชนรหัสอื่น ทำเฉพาะค่าที่สั้นแบบรหัส ไม่ยุ่งกับชื่อประเทศ
+        if (strlen($upper) <= 3 && preg_match('/\d/', $upper)) {
+            $upper = strtr($upper, ['0' => 'O', '1' => 'I']);
+        }
+
         $candidate = match (true) {
             strlen($upper) === 2 && ctype_alpha($upper) => $upper,
             isset(self::ALPHA3[$upper]) => self::ALPHA3[$upper],
@@ -91,6 +98,41 @@ class CountryCode
         };
 
         return $candidate !== null && in_array($candidate, $this->allowed, true) ? $candidate : null;
+    }
+
+    /**
+     * รหัส 3 ตัวสำหรับเก็บลงข้อมูลลูกค้า — แบบเดียวกับที่ได้จากชิปพาสปอร์ต
+     */
+    public function toAlpha3(string $alpha2): ?string
+    {
+        foreach (self::ALPHA3 as $alpha3 => $code) {
+            // รายการเรียงรหัส ISO ไว้ก่อนรหัสพิเศษ (D, GBD) ตัวแรกที่เจอจึงเป็นรหัสมาตรฐาน
+            if ($code === $alpha2 && strlen($alpha3) === 3) {
+                return $alpha3;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * ตัวเลือกสัญชาติ — รหัส 3 ตัว => ชื่อไทย เรียงตามชื่อ ไทยขึ้นก่อน
+     *
+     * @return array<string, string>
+     */
+    public function choices(): array
+    {
+        $choices = [];
+        foreach ($this->allowed as $code) {
+            $alpha3 = $this->toAlpha3($code);
+            if ($alpha3 !== null) {
+                $choices[$alpha3] = Locale::getDisplayRegion('-' . $code, 'th') . " ({$alpha3})";
+            }
+        }
+
+        asort($choices);
+
+        return ['THA' => $choices['THA']] + $choices;
     }
 
     /**

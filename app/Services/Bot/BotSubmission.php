@@ -28,6 +28,10 @@ class BotSubmission
     private const FIRST_ROW = 9;
     public const ROWS_PER_FILE = 492;
 
+    /** บิลที่ข้ามแก้ได้แบบไหน — ผูกลูกค้าเข้าบิล หรือแก้ข้อมูลลูกค้าที่ผูกอยู่ */
+    public const FIX_LINK = 'link';
+    public const FIX_CUSTOMER = 'customer';
+
     /** ค่าใน dropdown ของ template ต้องสะกดตรงตัวอักษร */
     private const TYPE_THAI = 'คนไทย';
     private const TYPE_THAI_CORP = 'นิติบุคคลไทย';
@@ -50,7 +54,7 @@ class BotSubmission
         self::FOREIGN => ['buy' => [], 'sell' => []],
     ];
 
-    /** @var list<array{trns_no: string, date: string, name: string, reason: string}> */
+    /** @var list<array{trns_no: string, date: string, name: string, reason: string, fix: ?string, transaction_id: int, customer_id: ?int}> */
     private array $skipped = [];
 
     private Carbon $start;
@@ -211,7 +215,7 @@ class BotSubmission
             ->whereBetween('m.trns_datetime', [$this->start, $this->end])
             ->orderBy('m.trns_datetime')->orderBy('m.id')->orderBy('d.id')
             ->get([
-                'm.trns_no', 'm.trns_type', 'm.trns_datetime', 'm.cust_name', 'm.customer_id',
+                'm.id as trns_id', 'm.trns_no', 'm.trns_type', 'm.trns_datetime', 'm.cust_name', 'm.customer_id',
                 'cu.id as cust_id', 'cu.type as cust_kind', 'cu.id_type', 'cu.id_number', 'cu.nationality',
                 'cu.name_en', 'cu.name_th', 'cu.first_name', 'cu.last_name',
                 'd.currency_code', 'd.unit_price', 'd.amount', 'd.total',
@@ -222,14 +226,14 @@ class BotSubmission
             $isBuy = $line->trns_type === 'BUYING';
             $name = $this->customerName($line);
 
-            $skip = fn (string $reason) => $this->skip($line->trns_no, $date, $name, $reason);
+            $skip = fn (string $reason, ?string $fix = null) => $this->skip($line, $date, $name, $reason, $fix);
 
             if ($line->cust_id === null) {
-                $skip('ไม่ได้ผูกข้อมูลลูกค้า');
+                $skip('ไม่ได้ผูกข้อมูลลูกค้า', self::FIX_LINK);
                 continue;
             }
             if (trim((string) $line->id_number) === '') {
-                $skip('ไม่มีเลขบัตรประชาชน/หนังสือเดินทาง');
+                $skip('ไม่มีเลขบัตรประชาชน/หนังสือเดินทาง', self::FIX_CUSTOMER);
                 continue;
             }
 
@@ -241,7 +245,8 @@ class BotSubmission
 
             $customer = $this->classify($line, $countries, $isBuy);
             if (is_string($customer)) {
-                $skip($customer);
+                // สัญชาติแก้ที่ข้อมูลลูกค้าได้ ส่วนนิติบุคคลฝั่งขายเป็นข้อจำกัดของแบบฟอร์มเอง
+                $skip($customer, $line->cust_kind === 'corporate' ? null : self::FIX_CUSTOMER);
                 continue;
             }
 
@@ -325,15 +330,23 @@ class BotSubmission
         return '';
     }
 
-    private function skip(string $trnsNo, Carbon $date, string $name, string $reason): void
+    private function skip(object $line, Carbon $date, string $name, string $reason, ?string $fix): void
     {
         // บิลหลายสกุลเงินถูกข้ามด้วยเหตุผลเดียวกัน แสดงครั้งเดียวพอ
         foreach ($this->skipped as $s) {
-            if ($s['trns_no'] === $trnsNo && $s['reason'] === $reason) {
+            if ($s['trns_no'] === $line->trns_no && $s['reason'] === $reason) {
                 return;
             }
         }
 
-        $this->skipped[] = ['trns_no' => $trnsNo, 'date' => $date->format('d/m/Y'), 'name' => $name, 'reason' => $reason];
+        $this->skipped[] = [
+            'trns_no' => $line->trns_no,
+            'date' => $date->format('d/m/Y'),
+            'name' => $name,
+            'reason' => $reason,
+            'fix' => $fix,
+            'transaction_id' => (int) $line->trns_id,
+            'customer_id' => $line->cust_id === null ? null : (int) $line->cust_id,
+        ];
     }
 }

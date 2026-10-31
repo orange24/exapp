@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\UserSession;
+use App\Support\ReadOnlyGuard;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\RateLimiter;
@@ -32,7 +33,12 @@ class LoginController extends Controller
             ]);
         }
 
-        if (! Auth::attempt($request->only('email', 'password'), $request->boolean('remember'))) {
+        // บัญชีอ่านอย่างเดียวก็ต้องล็อกอินได้ — attempt() บันทึก remember token ของตัวเอง
+        $attempted = ReadOnlyGuard::allowing(
+            fn () => Auth::attempt($request->only('email', 'password'), $request->boolean('remember'))
+        );
+
+        if (! $attempted) {
             RateLimiter::hit($key, 60);
             throw ValidationException::withMessages([
                 'email' => 'อีเมล หรือ รหัสผ่านไม่ถูกต้อง',
@@ -114,7 +120,7 @@ class LoginController extends Controller
         UserSession::where('session_id', $request->session()->getId())
             ->update(['is_terminated' => true, 'terminated_at' => now(), 'terminated_reason' => 'Logout']);
 
-        Auth::logout();
+        ReadOnlyGuard::allowing(fn () => Auth::logout()); // logout() หมุน remember token ของตัวเอง
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 

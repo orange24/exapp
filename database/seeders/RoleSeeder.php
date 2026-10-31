@@ -19,6 +19,7 @@ class RoleSeeder extends Seeder
             ['name' => 'trader',     'display_name' => 'Trader'],
             ['name' => 'staff',      'display_name' => 'พนักงาน'],
             ['name' => 'auditor',    'display_name' => 'ผู้ตรวจสอบ'],
+            ['name' => 'auditor_readonly', 'display_name' => 'ผู้ตรวจสอบ (อ่านอย่างเดียว)'],
         ];
         foreach ($roles as $r) {
             \App\Models\Role::firstOrCreate(['name' => $r['name']], $r);

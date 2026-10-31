@@ -326,4 +326,13 @@ class BotSubmissionTest extends TestCase
         $this->assertNull($codes->toAlpha2(''));
         $this->assertNull($codes->toAlpha2('XX'), 'รหัสที่ไม่อยู่ใน dropdown ของ template ใช้ไม่ได้');
     }
+
+    public function test_digits_misread_from_a_passport_are_read_as_letters(): void
+    {
+        // OCR อ่านตัว O บนพาสปอร์ตโอมานเป็นเลขศูนย์ — รหัสประเทศไม่มีตัวเลขเลย จึงแปลงกลับได้ปลอดภัย
+        $codes = new CountryCode((require resource_path('templates/bot/emc-dimension.php'))['countries']);
+
+        $this->assertSame('OM', $codes->toAlpha2('0MN'));
+        $this->assertSame('IN', $codes->toAlpha2('1ND'));
+    }
 }

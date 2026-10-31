@@ -21,6 +21,7 @@ use App\Http\Controllers\Report\AvgRateSummaryController;
 use App\Http\Controllers\Report\CashierPerformanceReportController;
 use App\Http\Controllers\Report\CustomerTransactionReportController;
 use App\Http\Controllers\Report\BotMonthlyReportController;
+use App\Http\Controllers\Report\BotCorrectionController;
 use App\Http\Controllers\Report\BotSubmissionController;
 use App\Http\Controllers\Report\DailyReportController;
 use App\Http\Controllers\Report\MySummaryReportController;
@@ -294,6 +295,9 @@ Route::middleware(['auth', 'session.check'])->group(function () {
     // ส่งข้อมูลให้แบงค์ชาติ — ใส่ลงไฟล์ template ทางการ แยกไฟล์คนไทย/ต่างชาติ
     Route::get('/reports/bot-submission', [BotSubmissionController::class, 'index'])->name('reports.bot-submission');
     Route::post('/reports/bot-submission/export', [BotSubmissionController::class, 'export'])->name('reports.bot-submission.export');
+    Route::get('/reports/bot-submission/customers', [BotCorrectionController::class, 'search'])->name('reports.bot-submission.customers');
+    Route::patch('/reports/bot-submission/transactions/{transaction}/customer', [BotCorrectionController::class, 'updateCustomer'])->name('reports.bot-submission.customer.update');
+    Route::post('/reports/bot-submission/transactions/{transaction}/customer', [BotCorrectionController::class, 'linkCustomer'])->name('reports.bot-submission.customer.link');
 
     // BOT Report Staging (จัดการข้อมูลก่อนส่ง ธปท.)
     Route::get('/reports/bot-staging', fn() => view('reports.bot-staging'))->name('reports.bot-staging');

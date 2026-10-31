@@ -9,6 +9,15 @@
     $groupLabels = [\App\Services\Bot\BotSubmission::THAI => 'คนไทย', \App\Services\Bot\BotSubmission::FOREIGN => 'ชาวต่างชาติ'];
 @endphp
 
+@if (session('success'))
+    <div class="mb-4 p-3 bg-green-50 border border-green-300 text-green-700 rounded text-sm">{{ session('success') }}</div>
+@endif
+@if ($errors->any())
+    <div class="mb-4 p-3 bg-red-50 border border-red-300 text-red-700 rounded text-sm">
+        แก้ไม่สำเร็จ: {{ $errors->first() }}
+    </div>
+@endif
+
 <div class="mb-4">
     <h2 class="text-lg font-semibold text-gray-800">ส่งข้อมูลให้แบงค์ชาติ (BOT Submission)</h2>
     <p class="text-sm text-gray-500">
@@ -129,12 +138,18 @@
 
     {{-- Skipped --}}
     @if (count($submission->skipped()) > 0)
-        <div class="bg-white rounded-lg shadow p-5 mb-4 border-l-4 border-amber-400">
+        <div class="bg-white rounded-lg shadow p-5 mb-4 border-l-4 border-amber-400"
+             x-data="botFix(@js($skippedCustomers))">
             <h3 class="text-sm font-semibold text-amber-800 mb-1">
                 รายการที่ไม่ได้ใส่ในไฟล์ ({{ count($submission->skipped()) }} บิล)
             </h3>
             <p class="text-xs text-gray-500 mb-3">
-                ข้อมูลลูกค้าไม่ครบจนแบงค์ชาติรับไม่ได้ แก้ข้อมูลลูกค้าของบิลเหล่านี้แล้วออกไฟล์ใหม่
+                ข้อมูลลูกค้าไม่ครบจนแบงค์ชาติรับไม่ได้
+                @if ($canFix)
+                    กด "แก้" ท้ายแถว แก้เสร็จบิลจะหายจากตารางนี้และเข้าไฟล์ทันที
+                @else
+                    ต้องให้ผู้ที่มีสิทธิ์แก้ข้อมูลลูกค้าของบิลเหล่านี้ก่อน แล้วออกไฟล์ใหม่
+                @endif
                 (รายการนี้รวมทั้งคนไทยและชาวต่างชาติ เพราะบางบิลแยกกลุ่มไม่ได้)
             </p>
             <div class="overflow-x-auto">
@@ -145,6 +160,9 @@
                             <th class="px-3 py-2 text-left">วันที่</th>
                             <th class="px-3 py-2 text-left">ชื่อลูกค้า</th>
                             <th class="px-3 py-2 text-left">สาเหตุ</th>
+                            @if ($canFix)
+                                <th class="px-3 py-2"></th>
+                            @endif
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-100">
@@ -154,11 +172,30 @@
                                 <td class="px-3 py-1.5">{{ $s['date'] }}</td>
                                 <td class="px-3 py-1.5">{{ $s['name'] ?: '—' }}</td>
                                 <td class="px-3 py-1.5 text-amber-800">{{ $s['reason'] }}</td>
+                                @if ($canFix)
+                                    <td class="px-3 py-1.5 text-right whitespace-nowrap">
+                                        @if ($s['fix'] === \App\Services\Bot\BotSubmission::FIX_LINK)
+                                            <button type="button" class="text-sm text-[#0e513a] font-medium hover:underline"
+                                                    @click="openLink(@js($s['trns_no']), @js(route('reports.bot-submission.customer.link', $s['transaction_id'])))">
+                                                ผูกลูกค้า
+                                            </button>
+                                        @elseif ($s['fix'] === \App\Services\Bot\BotSubmission::FIX_CUSTOMER)
+                                            <button type="button" class="text-sm text-[#0e513a] font-medium hover:underline"
+                                                    @click="openCustomer(@js($s['trns_no']), @js($s['name']), {{ (int) $s['customer_id'] }}, @js(route('reports.bot-submission.customer.update', $s['transaction_id'])))">
+                                                แก้ข้อมูลลูกค้า
+                                            </button>
+                                        @endif
+                                    </td>
+                                @endif
                             </tr>
                         @endforeach
                     </tbody>
                 </table>
             </div>
+
+            @if ($canFix)
+                @include('reports.partials.bot-fix-modals')
+            @endif
         </div>
     @endif
 

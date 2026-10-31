@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Report;
 
 use App\Http\Controllers\Controller;
 use App\Models\Branch;
+use App\Models\Customer;
 use App\Services\Bot\BotSubmission;
+use App\Services\Bot\CountryCode;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
 
@@ -33,6 +35,9 @@ class BotSubmissionController extends Controller
             'group' => $group,
             'submission' => $submission,
             'rows' => $submission?->rows($group) ?? ['buy' => [], 'sell' => []],
+            'canFix' => $request->user()->canCorrectBotSubmission(),
+            'skippedCustomers' => $submission ? $this->skippedCustomers($submission) : [],
+            'countries' => (new CountryCode((require resource_path('templates/bot/emc-dimension.php'))['countries']))->choices(),
             'counts' => $submission ? [
                 BotSubmission::THAI => $this->count($submission, BotSubmission::THAI),
                 BotSubmission::FOREIGN => $this->count($submission, BotSubmission::FOREIGN),
@@ -91,6 +96,20 @@ class BotSubmissionController extends Controller
         $branch = $branches->firstWhere('id', (int) $request->input('branch_id')) ?? $branches->first();
 
         return [$year, $month, $group, $branch];
+    }
+
+    /**
+     * ข้อมูลปัจจุบันของลูกค้าในบิลที่ข้าม — ตั้งค่าเริ่มของหน้าต่างแก้ไข
+     *
+     * @return array<int, array{id_type: ?string, id_number: ?string, nationality: ?string}>
+     */
+    private function skippedCustomers(BotSubmission $submission): array
+    {
+        $ids = array_filter(array_column($submission->skipped(), 'customer_id'));
+
+        return Customer::whereIn('id', $ids)->get(['id', 'id_type', 'id_number', 'nationality'])
+            ->mapWithKeys(fn (Customer $c) => [$c->id => $c->only(['id_type', 'id_number', 'nationality'])])
+            ->all();
     }
 
     private function count(BotSubmission $submission, string $group): array

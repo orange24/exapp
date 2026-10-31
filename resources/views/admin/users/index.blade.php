@@ -46,7 +46,7 @@
                                     {{ $user->role?->name === 'admin' ? 'bg-purple-100 text-purple-800' : '' }}
                                     {{ $user->role?->name === 'superadmin' ? 'bg-red-100 text-red-800' : '' }}
                                     {{ $user->role?->name === 'staff' ? 'bg-blue-100 text-blue-800' : '' }}
-                                    {{ $user->role?->name === 'auditor' ? 'bg-yellow-100 text-yellow-800' : '' }}">
+                                    {{ in_array($user->role?->name, ['auditor', 'auditor_readonly'], true) ? 'bg-yellow-100 text-yellow-800' : '' }}">
                                     {{ $user->role?->display_name ?? '-' }}
                                 </span>
                             </td>

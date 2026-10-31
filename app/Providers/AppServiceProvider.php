@@ -2,7 +2,9 @@
 
 namespace App\Providers;
 
+use App\Support\ReadOnlyGuard;
 use App\Support\WorkingDayClock;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
 
@@ -24,5 +26,8 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Schema::defaultStringLength(191);
+
+        // บัญชีอ่านอย่างเดียวเขียนฐานข้อมูลไม่ได้ — ดูเหตุผลที่ ReadOnlyGuard
+        DB::beforeExecuting(fn (string $sql) => ReadOnlyGuard::check($sql));
     }
 }

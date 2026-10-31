@@ -3,6 +3,7 @@
 namespace App\Livewire\User;
 
 use Illuminate\Support\Facades\Auth;
+use App\Support\ReadOnlyGuard;
 use Illuminate\Support\Facades\Hash;
 use Livewire\Component;
 
@@ -47,9 +48,10 @@ class ChangePassword extends Component
             return;
         }
 
-        $user->update([
+        // เปลี่ยนรหัสผ่านตัวเองได้ทุกบัญชี รวมถึงบัญชีอ่านอย่างเดียว
+        ReadOnlyGuard::allowing(fn () => $user->update([
             'password' => Hash::make($this->new_password),
-        ]);
+        ]));
 
         $this->reset(['current_password', 'new_password', 'confirm_password']);
 

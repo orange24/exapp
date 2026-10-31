@@ -95,9 +95,49 @@ class User extends Authenticatable
         return $this->role?->name === 'trader';
     }
 
+    /**
+     * ผู้ตรวจสอบทั้งสองระดับ — ระดับปกติ และระดับอ่านอย่างเดียว
+     *
+     * ขอบเขตการมองเห็นเหมือนกันทุกอย่าง ต่างกันแค่แก้ข้อมูลได้หรือไม่ (isReadOnly)
+     */
     public function isAuditor(): bool
     {
-        return $this->role?->name === 'auditor';
+        return in_array($this->role?->name, ['auditor', 'auditor_readonly'], true);
+    }
+
+    /**
+     * บัญชีอ่านอย่างเดียว — แก้ข้อมูลอะไรไม่ได้เลย ไม่ว่าเมนูไหน
+     *
+     * ไม่ได้พึ่งการซ่อนปุ่มหรือสิทธิ์รายเมนู ซึ่งพลาดได้ทุกครั้งที่เพิ่มหน้าใหม่ —
+     * ตัวกันจริงอยู่ที่ชั้นฐานข้อมูล (App\Support\ReadOnlyGuard) ส่วนที่นี่ใช้
+     * ซ่อนปุ่มให้ไม่ต้องกดแล้วเจอ error
+     */
+    public function isReadOnly(): bool
+    {
+        return $this->role?->name === 'auditor_readonly';
+    }
+
+    /**
+     * แก้บิลที่ส่งแบงค์ชาติไม่ได้จากหน้าส่งข้อมูลให้แบงค์ชาติ — ใครเปิดหน้านั้นได้ก็แก้ได้
+     * ยกเว้นบัญชีอ่านอย่างเดียว
+     */
+    public function canCorrectBotSubmission(): bool
+    {
+        return ! $this->isReadOnly() && $this->hasMenuAccess('reports.bot-submission');
+    }
+
+    /**
+     * role ที่ใช้หาเมนูและสิทธิ์ — ผู้ตรวจสอบอ่านอย่างเดียวยืมของ auditor
+     *
+     * เพิ่มเมนูให้ auditor เมื่อไหร่ ระดับอ่านอย่างเดียวได้ตามไปเองโดยไม่ต้องแจกซ้ำ
+     */
+    private function accessRoleId(): ?int
+    {
+        if ($this->isReadOnly()) {
+            return Role::where('name', 'auditor')->value('id') ?? $this->role_id;
+        }
+
+        return $this->role_id;
     }
 
     /**
@@ -402,12 +442,24 @@ class User extends Authenticatable
         return $this->belongsToMany(Branch::class, 'user_branches');
     }
 
+    /** สิทธิ์ที่ไม่ได้เปลี่ยนข้อมูล — บัญชีอ่านอย่างเดียวถือได้แค่นี้ */
+    public const READ_ONLY_ACTIONS = ['read', 'print', 'export'];
+
     public function hasPermission(string $module, string $action): bool
     {
-        return $this->role?->permissions()
-            ->where('module', $module)
+        if ($this->isReadOnly() && ! in_array($action, self::READ_ONLY_ACTIONS, true)) {
+            return false;
+        }
+
+        $roleId = $this->accessRoleId();
+        if ($roleId === null) {
+            return false;
+        }
+
+        return Permission::where('module', $module)
             ->where('action', $action)
-            ->exists() ?? false;
+            ->whereHas('roles', fn ($q) => $q->where('roles.id', $roleId))
+            ->exists();
     }
 
     // Counter Selection Methods
@@ -425,7 +477,7 @@ class User extends Authenticatable
     public function canAccessBuySell(): bool
     {
         $role = $this->role?->name;
-        return !in_array($role, ['trader', 'auditor']);
+        return !in_array($role, ['trader', 'auditor', 'auditor_readonly']);
     }
 
     /**
@@ -446,16 +498,17 @@ class User extends Authenticatable
     // Menu Access Methods
     public function getAccessibleMenus()
     {
-        if (!$this->role_id) {
+        $roleId = $this->accessRoleId();
+        if (!$roleId) {
             return collect();
         }
 
         return \Illuminate\Support\Facades\Cache::remember(
-            "menu_tree_role_{$this->role_id}",
+            "menu_tree_role_{$roleId}",
             3600,
-            function () {
-                return Menu::whereHas('roles', function ($query) {
-                    $query->where('roles.id', $this->role_id);
+            function () use ($roleId) {
+                return Menu::whereHas('roles', function ($query) use ($roleId) {
+                    $query->where('roles.id', $roleId);
                 })
                     ->where('is_active', true)
                     ->orderBy('parent_id')
