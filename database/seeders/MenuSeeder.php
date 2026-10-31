@@ -139,16 +139,13 @@ class MenuSeeder extends Seeder
             $menuIdMap['inventory.dashboard'],
         ]);
 
-        // Auditor: Dashboard, Reports, Master Data (read-only)
+        // Auditor: Dashboard, Reports — ไม่เห็นข้อมูลหลัก (หน้าพวกนั้นมีปุ่มแก้ไข)
+        // ดูเรททุกสาขาผ่านเมนู rates.overview ของ AuditorMenuSeeder
         $roles['auditor']->menus()->syncWithoutDetaching([
             $menuIdMap['dashboard'],
             $menuIdMap['reports'],
             $menuIdMap['admin.transactions'],
             $menuIdMap['reports.daily'],
-            $menuIdMap['master-data'],
-            $menuIdMap['admin.currencies'],
-            $menuIdMap['admin.customers'],
-            $menuIdMap['admin.accounts'],
         ]);
 
         // Admin & Superadmin: All menus except the trader-only tools. Their route

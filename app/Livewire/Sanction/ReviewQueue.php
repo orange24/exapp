@@ -78,6 +78,12 @@ class ReviewQueue extends Component
         ])->values()->all();
     }
 
+    /** ตัดสินได้เฉพาะคนที่มี module7/approve — auditor ดูอย่างเดียว */
+    public function getCanDecideProperty(): bool
+    {
+        return (bool) Auth::user()?->hasPermission('module7', 'approve');
+    }
+
     public function getBranchesProperty()
     {
         return Branch::orderBy('branch_name')->get(['id', 'branch_name']);

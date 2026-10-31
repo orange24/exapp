@@ -33,12 +33,12 @@ class SanctionMenuSeeder extends Seeder
 
     /** @var array<int, array{0: string, 1: string, 2: string, 3: int}> */
     public const REPORT_MENUS = [
-        ['reports.sanction-screening-log', 'บันทึกการตรวจรายชื่อ', 'Screening Log', 20],
-        ['reports.sanction-decisions', 'การอนุมัติเมื่อพบชื่อใกล้เคียง', 'Screening Decisions', 21],
-        ['reports.sanction-rescan', 'ลูกค้าเดิมที่กลายเป็นชื่อต้องห้าม', 'Rescan Findings', 22],
-        ['reports.sanction-list-delta', 'การเปลี่ยนแปลงรายชื่อ ปปง.', 'List Changes', 23],
-        ['reports.sanction-sync-health', 'สุขภาพการอัปเดตรายชื่อ', 'Sync Health', 24],
-        ['reports.sanction-coverage-gap', 'ธุรกรรมที่ไม่ได้ตรวจรายชื่อ', 'Coverage Gap', 25],
+        ['reports.sanction-screening-log', 'บันทึกการตรวจรายชื่อ', 'Screening Log', 1],
+        ['reports.sanction-decisions', 'การอนุมัติเมื่อพบชื่อใกล้เคียง', 'Screening Decisions', 2],
+        ['reports.sanction-rescan', 'ลูกค้าเดิมที่กลายเป็นชื่อต้องห้าม', 'Rescan Findings', 3],
+        ['reports.sanction-list-delta', 'การเปลี่ยนแปลงรายชื่อ ปปง.', 'List Changes', 4],
+        ['reports.sanction-sync-health', 'สุขภาพการอัปเดตรายชื่อ', 'Sync Health', 5],
+        ['reports.sanction-coverage-gap', 'ธุรกรรมที่ไม่ได้ตรวจรายชื่อ', 'Coverage Gap', 6],
     ];
 
     public function run(): void
@@ -96,34 +96,43 @@ class SanctionMenuSeeder extends Seeder
     /** เฉพาะ role ที่ถือ module7/write จริง ตาม SanctionPermissionSeeder */
     private const SYNC_ROLES = ['superadmin', 'admin'];
 
+    /**
+     * รายงาน ปปง. มีหลายตัว ปนอยู่ในกลุ่ม "รายงาน" แล้วรก — แยกเป็นกลุ่มของตัวเอง
+     * order 9 ต่อท้าย "รายชื่อบุคคลต้องห้าม" (8) ของ ปปง. จึงอยู่ติดกัน
+     */
+    public const REPORT_GROUP = 'sanction-reports';
+
     public function seedReportMenus(): void
     {
         $parent = Menu::firstOrCreate(
-            ['key' => 'reports'],
+            ['key' => self::REPORT_GROUP],
             [
-                'label_th' => 'รายงาน',
-                'label_en' => 'Reports',
+                'label_th' => 'รายงาน ปปง.',
+                'label_en' => 'AMLO Reports',
                 'route' => null,
                 'icon' => 'document-chart-bar',
                 'parent_id' => null,
-                'order' => 4,
+                'order' => 9,
             ]
         );
 
         $menus = [$parent];
 
         foreach (self::REPORT_MENUS as [$key, $labelTh, $labelEn, $order]) {
-            $menus[] = Menu::firstOrCreate(
+            $menu = Menu::firstOrCreate(
                 ['key' => $key],
                 [
                     'label_th' => $labelTh,
                     'label_en' => $labelEn,
                     'route' => $key,
                     'icon' => 'document-text',
-                    'parent_id' => $parent->id,
-                    'order' => $order,
                 ]
             );
+
+            // ฐานข้อมูลเดิมมีเมนูพวกนี้อยู่ใต้ "รายงาน" แล้ว — ย้ายเข้ากลุ่มใหม่
+            $menu->update(['parent_id' => $parent->id, 'order' => $order]);
+
+            $menus[] = $menu;
         }
 
         $this->attach(self::REPORT_ROLES, $menus);

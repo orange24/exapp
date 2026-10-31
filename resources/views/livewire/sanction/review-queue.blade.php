@@ -44,7 +44,9 @@
                 @forelse ($this->rows as $row)
                     <tr>
                         <td class="p-2 align-top">
-                            <input type="checkbox" wire:model.live="selected" value="{{ $row['id'] }}">
+                            @if ($this->canDecide)
+                                <input type="checkbox" wire:model.live="selected" value="{{ $row['id'] }}">
+                            @endif
                         </td>
                         <td class="p-2 align-top font-bold">{{ number_format($row['top_score'], 0) }}</td>
                         <td class="p-2 align-top">
@@ -81,6 +83,8 @@
         </table>
     </div>
 
+    {{-- ผู้ตรวจสอบ (auditor) ดูคิวได้แต่ตัดสินไม่ได้ — ไม่โชว์ปุ่มที่กดแล้วเด้ง 403 --}}
+    @if ($this->canDecide)
     <div class="mt-3 bg-white border rounded p-3">
         <div class="text-sm mb-2">เลือกแล้ว {{ count($selected) }} รายการ</div>
 
@@ -97,10 +101,7 @@
                     class="px-3 py-1.5 rounded bg-red-600 text-white text-sm">
                 ยืนยันว่าเป็นบุคคลเดียวกัน
             </button>
-            <button type="button" wire:click="bulkDecide('{{ \App\Models\SanctionScreening::DECISION_ESCALATED }}')"
-                    class="px-3 py-1.5 rounded border text-sm">
-                ส่งต่อให้ผู้บริหารตัดสิน
-            </button>
         </div>
     </div>
+    @endif
 </div>

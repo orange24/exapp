@@ -126,6 +126,40 @@ class ReviewQueueTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_there_is_no_escalate_button_and_escalating_is_refused(): void
+    {
+        // ส่งต่อแล้วรายการหายจากคิวแต่ไม่มีใครตัดสินต่อได้ — เอาออก
+        $a = $this->pendingScreening();
+
+        Livewire::actingAs($this->adminUser)
+            ->test(ReviewQueue::class)
+            ->assertDontSee('ส่งต่อให้ผู้บริหาร');
+
+        $this->expectException(\InvalidArgumentException::class);
+
+        app(SanctionScreeningService::class)->decide(
+            screening: $a,
+            decision: SanctionScreening::DECISION_ESCALATED,
+            decidedBy: $this->adminUser->id,
+            reason: 'ไม่แน่ใจ ขอให้ผู้บริหารช่วยตัดสินอีกครั้งหนึ่ง',
+        );
+    }
+
+    public function test_a_viewer_without_approve_sees_the_queue_but_no_decision_buttons(): void
+    {
+        $this->pendingScreening();
+
+        Livewire::actingAs($this->staffUser)
+            ->test(ReviewQueue::class)
+            ->assertSee('AMRAN MING')
+            ->assertDontSee('ยืนยันว่าเป็นบุคคลเดียวกัน')
+            ->assertDontSee('ไม่ใช่บุคคลเดียวกัน (เคลียร์)');
+
+        Livewire::actingAs($this->adminUser)
+            ->test(ReviewQueue::class)
+            ->assertSee('ยืนยันว่าเป็นบุคคลเดียวกัน');
+    }
+
     public function test_queue_is_sorted_by_score_descending(): void
     {
         $this->pendingScreening('AMRAN MING');

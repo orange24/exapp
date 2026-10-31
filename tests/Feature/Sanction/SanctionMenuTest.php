@@ -58,18 +58,32 @@ class SanctionMenuTest extends TestCase
         $this->assertSame($parent->id, $review->parent_id);
     }
 
-    public function test_the_six_report_menus_hang_under_the_reports_parent(): void
+    public function test_the_six_report_menus_have_their_own_group(): void
     {
-        $reports = Menu::where('key', 'reports')->firstOrFail();
+        $reports = Menu::where('key', SanctionMenuSeeder::REPORT_GROUP)->firstOrFail();
+        $this->assertNull($reports->parent_id, 'กลุ่มรายงาน ปปง. เป็นหัวข้อระดับบนสุด');
+        $this->assertSame('รายงาน ปปง.', $reports->label_th);
 
         foreach (SanctionMenuSeeder::REPORT_MENUS as [$key, $labelTh, $labelEn, $order]) {
             $menu = Menu::where('key', $key)->firstOrFail();
 
             $this->assertSame($key, $menu->route, "เมนู {$key} ชี้ route ผิด");
-            $this->assertSame($reports->id, $menu->parent_id, "เมนู {$key} ไม่ได้อยู่ใต้ 'รายงาน'");
+            $this->assertSame($reports->id, $menu->parent_id, "เมนู {$key} ไม่ได้อยู่ใต้ 'รายงาน ปปง.'");
             $this->assertSame($labelTh, $menu->label_th);
             $this->assertSame($order, $menu->order);
         }
+    }
+
+    public function test_a_database_with_the_reports_under_the_old_parent_gets_them_moved(): void
+    {
+        $old = Menu::where('key', 'reports')->firstOrFail();
+        Menu::whereIn('key', array_column(SanctionMenuSeeder::REPORT_MENUS, 0))->update(['parent_id' => $old->id, 'order' => 20]);
+
+        $this->seed(SanctionMenuSeeder::class);
+
+        $group = Menu::where('key', SanctionMenuSeeder::REPORT_GROUP)->firstOrFail();
+        $this->assertSame(0, Menu::where('parent_id', $old->id)->whereIn('key', array_column(SanctionMenuSeeder::REPORT_MENUS, 0))->count());
+        $this->assertSame(6, Menu::where('parent_id', $group->id)->count());
     }
 
     public function test_every_menu_route_name_actually_resolves(): void
@@ -94,6 +108,7 @@ class SanctionMenuTest extends TestCase
         $expectations = [
             'sanctions' => ['admin', 'superadmin', 'branch_manager', 'auditor'],
             'sanctions.review' => ['admin', 'superadmin', 'branch_manager', 'auditor'],
+            SanctionMenuSeeder::REPORT_GROUP => ['admin', 'superadmin', 'auditor'],
         ];
 
         foreach (array_column(SanctionMenuSeeder::REPORT_MENUS, 0) as $key) {

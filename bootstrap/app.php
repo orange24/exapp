@@ -28,6 +28,7 @@ return $app
             'session.check' => \App\Http\Middleware\CheckSessionTerminated::class,
             'admin'         => \App\Http\Middleware\EnsureUserIsAdmin::class,
             'superadmin'    => \App\Http\Middleware\EnsureUserIsSuperAdmin::class,
+            'menu'          => \App\Http\Middleware\EnsureMenuAccess::class,
             'permission'    => \App\Http\Middleware\EnsurePermission::class,
             'card-reader'   => \App\Http\Middleware\AuthenticateCardReader::class,
             'manage-card-readers' => \App\Http\Middleware\EnsureCanManageCardReaders::class,

@@ -24,6 +24,16 @@ func TestParseBuddhistDateRejectsEmptyDayOrMonth(t *testing.T) {
 	}
 }
 
+func TestParseBuddhistDateRejectsDatesThatDoNotExist(t *testing.T) {
+	// บัตรตลอดชีพ (อายุ 70 ขึ้นไป) เก็บวันหมดอายุเป็น 99999999 — เดิมแปลงเป็น
+	// "9456-99-99" ส่งขึ้นไปแล้วเซิร์ฟเวอร์ปฏิเสธทั้งใบ บัตรของคนกลุ่มนี้จึงไม่ขึ้นเลย
+	for _, raw := range []string{"99999999", "25241318", "25240232"} {
+		if v, err := ParseBuddhistDate(raw); err == nil {
+			t.Fatalf("ควร error แต่ได้ %q จาก %q", v, raw)
+		}
+	}
+}
+
 func TestSplitNameField(t *testing.T) {
 	title, first, last := SplitNameField("นาย#สมชาย##ใจดี")
 

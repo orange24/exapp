@@ -122,6 +122,9 @@ Route::middleware(['auth', 'session.check'])->group(function () {
     // OCR API (web route for session auth)
     Route::post('/ocr/passport', [OcrController::class, 'passport'])->name('ocr.passport');
 
+    // เรทวันนี้ทุกเคาน์เตอร์ในสาขาที่มีสิทธิ์ — อ่านอย่างเดียว (auditor)
+    Route::get('/rates/overview', [\App\Http\Controllers\Rate\RateOverviewController::class, 'index'])->name('rates.overview');
+
     // Rate management
     Route::prefix('admin/rate')->name('admin.rate.')->group(function () {
         Route::get('/',           [RateController::class, 'index'])->name('index');
@@ -179,20 +182,26 @@ Route::middleware(['auth', 'session.check'])->group(function () {
         });
 
         // Module 2: Currency CRUD
-        Route::resource('currencies', CurrencyController::class)->except(['show', 'destroy']);
-        Route::patch('/currencies/{currency}/toggle-active', [CurrencyController::class, 'toggleActive'])->name('currencies.toggle-active');
+        Route::middleware('menu:admin.currencies')->group(function () {
+            Route::resource('currencies', CurrencyController::class)->except(['show', 'destroy']);
+            Route::patch('/currencies/{currency}/toggle-active', [CurrencyController::class, 'toggleActive'])->name('currencies.toggle-active');
 
-        // Module 2: Denomination CRUD (nested under currency)
-        Route::post('/currencies/{currency}/denominations', [DenominationController::class, 'store'])->name('denominations.store');
-        Route::put('/denominations/{denomination}', [DenominationController::class, 'update'])->name('denominations.update');
-        Route::delete('/denominations/{denomination}', [DenominationController::class, 'destroy'])->name('denominations.destroy');
+            // Module 2: Denomination CRUD (nested under currency)
+            Route::post('/currencies/{currency}/denominations', [DenominationController::class, 'store'])->name('denominations.store');
+            Route::put('/denominations/{denomination}', [DenominationController::class, 'update'])->name('denominations.update');
+            Route::delete('/denominations/{denomination}', [DenominationController::class, 'destroy'])->name('denominations.destroy');
+        });
 
         // Module 2: Customer Registry
-        Route::resource('customers', CustomerController::class)->except(['destroy']);
+        Route::middleware('menu:admin.customers')->group(function () {
+            Route::resource('customers', CustomerController::class)->except(['destroy']);
+        });
 
         // Module 2: Chart of Accounts
-        Route::resource('accounts', AccountController::class)->except(['show', 'destroy']);
-        Route::patch('/accounts/{account}/toggle-active', [AccountController::class, 'toggleActive'])->name('accounts.toggle-active');
+        Route::middleware('menu:admin.accounts')->group(function () {
+            Route::resource('accounts', AccountController::class)->except(['show', 'destroy']);
+            Route::patch('/accounts/{account}/toggle-active', [AccountController::class, 'toggleActive'])->name('accounts.toggle-active');
+        });
 
         // Rate Calculation Settings (Accounting Admin)
         Route::resource('rate-settings', RateSettingController::class)->except(['show'])->parameter('rate-settings', 'rateSetting');

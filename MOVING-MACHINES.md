@@ -122,6 +122,8 @@ php artisan db:seed --class=CompanyMenuSeeder --force      # จัดการ�
 php artisan db:seed --class=BotSubmissionMenuSeeder --force # ส่งข้อมูลให้แบงค์ชาติ
 php artisan db:seed --class=DailyLimitMenuSeeder --force    # วงเงินต่อคนต่อวัน
 php artisan db:seed --class=SuperAdminMenuSeeder --force    # ย้ายเมนูบริษัท/สาขา/ผู้ใช้/สิทธิ์ ไปเป็นของ superadmin
+php artisan db:seed --class=SanctionMenuSeeder --force      # แยกรายงาน ปปง. เป็นกลุ่มของตัวเอง
+php artisan db:seed --class=AuditorMenuSeeder --force       # auditor: เพิ่มเรททุกสาขา, ถอนข้อมูลหลัก
 ```
 
 ทุกตัวรันซ้ำได้ ไม่ลบข้อมูล — `SuperAdminMenuSeeder` จะไม่ทำอะไรเลยถ้ายังไม่มีผู้ใช้

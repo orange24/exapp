@@ -7,6 +7,7 @@ package card
 import (
 	"errors"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -212,13 +213,21 @@ func (w *Watcher) WaitForInsertion(timeout time.Duration) (string, error) {
 }
 
 func transmit(c *scard.Card, cmd []byte) ([]byte, error) {
+	data, _, err := transmitSW(c, cmd)
+
+	return data, err
+}
+
+// transmitSW เหมือน transmit แต่คืนรหัสสถานะสองไบต์ท้ายด้วย (90 00 = สำเร็จ)
+// ใช้ตอนต้องบันทึกลง log ว่าชิปตอบอะไร
+func transmitSW(c *scard.Card, cmd []byte) ([]byte, []byte, error) {
 	resp, err := c.Transmit(cmd)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if len(resp) < 2 {
-		return nil, fmt.Errorf("คำตอบจากบัตรสั้นผิดปกติ")
+		return nil, nil, fmt.Errorf("คำตอบจากบัตรสั้นผิดปกติ")
 	}
 
 	// บัตรตอบ 61 xx แปลว่า "ข้อมูลพร้อมแล้ว xx ไบต์ มาเอาได้"
@@ -227,17 +236,17 @@ func transmit(c *scard.Card, cmd []byte) ([]byte, error) {
 
 		data, err := c.Transmit(getResponse)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		if len(data) < 2 {
-			return nil, fmt.Errorf("คำตอบรอบสองสั้นผิดปกติ")
+			return nil, nil, fmt.Errorf("คำตอบรอบสองสั้นผิดปกติ")
 		}
 
-		return data[:len(data)-2], nil
+		return data[:len(data)-2], data[len(data)-2:], nil
 	}
 
-	return resp[:len(resp)-2], nil
+	return resp[:len(resp)-2], resp[len(resp)-2:], nil
 }
 
 // Read อ่านบัตรที่อยู่ในเครื่องอ่านชื่อ reader
@@ -284,17 +293,33 @@ func (r *Reader) Read(reader string) (Data, error) {
 
 	d.Address = field(cmdAddress)
 
-	if v, err := ParseBuddhistDate(field(cmdBirth)); err == nil {
-		d.DateOfBirth = v
+	/*
+	 * วันที่ที่อ่านไม่ผ่านต้องทิ้งร่องรอยไว้ใน log
+	 *
+	 * เดิมทิ้งเงียบ ๆ — สาขาเจอชื่อขึ้นแต่วันเกิด/วันหมดอายุว่าง แล้วไม่มีอะไร
+	 * ให้ดูเลยว่าชิปตอบอะไรกลับมา บันทึกเฉพาะไบต์ของช่องวันที่ ไม่ใช่ชื่อหรือเลขบัตร
+	 */
+	date := func(label string, cmd []byte) string {
+		raw, sw, err := transmitSW(c, cmd)
+		if err != nil {
+			log.Printf("อ่าน%sจากบัตรไม่ได้: %v", label, err)
+
+			return ""
+		}
+
+		v, err := ParseBuddhistDate(DecodeTIS620(raw))
+		if err != nil {
+			log.Printf("แปลง%sไม่ได้ (ไบต์ดิบ [% X] สถานะ % X): %v", label, raw, sw, err)
+
+			return ""
+		}
+
+		return v
 	}
 
-	if v, err := ParseBuddhistDate(field(cmdIssue)); err == nil {
-		d.IssueDate = v
-	}
-
-	if v, err := ParseBuddhistDate(field(cmdExpire)); err == nil {
-		d.ExpireDate = v
-	}
+	d.DateOfBirth = date("วันเกิด", cmdBirth)
+	d.IssueDate = date("วันออกบัตร", cmdIssue)
+	d.ExpireDate = date("วันหมดอายุ", cmdExpire)
 
 	return d, nil
 }

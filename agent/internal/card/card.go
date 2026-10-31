@@ -7,6 +7,7 @@ package card
 import (
 	"fmt"
 	"strings"
+	"time"
 	"unicode"
 
 	"golang.org/x/text/encoding/charmap"
@@ -147,7 +148,15 @@ func ParseBuddhistDate(raw string) (string, error) {
 		return "", fmt.Errorf("วันหรือเดือนว่าง: %q", raw)
 	}
 
-	return fmt.Sprintf("%04d-%s-%s", buddhistYear-543, month, day), nil
+	iso := fmt.Sprintf("%04d-%s-%s", buddhistYear-543, month, day)
+
+	// ต้องเป็นวันที่ที่มีอยู่จริง — บัตรตลอดชีพเก็บวันหมดอายุเป็น 99999999
+	// ถ้าปล่อยผ่าน เซิร์ฟเวอร์จะปฏิเสธข้อมูลทั้งใบ ไม่ใช่แค่ช่องนี้
+	if _, err := time.Parse("2006-01-02", iso); err != nil {
+		return "", fmt.Errorf("ไม่ใช่วันที่ที่มีจริง: %q", raw)
+	}
+
+	return iso, nil
 }
 
 // ValidCitizenID ตรวจเลข 13 หลักด้วยหลักตรวจสอบของกรมการปกครอง

@@ -119,10 +119,11 @@ class SanctionScreeningService
             );
         }
 
+        // "ส่งต่อให้ผู้บริหาร" (escalated) เอาออกแล้ว — รายการหายจากคิวแต่ไม่มีใคร
+        // ตัดสินต่อได้ เคสจึงค้างถาวร ค่าคงที่ยังอยู่เพื่ออ่านข้อมูลเก่าเท่านั้น
         $allowed = [
             SanctionScreening::DECISION_FALSE_POSITIVE,
             SanctionScreening::DECISION_TRUE_MATCH,
-            SanctionScreening::DECISION_ESCALATED,
         ];
 
         if (! in_array($decision, $allowed, true)) {
