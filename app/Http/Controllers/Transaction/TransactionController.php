@@ -12,11 +12,16 @@ class TransactionController extends Controller
 {
     public function buy(): \Illuminate\View\View
     {
+        // ซ่อนเมนูกับการ์ดอย่างเดียวไม่พอ — พิมพ์ URL ตรงก็ยังเข้าได้
+        abort_unless(auth()->user()->hasMenuAccess('transaction.buy'), 403, 'ไม่มีสิทธิ์ทำรายการรับซื้อ');
+
         return view('transaction.buy');
     }
 
     public function sell(): \Illuminate\View\View
     {
+        abort_unless(auth()->user()->hasMenuAccess('transaction.sell'), 403, 'ไม่มีสิทธิ์ทำรายการจ่ายขาย');
+
         return view('transaction.sell');
     }
 

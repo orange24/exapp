@@ -43,14 +43,7 @@ class CompanyManagementTest extends TestCase
         foreach (\App\Models\Role::with('menus')->get() as $role) {
             $sees = $role->menus->contains('id', $menu->id);
 
-            $user = new \App\Models\User(['role_id' => $role->id]);
-            $user->setRelation('role', $role);
-
-            $this->assertSame(
-                $user->hasPermission('module1', 'write'),
-                $sees,
-                "role {$role->name}: เห็นเมนู=" . var_export($sees, true),
-            );
+            $this->assertSame($role->name === 'superadmin', $sees, "role {$role->name}: เห็นเมนู=" . var_export($sees, true));
         }
     }
 
@@ -58,7 +51,7 @@ class CompanyManagementTest extends TestCase
     {
         Company::create(['company_code' => 'VIEW', 'company_name' => 'บริษัททดสอบ', 'is_active' => true]);
 
-        $this->actingAsAdmin()->get(route('admin.companies.index'))
+        $this->actingAsSuperAdmin()->get(route('admin.companies.index'))
             ->assertStatus(200)
             ->assertSee('บริษัททดสอบ');
     }
@@ -70,7 +63,7 @@ class CompanyManagementTest extends TestCase
 
     public function test_an_admin_can_create_a_company(): void
     {
-        $this->actingAsAdmin()->post(route('admin.companies.store'), [
+        $this->actingAsSuperAdmin()->post(route('admin.companies.store'), [
             'company_code' => 'NEWCO',
             'company_name' => 'บริษัทใหม่ จำกัด',
             'tax_id' => '0105500000000',
@@ -84,7 +77,7 @@ class CompanyManagementTest extends TestCase
     {
         Company::create(['company_code' => 'TAKEN', 'company_name' => 'มีแล้ว', 'is_active' => true]);
 
-        $this->actingAsAdmin()->post(route('admin.companies.store'), [
+        $this->actingAsSuperAdmin()->post(route('admin.companies.store'), [
             'company_code' => 'TAKEN',
             'company_name' => 'ซ้ำ',
             'is_active' => 1,
@@ -95,7 +88,7 @@ class CompanyManagementTest extends TestCase
     {
         $company = Company::create(['company_code' => 'EDIT', 'company_name' => 'ชื่อเดิม', 'is_active' => true]);
 
-        $this->actingAsAdmin()->put(route('admin.companies.update', $company), [
+        $this->actingAsSuperAdmin()->put(route('admin.companies.update', $company), [
             'company_code' => 'EDIT',
             'company_name' => 'ชื่อใหม่',
             'is_active' => 1,
@@ -117,7 +110,7 @@ class CompanyManagementTest extends TestCase
             'is_active' => true,
         ]);
 
-        $this->actingAsAdmin()
+        $this->actingAsSuperAdmin()
             ->patch(route('admin.companies.toggle-active', $company))
             ->assertSessionHas('error');
 
@@ -128,7 +121,7 @@ class CompanyManagementTest extends TestCase
     {
         $company = Company::create(['company_code' => 'EMPTY', 'company_name' => 'ไม่มีสาขา', 'is_active' => true]);
 
-        $this->actingAsAdmin()->patch(route('admin.companies.toggle-active', $company));
+        $this->actingAsSuperAdmin()->patch(route('admin.companies.toggle-active', $company));
 
         $this->assertFalse($company->fresh()->is_active);
     }

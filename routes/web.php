@@ -21,6 +21,7 @@ use App\Http\Controllers\Report\AvgRateSummaryController;
 use App\Http\Controllers\Report\CashierPerformanceReportController;
 use App\Http\Controllers\Report\CustomerTransactionReportController;
 use App\Http\Controllers\Report\BotMonthlyReportController;
+use App\Http\Controllers\Report\BotSubmissionController;
 use App\Http\Controllers\Report\DailyReportController;
 use App\Http\Controllers\Report\MySummaryReportController;
 use App\Http\Controllers\Report\ProfitLossReportController;
@@ -66,6 +67,9 @@ Route::middleware(['auth', 'session.check'])->group(function () {
         abort_unless($user->role?->name === 'staff', 403, 'Only Staff can switch branches');
 
         $branch = \App\Models\Branch::where('id', $branchId)->firstOrFail();
+
+        // dropdown ไม่ใช่การควบคุมสิทธิ์ — ต้องเป็นสาขาที่ผูกไว้ในบริษัทที่เปิดอยู่
+        abort_unless($user->selectableBranches()->contains('id', $branch->id), 403, 'ไม่มีสิทธิ์ลงเวรที่สาขานี้');
 
         // Update session
         session(['working_branch_id' => $branch->id]);
@@ -147,24 +151,31 @@ Route::middleware(['auth', 'session.check'])->group(function () {
         Route::middleware('admin')->group(function () {
             Route::get('/sessions', fn() => view('admin.sessions'))->name('sessions');
 
-            // Module 1: User Management
-            Route::resource('users', UserController::class)->except(['show', 'destroy']);
-            Route::patch('/users/{user}/toggle-active', [UserController::class, 'toggleActive'])->name('users.toggle-active');
+            // วงเงินต่อคนต่อวันของธุรกรรมหน้าเคาน์เตอร์ (รับซื้อ / จ่ายขาย)
+            Route::get('/daily-limit', [\App\Http\Controllers\Admin\DailyLimitController::class, 'edit'])->name('daily-limit.edit');
+            Route::put('/daily-limit', [\App\Http\Controllers\Admin\DailyLimitController::class, 'update'])->name('daily-limit.update');
 
-            // Module 1: Permission Matrix
-            Route::get('/permissions', [PermissionController::class, 'index'])->name('permissions.index');
-            Route::put('/permissions', [PermissionController::class, 'update'])->name('permissions.update');
+            // โครงสร้างระบบ — บริษัท สาขา ผู้ใช้ สิทธิ์ — superadmin เท่านั้น
+            Route::middleware('superadmin')->group(function () {
+                // Module 1: User Management
+                Route::resource('users', UserController::class)->except(['show', 'destroy']);
+                Route::patch('/users/{user}/toggle-active', [UserController::class, 'toggleActive'])->name('users.toggle-active');
 
-            // Company Management — บริษัทเป็นเจ้าของสาขา จึงวางไว้เหนือสาขา
-            Route::resource('companies', \App\Http\Controllers\Admin\CompanyController::class)->except(['show', 'destroy']);
-            Route::patch('/companies/{company}/toggle-active', [\App\Http\Controllers\Admin\CompanyController::class, 'toggleActive'])->name('companies.toggle-active');
+                // Module 1: Permission Matrix
+                Route::get('/permissions', [PermissionController::class, 'index'])->name('permissions.index');
+                Route::put('/permissions', [PermissionController::class, 'update'])->name('permissions.update');
 
-            // Branch & Counter Management
-            Route::resource('branches', BranchController::class)->except(['show', 'destroy']);
-            Route::patch('/branches/{branch}/toggle-active', [BranchController::class, 'toggleActive'])->name('branches.toggle-active');
-            Route::post('/branches/{branch}/counters', [BranchController::class, 'storeCounter'])->name('branches.store-counter');
-            Route::patch('/counters/{counter}/toggle', [BranchController::class, 'toggleCounter'])->name('branches.toggle-counter');
-            Route::delete('/counters/{counter}', [BranchController::class, 'destroyCounter'])->name('branches.destroy-counter');
+                // Company Management — บริษัทเป็นเจ้าของสาขา จึงวางไว้เหนือสาขา
+                Route::resource('companies', \App\Http\Controllers\Admin\CompanyController::class)->except(['show', 'destroy']);
+                Route::patch('/companies/{company}/toggle-active', [\App\Http\Controllers\Admin\CompanyController::class, 'toggleActive'])->name('companies.toggle-active');
+
+                // Branch & Counter Management
+                Route::resource('branches', BranchController::class)->except(['show', 'destroy']);
+                Route::patch('/branches/{branch}/toggle-active', [BranchController::class, 'toggleActive'])->name('branches.toggle-active');
+                Route::post('/branches/{branch}/counters', [BranchController::class, 'storeCounter'])->name('branches.store-counter');
+                Route::patch('/counters/{counter}/toggle', [BranchController::class, 'toggleCounter'])->name('branches.toggle-counter');
+                Route::delete('/counters/{counter}', [BranchController::class, 'destroyCounter'])->name('branches.destroy-counter');
+            });
         });
 
         // Module 2: Currency CRUD
@@ -270,6 +281,10 @@ Route::middleware(['auth', 'session.check'])->group(function () {
     Route::get('/reports/bot-monthly', [BotMonthlyReportController::class, 'index'])->name('reports.bot-monthly');
     Route::post('/reports/bot-monthly/export', [BotMonthlyReportController::class, 'exportExcel'])->name('reports.bot-monthly.export');
     Route::post('/reports/bot-monthly/settings', [BotMonthlyReportController::class, 'updateSettings'])->name('reports.bot-monthly.settings');
+
+    // ส่งข้อมูลให้แบงค์ชาติ — ใส่ลงไฟล์ template ทางการ แยกไฟล์คนไทย/ต่างชาติ
+    Route::get('/reports/bot-submission', [BotSubmissionController::class, 'index'])->name('reports.bot-submission');
+    Route::post('/reports/bot-submission/export', [BotSubmissionController::class, 'export'])->name('reports.bot-submission.export');
 
     // BOT Report Staging (จัดการข้อมูลก่อนส่ง ธปท.)
     Route::get('/reports/bot-staging', fn() => view('reports.bot-staging'))->name('reports.bot-staging');

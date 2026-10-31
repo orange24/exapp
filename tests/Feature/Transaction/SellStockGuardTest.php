@@ -24,6 +24,9 @@ class SellStockGuardTest extends TestCase
     {
         parent::setUp();
         $this->seedTestData();
+        // เทสนี้ไม่ได้ทดสอบวงเงินต่อคนต่อวัน — ปิดไว้ บิลไม่ผูกลูกค้าจึงบันทึกได้
+        \App\Services\CustomerDailyLimit::save(\App\Services\CustomerDailyLimit::BUYING, false, 800000);
+        \App\Services\CustomerDailyLimit::save(\App\Services\CustomerDailyLimit::SELLING, false, 800000);
 
         CounterRate::create([
             'counter_id' => $this->counter->id,

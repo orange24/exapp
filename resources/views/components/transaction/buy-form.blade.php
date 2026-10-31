@@ -45,6 +45,9 @@ new class extends Component
     // (เงินทุนตั้งต้นในระบบมักไม่ครบ ถ้าบล็อกหน้าเคาน์เตอร์จะทำงานไม่ได้)
     public string $thbWarning = '';
 
+    /** เกินวงเงินต่อคนต่อวัน — บล็อกการบันทึก ต่างจาก thbWarning ที่แค่เตือน */
+    public string $limitError = '';
+
     // Passport OCR fields (filled after capture)
     public string $passportImageB64 = '';
     public string $ocrFirstName = '';
@@ -228,6 +231,19 @@ new class extends Component
     public function saveTransaction(): void
     {
         if (empty($this->rows) || ! $this->counterId) return;
+
+        // วงเงินต่อคนต่อวัน — ก่อนด่าน sanction เพราะไม่ต้องสร้างผลการตรวจทิ้งไว้
+        // ให้บิลที่ยังไงก็บันทึกไม่ได้ (ตั้งค่าที่หน้า ตั้งค่า > วงเงินต่อคนต่อวัน)
+        $this->limitError = app(\App\Services\CustomerDailyLimit::class)->violation(
+            \App\Services\CustomerDailyLimit::BUYING,
+            $this->customerId,
+            $this->ocrPassportNo,
+            (int) $this->counterId,
+            (float) collect($this->rows)->sum('total'),
+        ) ?? '';
+        if ($this->limitError !== '') {
+            return;
+        }
 
         // Sanction gate — ต้องอยู่ "ก่อน" DB::transaction() ข้างล่าง
         //

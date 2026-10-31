@@ -23,6 +23,34 @@
         @csrf
         @if ($isEdit) @method('PUT') @endif
 
+        @if ($companies->isNotEmpty())
+            @php $currentCompanyId = (int) old('company_id', $branch->company_id); @endphp
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">
+                    บริษัท (สำนักงานใหญ่) <span class="text-red-500">*</span>
+                </label>
+                <select name="company_id" required
+                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-500">
+                    <option value="">-- เลือกบริษัทที่สาขานี้สังกัด --</option>
+                    @foreach ($companies as $company)
+                        {{-- บริษัทที่ปิดแล้วไม่ให้เลือกใหม่ แต่สาขาที่ยังสังกัดอยู่ต้องเห็นค่าเดิม --}}
+                        @if ($company->is_active || (int) $company->id === $currentCompanyId)
+                            <option value="{{ $company->id }}" {{ (int) $company->id === $currentCompanyId ? 'selected' : '' }}>
+                                {{ $company->company_code }} — {{ $company->company_name }}{{ $company->is_active ? '' : ' (ปิดใช้งาน)' }}
+                            </option>
+                        @endif
+                    @endforeach
+                </select>
+                @if ($isEdit && $branch->company_id)
+                    <p class="mt-1 text-xs text-amber-700">
+                        ย้ายบริษัทแล้ว รายการเงิน สต็อก และรายงานทั้งหมดของสาขานี้จะไปอยู่ใต้บริษัทใหม่
+                        และพนักงานที่ผูกสาขานี้ไว้ต้องถูกผูกบริษัทใหม่ด้วย (หน้าจัดการผู้ใช้)
+                    </p>
+                @endif
+                @error('company_id') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+            </div>
+        @endif
+
         <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">รหัสสาขา (Code) <span class="text-red-500">*</span></label>

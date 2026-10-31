@@ -261,6 +261,10 @@ class SellFormScreeningTest extends TestCase
 
     public function test_transaction_without_any_customer_data_is_recorded_as_unscreened(): void
     {
+        // วงเงินต่อคนต่อวันบังคับผูกลูกค้า — บิลไม่มีข้อมูลลูกค้าเกิดได้เฉพาะตอนปิดวงเงิน
+        \App\Services\CustomerDailyLimit::save(\App\Services\CustomerDailyLimit::BUYING, false, 800000);
+        \App\Services\CustomerDailyLimit::save(\App\Services\CustomerDailyLimit::SELLING, false, 800000);
+
         $this->form()->call('saveTransaction');
 
         $this->assertDatabaseCount('transactions_master', 1);

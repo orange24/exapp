@@ -198,7 +198,73 @@ class User extends Authenticatable
             return Branch::whereKey($this->branch_id)->get();
         }
 
-        return Branch::orderBy('branch_code')->get();
+        $query = Branch::orderBy('branch_code');
+
+        $companyId = $this->activeCompanyId();
+        if ($companyId !== null) {
+            $query->where('company_id', $companyId);
+        }
+
+        // staff ลงเวรได้เฉพาะสาขาที่ผูกไว้ ถ้ายังไม่เคยผูก (ผู้ใช้เดิมก่อนมี
+        // ฟอร์มผูกสาขา) ให้เลือกได้ทุกสาขาเหมือนเดิม ไม่งั้นวัน deploy ทุกคน
+        // จะเหลือสาขาให้เลือกแค่ต้นสังกัด
+        $assigned = $this->isAdmin() ? [] : $this->assignedBranchIds();
+        if ($assigned !== []) {
+            $query->whereIn('id', $assigned);
+        }
+
+        return $query->get();
+    }
+
+    /**
+     * สาขาที่ผูกไว้ผ่านฟอร์มผู้ใช้ (user_branches)
+     *
+     * @return array<int, int>
+     */
+    public function assignedBranchIds(): array
+    {
+        return $this->branches()->pluck('branches.id')->map(fn ($id) => (int) $id)->all();
+    }
+
+    /**
+     * สาขาที่ staff ควรลงเวรเมื่อยังไม่ได้เลือก (ตอน login หรือหลังสลับบริษัท)
+     *
+     * ต้องเป็นสาขาในบริษัทที่กำลังทำงานอยู่ — users.branch_id อาจเป็นสาขาของ
+     * อีกบริษัท ถ้าใช้ตรง ๆ ทุกหน้าในบริษัทนี้จะว่างเปล่า
+     */
+    public function defaultWorkingBranchId(): ?int
+    {
+        $choices = $this->selectableBranches()->pluck('id')->map(fn ($id) => (int) $id)->all();
+
+        foreach ([$this->last_working_branch_id, $this->branch_id] as $preferred) {
+            if ($preferred !== null && in_array((int) $preferred, $choices, true)) {
+                return (int) $preferred;
+            }
+        }
+
+        return $choices[0] ?? null;
+    }
+
+    /**
+     * ลงเวรที่สาขานี้ พร้อมเลือกเคาน์เตอร์แรกที่เปิดอยู่ให้
+     */
+    public function seatAtWorkingBranch(?int $branchId): void
+    {
+        if ($branchId === null) {
+            return;
+        }
+
+        session(['working_branch_id' => $branchId]);
+
+        // จำไว้ให้ login ครั้งหน้ากลับมาที่สาขา (และบริษัท) เดิม
+        if ((int) $this->last_working_branch_id !== $branchId) {
+            $this->update(['last_working_branch_id' => $branchId]);
+        }
+
+        $counter = Counter::where('branch_id', $branchId)->where('is_active', true)->first();
+        if ($counter) {
+            session(['working_counter_id' => $counter->id, 'working_counter_name' => $counter->counter_name]);
+        }
     }
 
     /**
@@ -281,11 +347,26 @@ class User extends Authenticatable
         // auditor ตรวจสอบทุกสาขา ไม่ได้ประจำสาขาไหน — ถ้าจำกัดไว้ที่สาขาเดียว
         // เขาจะตรวจได้แค่สาขาที่บังเอิญถูกผูกไว้ตอนสร้างผู้ใช้ และถ้าไม่ผูก
         // สาขาเลย (branch_id = null) เขาจะไม่เห็นอะไรเลยสักสาขา
-        if ($this->isAuditor()) {
+        //
+        // trader ก็เช่นกัน — ฟอร์มผู้ใช้ให้ trader เลือกแค่บริษัท ไม่ได้เลือกสาขา
+        // จึงต้องเห็นทุกสาขาของบริษัทที่กำลังทำงานอยู่ (บีบต่อใน narrowToActiveCompany)
+        if ($this->isAuditor() || $this->isTrader()) {
             return Branch::pluck('id')->toArray();
         }
 
-        return [$this->branch_id]; // Own branch only (Branch Manager)
+        return $this->ownBranchIds(); // Branch Manager
+    }
+
+    /**
+     * สาขาที่ประจำอยู่ — ตามที่ผูกไว้ในฟอร์มผู้ใช้ ถ้ายังไม่เคยผูกใช้ต้นสังกัด
+     *
+     * @return array<int, int>
+     */
+    private function ownBranchIds(): array
+    {
+        $assigned = $this->assignedBranchIds();
+
+        return $assigned !== [] ? $assigned : [$this->branch_id];
     }
 
     public function getManagedBranchIds(): array
@@ -298,7 +379,7 @@ class User extends Authenticatable
             return $this->managed_branch_ids ?? []; // Assigned branches
         }
 
-        return [$this->branch_id]; // Own branch only
+        return $this->ownBranchIds();
     }
 
     public function canManageBranch(int $branchId): bool

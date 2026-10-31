@@ -49,19 +49,16 @@ class LoginController extends Controller
         $user = Auth::user();
 
         if ($user->requiresCounterAtLogin()) {
-            // Staff: must select counter at login
-            $workingBranchId = $user->last_working_branch_id ?? $user->branch_id;
-            $request->session()->put('working_branch_id', $workingBranchId);
-
-            // Set default counter
-            $defaultCounter = \App\Models\Counter::where('branch_id', $workingBranchId)
-                ->where('is_active', true)
-                ->first();
-
-            if ($defaultCounter) {
-                $request->session()->put('working_counter_id', $defaultCounter->id);
-                $request->session()->put('working_counter_name', $defaultCounter->counter_name);
+            // เปิดบริษัทของสาขาที่ทำงานล่าสุด — คนที่ดูแลหลายบริษัทจะได้กลับมา
+            // ที่เดิม ไม่ใช่ตกไปบริษัทแรกในรายการทุกครั้งที่ login
+            $lastBranch = \App\Models\Branch::find($user->last_working_branch_id ?? $user->branch_id);
+            $companyId = (int) $lastBranch?->company_id;
+            if ($companyId && in_array($companyId, array_map('intval', $user->accessibleCompanyIds()), true)) {
+                $request->session()->put('active_company_id', $companyId);
             }
+
+            // Staff: must select counter at login
+            $user->seatAtWorkingBranch($user->defaultWorkingBranchId());
         }
         // Other roles: no counter set (can select later if needed for Buy/Sell)
 

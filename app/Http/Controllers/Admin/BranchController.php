@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Branch;
+use App\Models\Company;
 use App\Models\Counter;
 use Illuminate\Http\Request;
 
@@ -12,18 +13,32 @@ class BranchController extends Controller
     public function index()
     {
         $branches = Branch::withCount('counters', 'users')->orderBy('branch_code')->get();
-        return view('admin.branches.index', compact('branches'));
+
+        // จัดกลุ่มตามบริษัท สาขาที่ยังไม่มีบริษัทไปอยู่กลุ่มท้ายสุด
+        $companies = Company::orderBy('company_code')->get();
+        $looseBranches = $branches->whereNull('company_id')->values();
+        $branches = $branches->groupBy('company_id');
+
+        return view('admin.branches.index', compact('companies', 'branches', 'looseBranches'));
     }
 
-    public function create()
+    public function create(Request $request)
     {
-        return view('admin.branches.form', ['branch' => new Branch(), 'isEdit' => false]);
+        // กดปุ่มเพิ่มสาขาจากกลุ่มบริษัทไหน ตั้งต้นที่บริษัทนั้น ถ้าไม่ได้ระบุ
+        // (หรือระบุบริษัทที่ปิด/ไม่มีอยู่) ใช้บริษัทที่เปิดอยู่ใน sidebar
+        $companyId = Company::where('is_active', true)->whereKey($request->integer('company_id'))->value('id')
+            ?? auth()->user()->activeCompanyId();
+
+        $branch = new Branch(['company_id' => $companyId]);
+
+        return view('admin.branches.form', ['branch' => $branch, 'isEdit' => false, 'companies' => $this->companies()]);
     }
 
     public function store(Request $request)
     {
         $validated = $request->validate([
             'branch_code'  => 'required|string|max:20|unique:branches,branch_code',
+            'company_id'   => $this->companyRule(),
             'branch_name'  => 'required|string|max:100',
             'company_name' => 'nullable|string|max:150',
             'type'         => 'required|in:hq,branch',
@@ -44,13 +59,14 @@ class BranchController extends Controller
     public function edit(Branch $branch)
     {
         $branch->load('counters');
-        return view('admin.branches.form', ['branch' => $branch, 'isEdit' => true]);
+        return view('admin.branches.form', ['branch' => $branch, 'isEdit' => true, 'companies' => $this->companies()]);
     }
 
     public function update(Request $request, Branch $branch)
     {
         $validated = $request->validate([
             'branch_code'  => 'required|string|max:20|unique:branches,branch_code,' . $branch->id,
+            'company_id'   => $this->companyRule(),
             'branch_name'  => 'required|string|max:100',
             'company_name' => 'nullable|string|max:150',
             'type'         => 'required|in:hq,branch',
@@ -100,6 +116,26 @@ class BranchController extends Controller
         $counter->delete();
         return redirect()->route('admin.branches.edit', $branchId)->with('success', "ลบ {$name} เรียบร้อย");
     }
+    /**
+     * บริษัทให้เลือก — บริษัทที่ปิดอยู่ไม่ขึ้น ยกเว้นตอนแก้ไขสาขาที่ยังสังกัดอยู่
+     * (ดู view) จึงส่งมาทั้งหมดแล้วให้ view กรอง
+     */
+    private function companies()
+    {
+        return Company::orderBy('company_code')->get();
+    }
+
+    /**
+     * สาขาต้องสังกัดบริษัท ถ้าระบบมีบริษัทแล้ว — สาขาที่ไม่มีบริษัทหลุดจาก
+     * ขอบเขตของทุกบริษัท ไม่มีใครเห็นในหน้าที่บีบตามบริษัท
+     *
+     * @return array<int, string>
+     */
+    private function companyRule(): array
+    {
+        return [Company::exists() ? 'required' : 'nullable', 'exists:companies,id'];
+    }
+
     /**
      * ช่องเวลาใน html ส่งมาเป็น H:i เก็บให้เป็น H:i:s เสมอ
      *

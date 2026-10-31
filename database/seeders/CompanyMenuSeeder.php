@@ -3,7 +3,6 @@
 namespace Database\Seeders;
 
 use App\Models\Menu;
-use App\Models\Permission;
 use App\Models\Role;
 use Illuminate\Database\Seeder;
 
@@ -13,8 +12,8 @@ use Illuminate\Database\Seeder;
  * วางใต้ "ตั้งค่า" เหนือ "จัดการสาขา" เพราะบริษัทเป็นเจ้าของสาขา — คนที่เข้า
  * มาตั้งค่าระบบครั้งแรกต้องสร้างบริษัทก่อนถึงจะมีที่ให้สาขาไปสังกัด
  *
- * ให้เมนูตามสิทธิ์ module1/write จริง ไม่ใช่ระบุชื่อ role ไว้ตายตัว เมนูกับ
- * ประตูจึงตรงกันเสมอ (หน้านี้กั้นด้วย middleware ชุดเดียวกับจัดการสาขา)
+ * ให้เมนูเฉพาะ superadmin ตรงกับ middleware ที่กั้นหน้านี้ (ชุดเดียวกับ
+ * จัดการสาขา) — ถอนเมนูออกจาก role อื่นทำที่ SuperAdminMenuSeeder
  */
 class CompanyMenuSeeder extends Seeder
 {
@@ -39,18 +38,11 @@ class CompanyMenuSeeder extends Seeder
             ]
         );
 
-        $permission = Permission::where('module', 'module1')->where('action', 'write')->first();
+        // หน้านี้กั้นด้วย middleware superadmin — ให้เมนูเฉพาะ superadmin
+        $role = Role::where('name', 'superadmin')->first();
 
-        if ($permission === null) {
-            return;
-        }
-
-        $roles = Role::whereHas('permissions', fn ($q) => $q->whereKey($permission->id))->get();
-
-        foreach ($roles as $role) {
-            // ต้องผูกหัวข้อ "ตั้งค่า" ด้วย ไม่งั้นเมนูลูกไม่ถูก render เลย
-            $role->menus()->syncWithoutDetaching([$parent->id, $menu->id]);
-        }
+        // ต้องผูกหัวข้อ "ตั้งค่า" ด้วย ไม่งั้นเมนูลูกไม่ถูก render เลย
+        $role?->menus()->syncWithoutDetaching([$parent->id, $menu->id]);
 
         Menu::flushAccessCache();
     }

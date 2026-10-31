@@ -34,6 +34,17 @@ class SwitchCompanyController extends Controller
          */
         $request->session()->forget(['working_branch_id', 'working_counter_id', 'working_counter_name']);
 
+        /*
+         * staff ต้องได้สาขาของบริษัทใหม่ทันที
+         *
+         * ถ้าปล่อยว่าง ทุกหน้าจะตกไปใช้ users.branch_id ซึ่งอาจเป็นสาขาของ
+         * บริษัทเก่า แล้วขอบเขตที่บีบตามบริษัทจะเหลือศูนย์สาขา — หน้าว่างทั้งระบบ
+         */
+        $user = $request->user();
+        if ($user->requiresCounterAtLogin()) {
+            $user->seatAtWorkingBranch($user->defaultWorkingBranchId());
+        }
+
         return back()->with('success', 'สลับบริษัทแล้ว');
     }
 }

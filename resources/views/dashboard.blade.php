@@ -277,6 +277,9 @@ function counterSelector() {
 
 {{-- Quick Actions --}}
 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+    {{-- การ์ดซื้อ/ขายขึ้นตามสิทธิ์เมนูของ role เหมือน sidebar — auditor/trader
+         ไม่ได้ทำรายการหน้าเคาน์เตอร์ --}}
+    @if (auth()->user()->hasMenuAccess('transaction.buy'))
     <a href="{{ route('transaction.buy') }}"
        class="bg-white rounded-xl shadow border border-gray-200 p-6 flex items-center gap-4 hover:shadow-md transition-shadow group">
         <div class="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center group-hover:bg-green-200 transition-colors">
@@ -289,7 +292,9 @@ function counterSelector() {
             <p class="text-sm text-gray-500">Buy Foreign Currency</p>
         </div>
     </a>
+    @endif
 
+    @if (auth()->user()->hasMenuAccess('transaction.sell'))
     <a href="{{ route('transaction.sell') }}"
        class="bg-white rounded-xl shadow border border-gray-200 p-6 flex items-center gap-4 hover:shadow-md transition-shadow group">
         <div class="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center group-hover:bg-red-200 transition-colors">
@@ -302,6 +307,7 @@ function counterSelector() {
             <p class="text-sm text-gray-500">Sell Foreign Currency</p>
         </div>
     </a>
+    @endif
 
     @php
         // ตั้งราคาได้เฉพาะ admin/branch_manager (User::canChangeRates()) — role อื่น

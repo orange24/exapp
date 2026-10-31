@@ -50,7 +50,7 @@ class SingleCompanyIsUnchangedTest extends TestCase
     {
         // หน้านี้วิ่งผ่าน getVisibleBranchIds() ซึ่งเป็นจุดที่เพิ่ม scope บริษัท
         // เข้าไป ถ้าบีบแรงเกินจะเหลือศูนย์สาขาแล้วหน้าว่างเปล่า
-        $this->actingAsAdmin()->get(route('admin.branches.index'))
+        $this->actingAsSuperAdmin()->get(route('admin.branches.index'))
             ->assertStatus(200)
             ->assertSee($this->branch->branch_name);
     }

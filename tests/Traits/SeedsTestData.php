@@ -14,6 +14,7 @@ use Database\Seeders\MenuSeeder;
 trait SeedsTestData
 {
     protected User $adminUser;
+    protected User $superAdminUser;
     protected User $staffUser;
     protected Branch $branch;
     protected Counter $counter;
@@ -26,7 +27,7 @@ trait SeedsTestData
         // Roles — MenuSeeder expects all of these to exist
         $adminRole = Role::create(['name' => 'admin', 'display_name' => 'Admin']);
         $staffRole = Role::create(['name' => 'staff', 'display_name' => 'Staff']);
-        Role::create(['name' => 'superadmin', 'display_name' => 'Super Admin']);
+        $superAdminRole = Role::create(['name' => 'superadmin', 'display_name' => 'Super Admin']);
         Role::create(['name' => 'branch_manager', 'display_name' => 'Branch Manager']);
         Role::create(['name' => 'trader', 'display_name' => 'Trader']);
         Role::create(['name' => 'auditor', 'display_name' => 'Auditor']);
@@ -84,6 +85,15 @@ trait SeedsTestData
             'is_active' => true,
         ]);
 
+        $this->superAdminUser = User::create([
+            'name' => 'Super Admin',
+            'email' => 'superadmin@test.local',
+            'password' => bcrypt('password'),
+            'role_id' => $superAdminRole->id,
+            'branch_id' => $this->branch->id,
+            'is_active' => true,
+        ]);
+
         $this->staffUser = User::create([
             'name' => 'Staff',
             'email' => 'staff@test.local',
@@ -109,6 +119,16 @@ trait SeedsTestData
     protected function actingAsAdmin()
     {
         return $this->actingAs($this->adminUser)
+            ->withSession([
+                'working_counter_id' => $this->counter->id,
+                'working_counter_name' => $this->counter->counter_name,
+            ]);
+    }
+
+    /** บริษัท สาขา ผู้ใช้ สิทธิ์ — หน้าพวกนี้เป็นของ superadmin */
+    protected function actingAsSuperAdmin()
+    {
+        return $this->actingAs($this->superAdminUser)
             ->withSession([
                 'working_counter_id' => $this->counter->id,
                 'working_counter_name' => $this->counter->counter_name,

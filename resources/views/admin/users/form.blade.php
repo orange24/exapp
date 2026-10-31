@@ -13,6 +13,7 @@
     <div class="max-w-2xl">
         <form action="{{ $isEdit ? route('admin.users.update', $user) : route('admin.users.store') }}"
               method="POST"
+              x-data="userForm(@js((string) old('role_id', $user->role_id)), @js($roles->pluck('name', 'id')))"
               class="bg-white shadow rounded-lg p-6 space-y-5">
             @csrf
             @if ($isEdit) @method('PUT') @endif
@@ -63,31 +64,12 @@
                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
             </div>
 
-            {{-- Branch --}}
-            <div>
-                <label for="branch_id" class="block text-sm font-medium text-gray-700 mb-1">
-                    สาขา (Branch) <span class="text-red-500">*</span>
-                </label>
-                <select id="branch_id" name="branch_id"
-                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        required>
-                    <option value="">-- เลือกสาขา --</option>
-                    @foreach ($branches as $branch)
-                        <option value="{{ $branch->id }}"
-                                {{ old('branch_id', $user->branch_id) == $branch->id ? 'selected' : '' }}>
-                            {{ $branch->branch_code }} — {{ $branch->branch_name }}
-                        </option>
-                    @endforeach
-                </select>
-                @error('branch_id') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
-            </div>
-
             {{-- Role --}}
             <div>
                 <label for="role_id" class="block text-sm font-medium text-gray-700 mb-1">
                     บทบาท (Role) <span class="text-red-500">*</span>
                 </label>
-                <select id="role_id" name="role_id"
+                <select id="role_id" name="role_id" x-model="roleId"
                         class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         required>
                     <option value="">-- เลือกบทบาท --</option>
@@ -99,6 +81,79 @@
                     @endforeach
                 </select>
                 @error('role_id') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+            </div>
+
+            {{-- Companies + Branches --}}
+            {{-- staff/branch_manager ประจำสาขาจึงต้องเลือกสาขา ส่วน auditor/trader
+                 เลือกแค่บริษัทแล้วเห็นทุกสาขาของบริษัทนั้น admin เข้าได้ทุกบริษัท --}}
+            @php
+                $checkedCompanies = array_map('intval', old('company_ids', $companyIds));
+                $checkedBranches = array_map('intval', old('branch_ids', $branchIds));
+            @endphp
+            <div>
+                <div class="block text-sm font-medium text-gray-700 mb-1">
+                    บริษัทและสาขา (Companies &amp; Branches)
+                    <span x-show="needsCompanies() || needsBranches()" class="text-red-500">*</span>
+                </div>
+
+                <p x-show="isAdmin()" x-cloak class="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                    ผู้ดูแลระบบเข้าได้ทุกบริษัทและทุกสาขาอยู่แล้ว ไม่ต้องเลือก
+                </p>
+
+                <div x-show="!isAdmin()" class="space-y-3">
+                    <p class="text-xs text-gray-500" x-show="needsBranches()">
+                        เลือกบริษัท แล้วเลือกสาขาที่ลงเวรได้ใต้บริษัทนั้น (เลือกได้หลายสาขา)
+                    </p>
+                    <p class="text-xs text-gray-500" x-show="!needsBranches()" x-cloak>
+                        บทบาทนี้เห็นทุกสาขาของบริษัทที่เลือก ไม่ต้องเลือกสาขา
+                    </p>
+
+                    @foreach ($companies as $company)
+                        <div class="border border-gray-200 rounded-lg p-3" data-company="{{ $company->id }}">
+                            <label class="flex items-center gap-2 text-sm font-semibold text-gray-800">
+                                <input type="checkbox" name="company_ids[]" value="{{ $company->id }}"
+                                       class="w-4 h-4 rounded border-gray-300 company-box"
+                                       @change="companyToggled($event.target)"
+                                       {{ in_array($company->id, $checkedCompanies, true) ? 'checked' : '' }}>
+                                {{ $company->company_name }}
+                                <span class="text-xs font-normal text-gray-400">{{ $company->company_code }}</span>
+                            </label>
+
+                            <div x-show="needsBranches()" class="mt-2 ml-6 grid grid-cols-1 sm:grid-cols-2 gap-1">
+                                @forelse ($company->branches as $branch)
+                                    <label class="flex items-center gap-2 text-sm text-gray-700">
+                                        <input type="checkbox" name="branch_ids[]" value="{{ $branch->id }}"
+                                               class="w-4 h-4 rounded border-gray-300 branch-box"
+                                               @change="branchToggled($event.target)"
+                                               {{ in_array($branch->id, $checkedBranches, true) ? 'checked' : '' }}>
+                                        {{ $branch->branch_code }} — {{ $branch->branch_name }}
+                                    </label>
+                                @empty
+                                    <p class="text-xs text-gray-400">ยังไม่มีสาขาในบริษัทนี้</p>
+                                @endforelse
+                            </div>
+                        </div>
+                    @endforeach
+
+                    @if ($looseBranches->isNotEmpty())
+                        <div x-show="needsBranches()" class="border border-dashed border-gray-300 rounded-lg p-3">
+                            <div class="text-sm font-semibold text-gray-500 mb-2">สาขาที่ยังไม่ได้ผูกบริษัท</div>
+                            <div class="ml-6 grid grid-cols-1 sm:grid-cols-2 gap-1">
+                                @foreach ($looseBranches as $branch)
+                                    <label class="flex items-center gap-2 text-sm text-gray-700">
+                                        <input type="checkbox" name="branch_ids[]" value="{{ $branch->id }}"
+                                               class="w-4 h-4 rounded border-gray-300"
+                                               {{ in_array($branch->id, $checkedBranches, true) ? 'checked' : '' }}>
+                                        {{ $branch->branch_code }} — {{ $branch->branch_name }}
+                                    </label>
+                                @endforeach
+                            </div>
+                        </div>
+                    @endif
+                </div>
+
+                @error('company_ids') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+                @error('branch_ids') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
             </div>
 
             {{-- Active --}}
@@ -125,4 +180,31 @@
             </div>
         </form>
     </div>
+
+    <script>
+        function userForm(roleId, roleNames) {
+            return {
+                roleId: roleId,
+                roleName() { return roleNames[this.roleId] ?? ''; },
+                isAdmin() { return ['admin', 'superadmin'].includes(this.roleName()); },
+                // ต้องตรงกับ UserController::needsBranches()
+                needsBranches() { return this.roleId !== '' && !this.isAdmin() && !['auditor', 'trader'].includes(this.roleName()); },
+                needsCompanies() { return this.roleId !== '' && !this.isAdmin(); },
+
+                // ติ๊กสาขาแล้วติ๊กบริษัทของสาขานั้นให้ด้วย
+                branchToggled(box) {
+                    if (box.checked) {
+                        box.closest('[data-company]').querySelector('.company-box').checked = true;
+                    }
+                },
+
+                // เอาบริษัทออกแล้วเอาสาขาของบริษัทนั้นออกด้วย
+                companyToggled(box) {
+                    if (!box.checked) {
+                        box.closest('[data-company]').querySelectorAll('.branch-box').forEach(b => b.checked = false);
+                    }
+                },
+            };
+        }
+    </script>
 @endsection

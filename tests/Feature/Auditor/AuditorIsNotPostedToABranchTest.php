@@ -88,7 +88,7 @@ class AuditorIsNotPostedToABranchTest extends TestCase
 
     public function test_an_auditor_can_be_created_without_a_branch(): void
     {
-        $this->actingAsAdmin()->post(route('admin.users.store'), [
+        $this->actingAsSuperAdmin()->post(route('admin.users.store'), [
             'name' => 'ผู้ตรวจสอบคนใหม่',
             'email' => 'auditor-new@test.local',
             'password' => 'Password@123',
@@ -106,13 +106,13 @@ class AuditorIsNotPostedToABranchTest extends TestCase
     {
         // auditor ไม่ต้องมีสาขา ไม่ได้แปลว่าใครก็ไม่ต้องมี — staff ที่ไม่มีสาขา
         // จะไม่มีเคาน์เตอร์ให้ลงเวรและใช้งานหน้าซื้อ/ขายไม่ได้เลย
-        $this->actingAsAdmin()->post(route('admin.users.store'), [
+        $this->actingAsSuperAdmin()->post(route('admin.users.store'), [
             'name' => 'พนักงานไร้สาขา',
             'email' => 'staff-no-branch@test.local',
             'password' => 'Password@123',
             'password_confirmation' => 'Password@123',
             'role_id' => Role::where('name', 'staff')->firstOrFail()->id,
             'is_active' => 1,
-        ])->assertSessionHasErrors('branch_id');
+        ])->assertSessionHasErrors('branch_ids');
     }
 }

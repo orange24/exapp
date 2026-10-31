@@ -25,6 +25,26 @@
         .sidebar-link { color: #0e513a; }
         .sidebar-link:hover { background-color: #f0f0f0; }
         .sidebar-link.active { background-color: #e0efe8; }
+
+        /*
+         * ลูกศรของ dropdown ทุกตัวในระบบ — ลูกศรของ browser ชิดขอบขวาจนเกือบติดเส้น
+         * จึงซ่อนแล้ววาดเองให้เว้นระยะ 0.75rem และกันที่ไว้ไม่ให้ข้อความวิ่งทับ
+         *
+         * ตัวเลือกแบบนี้ (:not ซ้อน 2 ชั้น) มีน้ำหนักมากกว่าคลาส px-* ของ Tailwind
+         * ที่ใส่ไว้ใน select แต่ละตัว padding-right ข้างล่างจึงชนะโดยไม่ต้องใช้ !important
+         * ส่วน select หลายบรรทัด (multiple/size) ไม่มีลูกศร จึงไม่แตะ
+         */
+        select:not([multiple]):not([size]) {
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+            background-repeat: no-repeat;
+            background-position: right 0.75rem center;
+            background-size: 1.1em 1.1em;
+            padding-right: 2.5rem;
+        }
+        select:not([multiple]):not([size]):disabled { cursor: not-allowed; }
     </style>
 </head>
 <body class="h-full flex" x-data="{ sidebarOpen: true }">

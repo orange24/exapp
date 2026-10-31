@@ -229,7 +229,7 @@ class PageAccessTest extends TestCase
 
     public function test_users_page_loads(): void
     {
-        $this->actingAsAdmin()->get('/admin/users')->assertStatus(200);
+        $this->actingAsSuperAdmin()->get('/admin/users')->assertStatus(200);
     }
 
     public function test_currencies_page_loads(): void
@@ -249,12 +249,12 @@ class PageAccessTest extends TestCase
 
     public function test_branches_page_loads(): void
     {
-        $this->actingAsAdmin()->get('/admin/branches')->assertStatus(200);
+        $this->actingAsSuperAdmin()->get('/admin/branches')->assertStatus(200);
     }
 
     public function test_permissions_page_loads(): void
     {
-        $this->actingAsAdmin()->get('/admin/permissions')->assertStatus(200);
+        $this->actingAsSuperAdmin()->get('/admin/permissions')->assertStatus(200);
     }
 
     public function test_sessions_page_loads(): void

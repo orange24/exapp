@@ -33,7 +33,7 @@ class BranchCutOffSettingTest extends TestCase
 
     private function save(array $overrides = [])
     {
-        return $this->actingAs($this->adminUser)
+        return $this->actingAs($this->superAdminUser)
             ->put(route('admin.branches.update', $this->branch), $this->payload($overrides));
     }
 
@@ -84,7 +84,7 @@ class BranchCutOffSettingTest extends TestCase
 
     public function test_a_new_branch_can_be_created_with_its_own_cut_off(): void
     {
-        $this->actingAs($this->adminUser)
+        $this->actingAs($this->superAdminUser)
             ->post(route('admin.branches.store'), [
                 'branch_code' => 'NEWB',
                 'branch_name' => 'สาขาใหม่',
@@ -103,7 +103,7 @@ class BranchCutOffSettingTest extends TestCase
     {
         $this->branch->update(['cut_off_time' => '02:30:00']);
 
-        $this->actingAs($this->adminUser)
+        $this->actingAs($this->superAdminUser)
             ->get(route('admin.branches.edit', $this->branch))
             ->assertOk()
             ->assertSee('name="cut_off_time"', false)

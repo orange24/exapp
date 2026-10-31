@@ -119,9 +119,13 @@ gcloud config set project exchange-app-496416
 ```bash
 php artisan db:seed --class=CardReaderMenuSeeder --force   # เครื่องอ่านบัตร ปชช.
 php artisan db:seed --class=CompanyMenuSeeder --force      # จัดการบริษัท
+php artisan db:seed --class=BotSubmissionMenuSeeder --force # ส่งข้อมูลให้แบงค์ชาติ
+php artisan db:seed --class=DailyLimitMenuSeeder --force    # วงเงินต่อคนต่อวัน
+php artisan db:seed --class=SuperAdminMenuSeeder --force    # ย้ายเมนูบริษัท/สาขา/ผู้ใช้/สิทธิ์ ไปเป็นของ superadmin
 ```
 
-ทั้งคู่รันซ้ำได้ ไม่ลบข้อมูล
+ทุกตัวรันซ้ำได้ ไม่ลบข้อมูล — `SuperAdminMenuSeeder` จะไม่ทำอะไรเลยถ้ายังไม่มีผู้ใช้
+role superadmin ที่ใช้งานได้ (กันไม่ให้ไม่มีใครเหลือเข้าหน้าจัดการผู้ใช้)
 
 ---
 

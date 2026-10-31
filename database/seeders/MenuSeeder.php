@@ -154,8 +154,10 @@ class MenuSeeder extends Seeder
         // Admin & Superadmin: All menus except the trader-only tools. Their route
         // guards are abort_unless(isTrader()), so showing them to admin would
         // render links that 403.
-        $allMenuIds = collect($menuIdMap)->except(['trader.inventory', 'admin.bank-sales', 'admin.bank-purchases'])->values();
-        $roles['admin']->menus()->syncWithoutDetaching($allMenuIds);
+        $allMenus = collect($menuIdMap)->except(['trader.inventory', 'admin.bank-sales', 'admin.bank-purchases']);
+        $allMenuIds = $allMenus->values();
+        // สาขา ผู้ใช้ สิทธิ์ อยู่หลัง middleware superadmin — admin ไม่ได้เมนูพวกนี้
+        $roles['admin']->menus()->syncWithoutDetaching($allMenus->except(SuperAdminMenuSeeder::MENU_KEYS)->values());
         if (isset($roles['superadmin'])) {
             $roles['superadmin']->menus()->syncWithoutDetaching($allMenuIds);
         }
