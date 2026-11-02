@@ -263,7 +263,7 @@
                 <div>
                     <label class="text-gray-500 text-xs">Expiry</label>
                     <input type="text" wire:model.blur="ocrExpiry"
-                           placeholder="วันหมดอายุ"
+                           placeholder="วว/ดด/ปปปป"
                            class="w-full border border-green-300 rounded px-2 py-1 text-sm font-semibold focus:ring-2 focus:ring-green-400 bg-white">
                 </div>
             </div>

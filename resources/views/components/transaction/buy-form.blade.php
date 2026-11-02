@@ -388,8 +388,8 @@ new class extends Component
                 'first_name'       => $firstName,
                 'last_name'        => $lastName,
                 'nationality'      => $this->ocrNationality,
-                'date_of_birth'    => $this->ocrDob ?: null,
-                'passport_expiry'  => $this->ocrExpiry ?: null,
+                'date_of_birth'    => \App\Support\TypedDate::toIso($this->ocrDob),
+                'passport_expiry'  => \App\Support\TypedDate::toIso($this->ocrExpiry),
                 'kyc_status'       => 'approved',
             ], $imageData)
         );
@@ -488,8 +488,8 @@ new class extends Component
                 'first_name'       => $firstName,
                 'last_name'        => $lastName,
                 'nationality'      => $this->ocrNationality,
-                'date_of_birth'    => $this->ocrDob ?: null,
-                'passport_expiry'  => $this->ocrExpiry ?: null,
+                'date_of_birth'    => \App\Support\TypedDate::toIso($this->ocrDob),
+                'passport_expiry'  => \App\Support\TypedDate::toIso($this->ocrExpiry),
                 'kyc_status'       => 'approved',
             ], $imageData)
         );
