@@ -381,7 +381,7 @@
         </div>
     @enderror
 
-    {{-- Add currency row — Sell: ลูกค้าให้ THB → แลกเงินต่างประเทศ --}}
+    {{-- Add currency row — Sell: ใส่จำนวนเงินต่างประเทศ → คิดเป็นเงินบาท --}}
     @if (! $showPrintSlip)
     <div class="mb-4 p-3 bg-red-50 border border-red-200 rounded">
         <div class="flex flex-wrap gap-3 items-end">
@@ -422,11 +422,16 @@
                 @endif
             </div>
             <div style="width:120px; flex-shrink:0;" x-data>
-                <label class="block text-sm font-medium text-gray-700 mb-1">ลูกค้าให้ (THB)</label>
+                <label class="block text-sm font-medium text-gray-700 mb-1">จำนวน (ต่างประเทศ)</label>
                 <x-number-input model="addAmount" :value="$addAmount" :decimals="0"
                        x-ref="amountInput"
                        @keydown.enter.prevent="commit($el); $wire.addRow().then(() => { $nextTick(() => $refs.currencySelect.focus()); })"
                        class="w-full border border-gray-300 rounded px-2 py-2 text-sm" />
+            </div>
+            <div style="width:130px; flex-shrink:0;">
+                <label class="block text-sm font-medium text-gray-700 mb-1">ลูกค้าจ่าย (THB)</label>
+                <input type="text" value="{{ $currentTotal > 0 ? number_format($currentTotal, 0) : '' }}" readonly tabindex="-1"
+                       class="w-full border border-gray-300 bg-gray-100 rounded px-2 py-2 text-sm text-right font-mono font-bold">
             </div>
             <div>
                 <button wire:click="addRow" type="button"
@@ -443,9 +448,9 @@
             <div style="background:#fff; border-radius:12px; padding:24px; width:100%; max-width:420px; box-shadow:0 20px 60px rgba(0,0,0,0.3);">
                 <h3 style="font-size:16px; font-weight:700; color:#dc2626; margin-bottom:16px;">เงินในบูธไม่เพียงพอ</h3>
                 <div style="font-size:14px; color:#333; line-height:1.8;">
-                    <div>ลูกค้าให้ = <strong>{{ number_format($addAmount, 0) }} THB</strong></div>
+                    <div>ลูกค้าขอ = <strong>{{ number_format($addAmount, 0) }}</strong> (ต่างประเทศ)</div>
                     <div>อัตราขาย = <strong>{{ format_rate($currentRate) }}</strong></div>
-                    <div>คำนวณได้ = <strong>{{ number_format($currentTotal, 0) }}</strong> (ต่างประเทศ)</div>
+                    <div>คิดเป็น = <strong>{{ number_format($currentTotal, 0) }} THB</strong></div>
                     <div style="color:#dc2626;">เงินในบูธมี = <strong>{{ number_format($boothAmount, 0) }}</strong></div>
                     <hr style="margin:12px 0; border-color:#eee;">
                     <div style="color:#16a34a; font-weight:600;">ปรับเป็น:</div>
@@ -477,7 +482,7 @@
                     <tr class="bg-[#0e513a] text-white">
                         <th class="px-3 py-2 text-left">#</th>
                         <th class="px-3 py-2 text-left">สกุลเงิน</th>
-                        <th class="px-3 py-2 text-right">ลูกค้าได้ (ต่างประเทศ)</th>
+                        <th class="px-3 py-2 text-right">จ่ายลูกค้า (ต่างประเทศ)</th>
                         <th class="px-3 py-2 text-right">อัตราขาย</th>
                         <th class="px-3 py-2 text-right">รับจากลูกค้า (THB)</th>
                         @if (! $showPrintSlip)

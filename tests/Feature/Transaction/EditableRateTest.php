@@ -111,10 +111,25 @@ class EditableRateTest extends TestCase
             ->set('selectedCurrency', (string) $this->denomination->id)
             ->assertSet('currentRate', 34.20)
             ->set('currentRate', 40.0)
-            ->set('addAmount', 4000)
+            ->set('addAmount', 100)
             ->call('addRow')
             ->assertSet('rows.0.rate', 40.0)
-            ->assertSet('rows.0.total', 100.0);   // floor(4000 / 40)
+            ->assertSet('rows.0.total', 100.0)
+            ->assertSet('rows.0.amount', 4000.0);  // 100 × 40
+    }
+
+    public function test_sell_baht_is_not_pushed_up_by_float_noise(): void
+    {
+        // 100 × 34.20 ใน float = 3420.0000000000005 — ถ้า ceil ตรงๆ จะคิดลูกค้าเกินไป 1 บาท
+        Livewire::actingAs($this->adminUser)
+            ->test('transaction.sell-form')
+            ->set('counterId', (string) $this->counter->id)
+            ->set('selectedCurrency', (string) $this->denomination->id)
+            ->set('currentRate', 34.20)
+            ->set('addAmount', 100)
+            ->assertSet('currentTotal', 3420.0)
+            ->call('addRow')
+            ->assertSet('rows.0.amount', 3420.0);
     }
 
     public function test_sell_staff_rate_is_forced_back_to_configured_rate(): void
@@ -125,10 +140,11 @@ class EditableRateTest extends TestCase
             ->set('selectedCurrency', (string) $this->denomination->id)
             ->set('currentRate', 1.0)            // tampered payload
             ->assertSet('currentRate', 34.20)    // reverted on update
-            ->set('addAmount', 3500)
+            ->set('addAmount', 102)
             ->call('addRow')
             ->assertSet('rows.0.rate', 34.20)
-            ->assertSet('rows.0.total', 102.0);  // floor(3500 / 34.20)
+            ->assertSet('rows.0.total', 102.0)
+            ->assertSet('rows.0.amount', 3489.0);  // 102 × 34.20 = 3,488.40 ปัดขึ้น
     }
 
     public function test_sell_rate_field_is_editable_only_for_admin(): void

@@ -43,8 +43,9 @@
 
         /* label ซ้าย / ค่าขวา — ชิดขอบทั้งสองข้างเสมอแม้ค่าจะยาว */
         .line { display: flex; justify-content: space-between; align-items: baseline; gap: 3mm; }
-        .line .k { font-size: 11pt; white-space: nowrap; }
-        .line .v { font-size: 12pt; font-weight: bold; text-align: right; word-break: break-all; }
+        .line .k { font-size: 10pt; white-space: nowrap; }
+        /* ตัดบรรทัดที่ช่องว่างก่อน — break-all เคยตัดกลางคำ "Warehou / se" */
+        .line .v { font-size: 10pt; font-weight: bold; text-align: right; overflow-wrap: anywhere; }
 
         table.items { width: 100%; border-collapse: collapse; table-layout: auto; margin: 1mm 0; }
         table.items th {

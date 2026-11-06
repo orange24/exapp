@@ -104,7 +104,7 @@ class TypedCustomerDateTest extends TestCase
             ->set('ocrPassportNo', 'X7654321')
             ->set('ocrExpiry', 'ตลอดชีพ')
             ->set('selectedCurrency', (string) $this->denomination->id)
-            ->set('addAmount', 3800)
+            ->set('addAmount', 100)
             ->call('addRow')
             ->call('saveTransaction')
             ->assertHasNoErrors();

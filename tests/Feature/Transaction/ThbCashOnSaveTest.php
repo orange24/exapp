@@ -116,7 +116,7 @@ class ThbCashOnSaveTest extends TestCase
             ->set('counterId', (string) $this->counter->id)
             ->set('custName', 'Test Customer')
             ->set('selectedCurrency', (string) $this->denomination->id)
-            ->set('addAmount', 3800)        // ลูกค้าจ่าย 3,800 บาท → รับ 100 USD
+            ->set('addAmount', 100)         // ลูกค้าขอ 100 USD × 38.00 = จ่าย 3,800 บาท
             ->call('addRow')
             ->call('saveTransaction')
             ->assertHasNoErrors();

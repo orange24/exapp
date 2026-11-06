@@ -76,7 +76,7 @@ class SellStockGuardTest extends TestCase
 
         $this->form()
             ->set('selectedCurrency', (string) $this->denomination->id)
-            ->set('addAmount', 700)   // 700 / 38.00 → 18 USD
+            ->set('addAmount', 18)    // 18 USD × 38.00 = 684 บาท
             ->call('addRow')
             ->assertHasErrors('stock')
             ->assertCount('rows', 0)
@@ -88,7 +88,7 @@ class SellStockGuardTest extends TestCase
     {
         $this->form()
             ->set('selectedCurrency', (string) $this->denomination->id)
-            ->set('addAmount', 700)
+            ->set('addAmount', 18)
             ->call('addRow')
             ->assertHasErrors('stock')
             ->assertCount('rows', 0);
@@ -101,7 +101,7 @@ class SellStockGuardTest extends TestCase
 
         $this->form()
             ->set('selectedCurrency', (string) $this->denomination->id)
-            ->set('addAmount', 700)
+            ->set('addAmount', 18)
             ->call('addRow')
             ->assertHasNoErrors()
             ->assertCount('rows', 1)
@@ -118,7 +118,7 @@ class SellStockGuardTest extends TestCase
 
         $component = $this->form()
             ->set('selectedCurrency', (string) $this->denomination->id)
-            ->set('addAmount', 700)
+            ->set('addAmount', 18)
             ->call('addRow')
             ->assertCount('rows', 1);
 

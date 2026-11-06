@@ -117,7 +117,7 @@ class SellFormScreeningTest extends TestCase
             ->test('transaction.sell-form')
             ->set('counterId', (string) $this->counter->id)
             ->set('selectedCurrency', (string) $this->denomination->id)
-            ->set('addAmount', 3800)
+            ->set('addAmount', 100)
             ->call('addRow');
     }
 

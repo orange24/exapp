@@ -30,12 +30,12 @@ new class extends Component
     // Transaction rows
     public array $rows = [];
 
-    // Current row — Sell: ลูกค้าให้ THB → แลกเป็นเงินต่างประเทศ
+    // Current row — Sell: ลูกค้าขอเงินต่างประเทศเท่าไร → คิดเป็นเงินบาทที่ต้องจ่าย
     public string $selectedCurrency = '';  // denomination_id
-    public float $addAmount = 0;           // จำนวนเงิน THB ที่ลูกค้าให้
+    public float $addAmount = 0;           // จำนวนเงินต่างประเทศที่ลูกค้าขอ
     public float $currentRate = 0;         // อัตราขาย
     public float $defaultRate = 0;         // rate ที่ตั้งค่าไว้ — role ที่แก้ไม่ได้จะถูกบังคับกลับมาค่านี้
-    public float $currentTotal = 0;        // จำนวนเงินต่างประเทศที่ลูกค้าจะได้ = THB / rate
+    public float $currentTotal = 0;        // เงินบาทที่ลูกค้าต้องจ่าย = ต่างประเทศ × rate
     public float $boothAmount = 0;         // จำนวนเงินต่างประเทศที่มีในบูธ
     public bool $showAdjustModal = false;  // แสดง modal ปรับจำนวน
     public float $adjustedTotal = 0;       // จำนวนเงินต่างประเทศหลัง adjust
@@ -195,12 +195,17 @@ new class extends Component
 
     public function recalcTotal(): void
     {
-        // Sell: ลูกค้าให้ THB → คำนวณเงินต่างประเทศที่ได้ = THB / rate
-        if ($this->currentRate > 0) {
-            $this->currentTotal = floor($this->addAmount / $this->currentRate);
-        } else {
-            $this->currentTotal = 0;
-        }
+        // Sell: เงินต่างประเทศ × rate = เงินบาทที่ลูกค้าจ่าย
+        $this->currentTotal = $this->currentRate > 0 ? $this->thbFor($this->addAmount) : 0;
+    }
+
+    /**
+     * เงินบาทฝั่งขายเป็นจำนวนเต็มเสมอ ปัดขึ้นเหมือนตอนปรับจำนวนตามสต็อก
+     * — round ก่อน ceil กันเศษทศนิยมของ float (100 × 34.20 = 3420.0000000000005) ดันขึ้นไปอีกบาท
+     */
+    private function thbFor(float $foreign): float
+    {
+        return ceil(round($foreign * $this->currentRate, 2));
     }
 
     public function addRow(): void
@@ -215,7 +220,7 @@ new class extends Component
         if ($this->currentRate <= 0) return;
 
         $denom = \App\Models\CurrencyDenomination::with('currency')->find($this->selectedCurrency);
-        $foreignAmount = $this->currentTotal; // จำนวนเงินต่างประเทศที่คำนวณได้
+        $foreignAmount = $this->addAmount;    // จำนวนเงินต่างประเทศที่ลูกค้าขอ
 
         // boothAmount มาจาก stock เสมอ (quantity - hold_amount) — ค่า 0 แปลว่า
         // "ไม่มีของในบูธ" ไม่ใช่ "ไม่ได้ตรวจ" ถ้าปล่อยผ่านตรงนี้ แถวจะถูกเพิ่มได้
@@ -228,7 +233,7 @@ new class extends Component
         // เงินในบูธไม่พอ → เปิด modal ให้ adjust
         if ($foreignAmount > $this->boothAmount) {
             $this->adjustedTotal = $this->boothAmount;
-            $this->adjustedThb = ceil($this->boothAmount * $this->currentRate);
+            $this->adjustedThb = $this->thbFor($this->boothAmount);
             $this->showAdjustModal = true;
             return;
         }
@@ -237,7 +242,7 @@ new class extends Component
             'currency_code'      => $denom?->currency_code ?? '',
             'currency_name'      => $denom?->display_name ?? '',
             'denomination_id'    => (int) $this->selectedCurrency,
-            'amount'             => $this->addAmount,       // THB ที่ลูกค้ากรอกมาเต็มๆ
+            'amount'             => $this->currentTotal,    // THB ที่ลูกค้าจ่าย
             'rate'               => $this->currentRate,
             'total'              => $foreignAmount,         // เงินต่างประเทศที่ให้ลูกค้า
             'discount_rate_sell' => 0,
