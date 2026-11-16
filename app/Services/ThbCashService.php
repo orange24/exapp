@@ -283,6 +283,96 @@ class ThbCashService
         );
     }
 
+    // ─────────────────────────────────────────────────────────────────
+    // ขอลบรายการเติมเงินทุน / นำเงินออก — ผู้จัดการอนุมัติ
+    // ─────────────────────────────────────────────────────────────────
+
+    /** ลบได้เฉพาะรายการที่คนกดเติม/นำออกเอง ไม่ใช่เงินจากบิลหรือผลต่างปิดวัน */
+    public const CANCELLABLE_REFS = [self::REF_TOPUP, self::REF_RETURN];
+
+    public function requestCancel(int $movementId, int $userId, string $reason): StockMovement
+    {
+        $reason = trim($reason);
+        if ($reason === '') {
+            throw new \InvalidArgumentException('กรุณาระบุเหตุผลในการลบ');
+        }
+
+        $movement = StockMovement::query()->thbWithCancelled()->findOrFail($movementId);
+
+        if (! in_array($movement->reference_type, self::CANCELLABLE_REFS, true)) {
+            throw new \InvalidArgumentException('ลบได้เฉพาะรายการเติมเงินทุน / นำเงินออก');
+        }
+        if (($movement->flag_cancel ?? 'N') !== 'N') {
+            throw new \InvalidArgumentException('รายการนี้ขอลบไปแล้ว');
+        }
+
+        $movement->update([
+            'flag_cancel' => 'R',
+            'cancel_reason' => mb_substr($reason, 0, 500),
+            'cancel_requested_by' => $userId,
+            'cancel_requested_at' => now(),
+        ]);
+
+        return $movement;
+    }
+
+    /**
+     * อนุมัติลบ — แถวยังอยู่เป็นประวัติ แต่หลุดจาก thb() จึงไม่ถูกนับในยอดอีก
+     * และต้องหักออกจาก counter_stock ให้ตรงกับยอดที่คำนวณจาก movement
+     *
+     * ยอดของทุกวันตั้งแต่วันที่ของรายการนั้นเป็นต้นไปจะเปลี่ยนตาม เพราะยอด
+     * คำนวณสดจาก movement เสมอ
+     */
+    public function approveCancel(int $movementId, int $userId): StockMovement
+    {
+        return DB::transaction(function () use ($movementId, $userId) {
+            $movement = StockMovement::query()->thbWithCancelled()->lockForUpdate()->findOrFail($movementId);
+
+            if ($movement->flag_cancel !== 'R') {
+                throw new \InvalidArgumentException('รายการนี้ไม่ได้อยู่ในสถานะรออนุมัติลบ');
+            }
+
+            $stock = CounterStock::lockForUpdate()
+                ->where('counter_id', $movement->counter_id)
+                ->where('currency_code', CounterStock::THB)
+                ->whereNull('denomination_id')
+                ->first();
+
+            if ($stock) {
+                $stock->quantity = (float) $stock->quantity - (float) $movement->amount;
+                $stock->total_cost_value = $stock->quantity;
+                $stock->save();
+            }
+
+            $movement->update([
+                'flag_cancel' => 'Y',
+                'cancel_approved_by' => $userId,
+                'cancel_approved_at' => now(),
+            ]);
+
+            return $movement;
+        });
+    }
+
+    /** ไม่อนุมัติ — กลับเป็นรายการปกติ */
+    public function rejectCancel(int $movementId): StockMovement
+    {
+        $movement = StockMovement::query()->thbWithCancelled()->findOrFail($movementId);
+
+        if ($movement->flag_cancel !== 'R') {
+            throw new \InvalidArgumentException('รายการนี้ไม่ได้อยู่ในสถานะรออนุมัติลบ');
+        }
+
+        $movement->update([
+            'flag_cancel' => 'N',
+            'cancel_reason' => null,
+            'cancel_requested_by' => null,
+            'cancel_requested_at' => null,
+        ]);
+
+        return $movement;
+    }
+
     private function assertPositive(float $amount): void
     {
         if ($amount <= 0) {

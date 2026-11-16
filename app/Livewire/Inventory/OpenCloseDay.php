@@ -43,6 +43,10 @@ class OpenCloseDay extends Component
     public float $transferAmount = 0;
     public string $transferNote = '';
 
+    // ขอลบรายการเติมเงินทุน / นำเงินออก
+    public ?int $cancelMovementId = null;
+    public string $cancelMovementReason = '';
+
     public function mount(): void
     {
         $this->counterId = (string) (session('working_counter_id') ?? '');
@@ -100,6 +104,32 @@ class OpenCloseDay extends Component
         }
 
         return app(ThbCashService::class)->summaryFor((int) $this->counterId, $this->date);
+    }
+
+    /**
+     * ประวัติเติมเงินทุน / นำเงินออก / ปรับยอด / ผลต่างปิดวัน ของวันที่เลือก
+     *
+     * ไม่รวมรับ-จ่ายจากบิลซื้อขาย (REF_TRANSACTION) — มีวันละหลายร้อยแถวและดูได้
+     * จากรายงานบิลอยู่แล้ว ที่นี่เหลือเฉพาะรายการที่คนบันทึกเงินเข้าออกเอง
+     */
+    public function getThbManualMovementsProperty()
+    {
+        if (! $this->counterId || ! $this->date) {
+            return collect();
+        }
+
+        $thbCash = app(ThbCashService::class);
+
+        return StockMovement::query()
+            ->thbWithCancelled()
+            ->with(['movedBy', 'cancelRequestedBy', 'cancelApprovedBy'])
+            ->where('counter_id', $this->counterId)
+            ->where('reference_type', '!=', ThbCashService::REF_TRANSACTION)
+            ->where('moved_at', '>', $thbCash->dayStart($this->date, (int) $this->counterId))
+            ->where('moved_at', '<=', $thbCash->dayEnd($this->date, (int) $this->counterId))
+            ->orderByDesc('moved_at')
+            ->orderByDesc('id')
+            ->get();
     }
 
     public function getRecentDaysProperty()
@@ -214,6 +244,69 @@ class OpenCloseDay extends Component
 
         session()->flash('success', ($isTopUp ? 'เติมเงินทุน ' : 'นำเงินออก ')
             . number_format($amount, 2) . ' บาท สำเร็จ');
+    }
+
+    public function startCancelMovement(int $movementId): void
+    {
+        $this->cancelMovementId = $movementId;
+        $this->cancelMovementReason = '';
+    }
+
+    public function abortCancelMovement(): void
+    {
+        $this->cancelMovementId = null;
+        $this->cancelMovementReason = '';
+    }
+
+    public function requestCancelMovement(): void
+    {
+        if (! $this->cancelMovementId) {
+            return;
+        }
+
+        try {
+            app(ThbCashService::class)->requestCancel($this->cancelMovementId, Auth::id(), $this->cancelMovementReason);
+        } catch (\InvalidArgumentException $e) {
+            session()->flash('error', $e->getMessage());
+            return;
+        }
+
+        $this->abortCancelMovement();
+        session()->flash('success', 'ส่งคำขอลบแล้ว รอผู้จัดการอนุมัติ');
+    }
+
+    public function approveCancelMovement(int $movementId): void
+    {
+        if (! Auth::user()->canApproveCancellations()) {
+            session()->flash('error', 'เฉพาะผู้จัดการ/Admin เท่านั้นที่อนุมัติลบได้');
+            return;
+        }
+
+        try {
+            $movement = app(ThbCashService::class)->approveCancel($movementId, Auth::id());
+        } catch (\InvalidArgumentException $e) {
+            session()->flash('error', $e->getMessage());
+            return;
+        }
+
+        session()->flash('success', 'อนุมัติลบรายการ ' . number_format((float) $movement->amount, 2) . ' บาท แล้ว');
+    }
+
+    public function rejectCancelMovement(int $movementId): void
+    {
+        if (! Auth::user()->canApproveCancellations()) {
+            session()->flash('error', 'เฉพาะผู้จัดการ/Admin เท่านั้นที่อนุมัติลบได้');
+            return;
+        }
+
+        try {
+            app(ThbCashService::class)->rejectCancel($movementId);
+        } catch (\InvalidArgumentException $e) {
+            session()->flash('error', $e->getMessage());
+            return;
+        }
+
+        session()->flash('success', 'ไม่อนุมัติการลบ รายการกลับเป็นปกติ');
     }
 
     public function prepareClosing(): void

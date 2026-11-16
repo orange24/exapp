@@ -174,6 +174,115 @@
                 เงินทุนมาจากบัญชีธนาคาร/เจ้าของ ซึ่งอยู่นอกบัญชีเงินสดเคาน์เตอร์ —
                 บันทึกเฉพาะฝั่งลิ้นชักนี้ ไม่ตัดยอดที่ไหนอีก
             </p>
+
+        {{-- ประวัติเงินเข้า-ออกที่บันทึกเอง (ไม่รวมบิลซื้อขาย) --}}
+        @php
+            $manualMovements = $this->thbManualMovements;
+            $refLabels = [
+                \App\Services\ThbCashService::REF_TOPUP => ['เติมเงินทุนเข้า', 'bg-green-100 text-green-800'],
+                \App\Services\ThbCashService::REF_RETURN => ['นำเงินออก', 'bg-orange-100 text-orange-800'],
+                \App\Services\ThbCashService::REF_ADJUST => ['ปรับยอด', 'bg-gray-100 text-gray-800'],
+                \App\Services\ThbCashService::REF_WORKING_DAY => ['ผลต่างปิดวัน', 'bg-purple-100 text-purple-800'],
+            ];
+            $activeMovements = $manualMovements->where('flag_cancel', '!=', 'Y');
+            $manualIn = $activeMovements->where('amount', '>', 0)->sum('amount');
+            $manualOut = $activeMovements->where('amount', '<', 0)->sum('amount');
+            $canApprove = auth()->user()->canApproveCancellations();
+            $cancellableRefs = \App\Services\ThbCashService::CANCELLABLE_REFS;
+        @endphp
+        <div class="mt-4 border-t pt-4">
+            <div class="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+                <h4 class="text-sm font-semibold text-gray-800">ประวัติการนำเงินเข้า-ออก</h4>
+                @if ($manualMovements->isNotEmpty())
+                    <div class="text-xs text-gray-600">
+                        เข้ารวม <span class="font-mono font-semibold text-green-700">{{ number_format($manualIn, 2) }}</span>
+                        · ออกรวม <span class="font-mono font-semibold text-red-700">{{ number_format($manualOut, 2) }}</span>
+                    </div>
+                @endif
+            </div>
+
+            @if ($manualMovements->isEmpty())
+                <p class="py-3 text-center text-sm text-gray-400">ยังไม่มีรายการนำเงินเข้า-ออกในวันนี้</p>
+            @else
+                <div class="overflow-x-auto rounded-lg border bg-white">
+                    <table class="min-w-full text-sm">
+                        <thead>
+                            <tr class="bg-gray-100 text-gray-700">
+                                <th class="px-3 py-2 text-left font-semibold">เวลา</th>
+                                <th class="px-3 py-2 text-left font-semibold">ประเภท</th>
+                                <th class="px-3 py-2 text-right font-semibold">จำนวนเงิน</th>
+                                <th class="px-3 py-2 text-left font-semibold">ผู้ทำรายการ</th>
+                                <th class="px-3 py-2 text-left font-semibold">หมายเหตุ</th>
+                                <th class="px-3 py-2 text-right font-semibold">จัดการ</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach ($manualMovements as $mv)
+                                @php [$label, $badge] = $refLabels[$mv->reference_type] ?? [$mv->reference_type, 'bg-gray-100 text-gray-800']; @endphp
+                                @php $flag = $mv->flag_cancel ?? 'N'; @endphp
+                                <tr class="border-b {{ $flag === 'Y' ? 'bg-gray-50 text-gray-400' : ($flag === 'R' ? 'bg-amber-50' : '') }}">
+                                    <td class="px-3 py-2 whitespace-nowrap {{ $flag === 'Y' ? 'line-through' : 'text-gray-600' }}">{{ $mv->moved_at->format('d/m/Y H:i') }}</td>
+                                    <td class="px-3 py-2">
+                                        <span class="rounded px-2 py-0.5 text-xs font-medium {{ $flag === 'Y' ? 'bg-gray-100 text-gray-500 line-through' : $badge }}">{{ $label }}</span>
+                                    </td>
+                                    <td class="px-3 py-2 text-right font-mono font-semibold {{ $flag === 'Y' ? 'line-through text-gray-400' : ($mv->amount < 0 ? 'text-red-700' : 'text-green-700') }}">
+                                        {{ $mv->amount > 0 ? '+' : '' }}{{ number_format($mv->amount, 2) }}
+                                    </td>
+                                    <td class="px-3 py-2 {{ $flag === 'Y' ? '' : 'text-gray-700' }}">{{ $mv->movedBy?->name ?? '-' }}</td>
+                                    <td class="px-3 py-2 {{ $flag === 'Y' ? '' : 'text-gray-600' }}">
+                                        {{ $mv->note }}
+                                        @if ($flag !== 'N')
+                                            <div class="mt-1 text-xs {{ $flag === 'R' ? 'text-amber-800' : 'text-gray-500' }}">
+                                                เหตุผลที่ลบ: {{ $mv->cancel_reason }}
+                                                — ขอโดย {{ $mv->cancelRequestedBy?->name ?? '-' }}
+                                                @if ($flag === 'Y')
+                                                    · อนุมัติโดย {{ $mv->cancelApprovedBy?->name ?? '-' }}
+                                                    {{ $mv->cancel_approved_at?->format('d/m/Y H:i') }}
+                                                @endif
+                                            </div>
+                                        @endif
+                                    </td>
+                                    <td class="px-3 py-2 text-right whitespace-nowrap">
+                                        @if ($flag === 'Y')
+                                            <span class="rounded bg-gray-200 px-2 py-0.5 text-xs font-medium text-gray-600">ลบแล้ว</span>
+                                        @elseif ($flag === 'R')
+                                            @if ($canApprove)
+                                                <button wire:click="approveCancelMovement({{ $mv->id }})"
+                                                        wire:confirm="อนุมัติลบรายการ {{ number_format($mv->amount, 2) }} บาท? ยอดเงินบาทจะถูกปรับตาม"
+                                                        class="rounded bg-red-600 px-2 py-1 text-xs font-semibold text-white hover:bg-red-700">อนุมัติลบ</button>
+                                                <button wire:click="rejectCancelMovement({{ $mv->id }})"
+                                                        class="rounded border border-gray-300 bg-white px-2 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50">ไม่อนุมัติ</button>
+                                            @else
+                                                <span class="rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">รออนุมัติลบ</span>
+                                            @endif
+                                        @elseif (in_array($mv->reference_type, $cancellableRefs, true))
+                                            <button wire:click="startCancelMovement({{ $mv->id }})"
+                                                    class="rounded border border-red-300 bg-white px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-50">ลบ</button>
+                                        @endif
+                                    </td>
+                                </tr>
+                                @if ($cancelMovementId === $mv->id)
+                                    <tr class="border-b bg-red-50">
+                                        <td colspan="6" class="px-3 py-3">
+                                            <div class="flex flex-wrap items-center gap-2">
+                                                <span class="text-sm font-medium text-red-800">ขอลบรายการ {{ number_format($mv->amount, 2) }} บาท — เหตุผล:</span>
+                                                <input type="text" wire:model="cancelMovementReason"
+                                                       class="min-w-[240px] flex-1 rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:ring-2 focus:ring-red-500"
+                                                       placeholder="ระบุเหตุผล (จำเป็น)">
+                                                <button wire:click="requestCancelMovement"
+                                                        class="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-red-700">ส่งขออนุมัติลบ</button>
+                                                <button wire:click="abortCancelMovement"
+                                                        class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-semibold text-gray-700 hover:bg-gray-50">ยกเลิก</button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                @endif
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            @endif
+        </div>
         </div>
     </div>
     @endif
