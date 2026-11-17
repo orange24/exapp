@@ -223,9 +223,11 @@ function counterSelector() {
         (clone $todayQuery)->where('trns_type', 'BUYING')->pluck('id')
     )->sum('total');
 
+    // บิลขายเก็บกลับด้านกับบิลซื้อ — amount คือบาทที่รับ, total คือเงินต่างประเทศ
+    // (ดู TransactionMaster::getTotalCurrencyAttribute)
     $sellTotal = \App\Models\TransactionDetail::whereIn('transaction_id',
         (clone $todayQuery)->where('trns_type', 'SELLING')->pluck('id')
-    )->sum('total');
+    )->sum('amount');
 
     // Pending cancellations
     $pendingCancel = \App\Models\TransactionMaster::where('flag_cancel', 'R')->count();
@@ -246,11 +248,20 @@ function counterSelector() {
     // Top currencies by volume today
     $topCurrencies = collect();
     if ($counterId) {
-        $topCurrencies = \App\Models\TransactionDetail::whereIn('transaction_id',
-            (clone $todayQuery)->pluck('id')
-        )
-        ->selectRaw('currency_code, SUM(amount) as total_amount, SUM(total) as total_thb')
-        ->groupBy('currency_code')
+        // สลับคอลัมน์ตามประเภทบิล ไม่งั้นบิลขายจะเอาบาทไปบวกเป็นจำนวนเงินต่างประเทศ
+        $topCurrencies = \App\Models\TransactionDetail::query()
+        ->join('transactions_master', 'transactions_master.id', '=', 'transactions_detail.transaction_id')
+        ->whereIn('transactions_detail.transaction_id', (clone $todayQuery)->pluck('id'))
+        // แยกซื้อ/ขาย — รวมกันแล้วพนักงานเทียบกับเงินที่รับมาไม่ได้
+        ->selectRaw("
+            transactions_detail.currency_code,
+            SUM(CASE WHEN transactions_master.trns_type = 'BUYING' THEN transactions_detail.amount ELSE 0 END) as buy_amount,
+            SUM(CASE WHEN transactions_master.trns_type = 'BUYING' THEN transactions_detail.total ELSE 0 END) as buy_thb,
+            SUM(CASE WHEN transactions_master.trns_type = 'SELLING' THEN transactions_detail.total ELSE 0 END) as sell_amount,
+            SUM(CASE WHEN transactions_master.trns_type = 'SELLING' THEN transactions_detail.amount ELSE 0 END) as sell_thb,
+            SUM(CASE WHEN transactions_master.trns_type = 'SELLING' THEN transactions_detail.amount ELSE transactions_detail.total END) as total_thb
+        ")
+        ->groupBy('transactions_detail.currency_code')
         ->orderByDesc('total_thb')
         ->limit(5)
         ->get();
@@ -418,8 +429,14 @@ function counterSelector() {
         @foreach ($topCurrencies as $tc)
             <div class="text-center p-3 bg-gray-50 rounded-lg">
                 <div class="text-lg font-bold" style="color:#0e513a;">{{ $tc->currency_code }}</div>
-                <div class="text-sm text-gray-600">{{ number_format($tc->total_amount, 2) }}</div>
-                <div class="text-xs text-gray-400">{{ number_format($tc->total_thb, 0) }} THB</div>
+                @if ($tc->buy_amount > 0)
+                    <div class="mt-1 text-sm text-green-700">ซื้อ {{ number_format($tc->buy_amount, 2) }}</div>
+                    <div class="text-xs text-gray-400">{{ number_format($tc->buy_thb, 2) }} THB</div>
+                @endif
+                @if ($tc->sell_amount > 0)
+                    <div class="mt-1 text-sm text-red-700">ขาย {{ number_format($tc->sell_amount, 2) }}</div>
+                    <div class="text-xs text-gray-400">{{ number_format($tc->sell_thb, 2) }} THB</div>
+                @endif
             </div>
         @endforeach
     </div>
